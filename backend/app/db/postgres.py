@@ -31,6 +31,27 @@ CREATE TABLE IF NOT EXISTS raw_tweets (
     status        TEXT NOT NULL DEFAULT 'new'
 );
 CREATE INDEX IF NOT EXISTS idx_raw_tweets_status ON raw_tweets (status);
+
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id          SERIAL PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    config      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active      BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id         SERIAL PRIMARY KEY,
+    rule_id    INTEGER NOT NULL REFERENCES alert_rules(id),
+    event_id   TEXT NOT NULL,
+    tweet_id   TEXT NOT NULL,
+    tweet_url  TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    summary    TEXT NOT NULL,
+    graph_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC);
 """
 
 
@@ -112,3 +133,82 @@ class PostgresStore:
                 text("UPDATE raw_tweets SET status = 'extracted' WHERE tweet_id = ANY(:ids)"),
                 {"ids": tweet_ids},
             )
+
+    # ------------------------------------------------------------------
+    # alert_rules
+    # ------------------------------------------------------------------
+
+    def ensure_rule(self, name: str, description: str, config: dict | None = None) -> None:
+        """Idempotently register a rule (no-op if it already exists)."""
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO alert_rules (name, description, config)
+                    VALUES (:name, :description, :config)
+                    ON CONFLICT (name) DO NOTHING
+                    """
+                ),
+                {"name": name, "description": description, "config": json.dumps(config or {})},
+            )
+
+    def get_active_rules(self) -> list[dict]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, name, description, config FROM alert_rules WHERE active = true"
+                )
+            ).mappings()
+            return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------------
+    # alerts
+    # ------------------------------------------------------------------
+
+    def insert_alert(
+        self,
+        rule_id: int,
+        event_id: str,
+        tweet_id: str,
+        tweet_url: str,
+        title: str,
+        summary: str,
+        graph_refs: list[str] | None = None,
+    ) -> int:
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO alerts (rule_id, event_id, tweet_id, tweet_url, title, summary, graph_refs)
+                    VALUES (:rule_id, :event_id, :tweet_id, :tweet_url, :title, :summary, :graph_refs)
+                    RETURNING id
+                    """
+                ),
+                {
+                    "rule_id": rule_id,
+                    "event_id": event_id,
+                    "tweet_id": tweet_id,
+                    "tweet_url": tweet_url,
+                    "title": title,
+                    "summary": summary,
+                    "graph_refs": json.dumps(graph_refs or []),
+                },
+            )
+            return result.scalar_one()
+
+    def get_alerts(self, limit: int = 20) -> list[dict]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT a.id, a.event_id, a.tweet_id, a.tweet_url, a.title, a.summary,
+                           a.graph_refs, a.created_at, r.name AS rule_name
+                    FROM alerts a
+                    JOIN alert_rules r ON r.id = a.rule_id
+                    ORDER BY a.created_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"limit": limit},
+            ).mappings()
+            return [dict(row) for row in rows]
