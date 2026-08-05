@@ -35,7 +35,7 @@ class BaleenScheduler:
         self.processing = processing
         self.interval_seconds = interval_seconds
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.source = XApiSource(settings)
+        self.source = XApiSource(settings.x_api_bearer_token)
         self.ingestion = IngestionPipeline(self.source, processing.store, self.settings)
 
     def _tick(self) -> None:

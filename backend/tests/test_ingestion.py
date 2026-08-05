@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -116,6 +116,43 @@ def test_gives_up_after_max_retries(monkeypatch):
     assert not result.ok
     assert result.errors
     assert "X API fetch failed" in result.errors[0]
+
+
+def test_x_api_source_rejects_non_string_token():
+    with pytest.raises(TypeError):
+        XApiSource(bearer_token=None)
+    with pytest.raises(TypeError):
+        XApiSource(bearer_token="")
+
+
+def test_x_api_source_normalizes_naive_created_at(monkeypatch):
+    source = XApiSource(bearer_token="test")
+
+    class Response:
+        data = [
+            SimpleNamespace(
+                id="42",
+                author_id="7",
+                text="hello",
+                created_at=datetime(2026, 1, 1, 12, 0, 0),  # naive
+                data={},
+            )
+        ]
+        includes = {"users": [SimpleNamespace(id="7", username="unusual_whales")]}
+
+    class OkClient:
+        def __init__(self, bearer_token=None):
+            pass
+
+        def search_recent_tweets(self, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(source, "_client", OkClient())
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert len(result.tweets) == 1
+    assert result.tweets[0].created_at.tzinfo is not None
+    assert result.tweets[0].created_at.utcoffset() == timedelta(0)
 
 
 def test_pipeline_records_source_errors(settings, postgres_store):

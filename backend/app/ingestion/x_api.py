@@ -31,6 +31,8 @@ class XApiSource(TweetSource):
         backoff_factor: float = 2.0,
         max_results: int = 100,
     ) -> None:
+        if not isinstance(bearer_token, str) or not bearer_token:
+            raise TypeError("bearer_token must be a non-empty string")
         self._client = tweepy.Client(bearer_token=bearer_token)
         self._max_retries = max_retries
         self._base_delay = base_delay_seconds
@@ -79,13 +81,18 @@ class XApiSource(TweetSource):
         users = {u.id: u.username for u in (response.includes.get("users", []) or [])}
         for tweet in response.data:
             handle = users.get(tweet.author_id, "unknown")
+            created_at = tweet.created_at
+            if created_at.tzinfo is None:
+                # X API timestamps are UTC; normalize naive datetimes so
+                # Postgres TIMESTAMPTZ round-trips correctly.
+                created_at = created_at.replace(tzinfo=timezone.utc)
             result.tweets.append(
                 RawTweet(
                     tweet_id=str(tweet.id),
                     author_handle=handle,
                     author_id=str(tweet.author_id),
                     text=tweet.text,
-                    created_at=tweet.created_at,
+                    created_at=created_at,
                     url=f"https://x.com/{handle}/status/{tweet.id}",
                     raw_json=tweet.data,
                 )
