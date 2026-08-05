@@ -52,16 +52,25 @@ export default function App() {
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
   const loadGraph = useCallback(() => {
+    setGraphError(null);
     fetchGraph()
       .then(setGraph)
       .catch((err) => setGraphError(err.message));
   }, []);
 
   const loadAlerts = useCallback(() => {
+    setAlertsError(null);
     fetchAlerts()
       .then((res) => setAlerts(res.alerts))
       .catch((err) => setAlertsError(err.message));
   }, []);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.all([loadGraph(), loadAlerts()]).finally(() => setRefreshing(false));
+  }, [loadGraph, loadAlerts]);
 
   useEffect(() => {
     loadGraph();
@@ -78,6 +87,12 @@ export default function App() {
           <span className="tagline">agentic graph over financial tweets</span>
         </div>
         <QueryBar onResult={setQueryResult} />
+        <span className="graph-stats">
+          {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
+        </span>
+        <button onClick={refresh} disabled={refreshing}>
+          {refreshing ? '…' : 'Refresh'}
+        </button>
       </header>
 
       <div className="app-body">

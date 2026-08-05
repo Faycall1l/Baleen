@@ -123,6 +123,12 @@ a:hover {
   gap: 8px;
 }
 
+.graph-stats {
+  color: #9b9ba5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .query-bar input {
   flex: 1 1 auto;
   background: #2b2b31;
