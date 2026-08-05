@@ -77,9 +77,10 @@ def main() -> None:
         logger.info("reference graph seeded: %s", counts)
 
     if args.live:
-        if not settings.x_api_bearer_token:
+        if not settings.x_api_configured:
             raise SystemExit(
-                "X_API_BEARER_TOKEN is not set. Add it to your env (or .env) and retry."
+                "X_API_BEARER_TOKEN is not set (or is a placeholder). "
+                "Add a real token to your env (or repo-root .env) and retry."
             )
         from app.ingestion.x_api import XApiSource
 

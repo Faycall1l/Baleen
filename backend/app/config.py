@@ -1,20 +1,28 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Root .env lives next to backend/ (repo root); resolve it absolutely so the
+#: loaded file does not depend on the process working directory.
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+#: Placeholder X API tokens (config defaults / .env.example) are treated as
+#: "not configured" so the scheduler and live tools refuse to run against them.
+PLACEHOLDER_TOKENS = frozenset({"", "placeholder-bearer-token", "your-x-api-bearer-token"})
+
 
 class Settings(BaseSettings):
     """All environment configuration for the Baleen backend.
 
-    Values are read from environment variables (or a local ``.env`` file),
-    matching ``.env.example`` at the repository root. Secrets are never
-    hardcoded here. Invalid values fail fast at startup instead of surfacing
-    as confusing runtime errors.
+    Values are read from environment variables (or the repo-root ``.env``),
+    matching ``.env.example``. Secrets are never hardcoded here. Invalid values
+    fail fast at startup instead of surfacing as confusing runtime errors.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
     # --- X (Twitter) API v2 ---
     x_api_bearer_token: str = "placeholder-bearer-token"
@@ -70,6 +78,11 @@ class Settings(BaseSettings):
     @property
     def x_handles(self) -> list[str]:
         return [h.strip() for h in self.x_user_handles.split(",") if h.strip()]
+
+    @property
+    def x_api_configured(self) -> bool:
+        """True only when a real X API bearer token is supplied."""
+        return self.x_api_bearer_token not in PLACEHOLDER_TOKENS
 
 
 @lru_cache

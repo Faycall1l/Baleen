@@ -16,6 +16,10 @@ How to configure, run, seed, and test Baleen.
 cp .env.example .env
 ```
 
+The backend loads this repo-root `.env` file automatically regardless of the
+working directory it is launched from, so you can run uvicorn / scripts from
+`backend/` and still pick up the same configuration.
+
 Fill in real values (see [`.env.example`](../.env.example) for inline docs):
 
 | Variable | Required | Notes |
@@ -109,6 +113,34 @@ docker-compose exec backend python -m scripts.ingest_once --seed-ref
 
 `--seed-ref` seeds the reference graph (politicians/committees/sectors) first —
 needed when the graph is empty.
+
+### Live ingestion (real X API + vLLM)
+
+Once `X_API_BEARER_TOKEN`, `LLM_BASE_URL`, and `LLM_MODEL_NAME` are set in
+`.env`, pull a batch from the real API and run it through the stack:
+
+```bash
+python -m scripts.ingest_once --live
+```
+
+`ingest_once --live` fails fast if the token is missing or still a placeholder,
+and the scheduler (if enabled) picks up the same X API source on its timer.
+Ticks that fail (rate limits, transient errors) back off exponentially up to
+10 minutes and recover automatically.
+
+### Re-running tweets that failed to parse
+
+If a tweet produced only an `UnparsedEvent`, re-queue it for extraction (e.g.
+after a better model or a fixed extractor is available):
+
+```bash
+python -m scripts.retry_unparsed              # reset genuinely-unparsed tweets to 'new'
+python -m scripts.retry_unparsed --dry-run    # preview first
+python -m scripts.retry_unparsed --process    # reset, then run the pipeline immediately
+```
+
+Tweets that *later* produced a typed event keep only that event — their stale
+`UnparsedEvent` nodes are purged automatically (obsolete records).
 
 ## 6. Neo4j read-only role (query agent)
 

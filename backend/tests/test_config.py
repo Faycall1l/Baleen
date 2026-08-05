@@ -26,3 +26,9 @@ def test_negative_retries_rejected():
 def test_llm_base_url_is_trailing_slash_stripped():
     settings = Settings(_env_file=None, llm_base_url="http://localhost:8001/v1/")
     assert settings.llm_base_url == "http://localhost:8001/v1"
+
+
+def test_x_api_configured_treats_placeholders_as_unconfigured():
+    for token in ("", "placeholder-bearer-token", "your-x-api-bearer-token"):
+        assert Settings(_env_file=None, x_api_bearer_token=token).x_api_configured is False
+    assert Settings(_env_file=None, x_api_bearer_token="real-token-value").x_api_configured is True
