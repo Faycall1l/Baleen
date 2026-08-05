@@ -132,3 +132,25 @@ def test_stored_alert_is_retrievable(postgres_store, neo4j_store):
     assert len(alerts) == 1
     assert alerts[0]["rule_name"] == "politician_trades_in_oversight_sector"
     assert "JPM" in alerts[0]["title"]
+
+
+def test_re_evaluating_the_same_event_creates_no_duplicate_alert(
+    postgres_store, neo4j_store
+):
+    seed(neo4j_store)
+    engine = _engine(postgres_store, neo4j_store)
+    event = _congress_event(
+        tweet_id="alert-dedup-1",
+        politician_id="W000817",
+        politician_name="Elizabeth Warren",
+        ticker="JPM",
+        committees=["SSBK"],
+    )
+    GraphWriter(neo4j_store).write_event(event)
+
+    first = engine.evaluate_event(event)
+    second = engine.evaluate_event(event)
+
+    assert len(first) == 1
+    assert second == []  # already-alerted event produces nothing new
+    assert len(postgres_store.get_alerts(limit=10)) == 1

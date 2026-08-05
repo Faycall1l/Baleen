@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC);
+-- Idempotency: one alert per (rule, event). Re-evaluating the same event must
+-- never create a duplicate (CREATE UNIQUE INDEX IF NOT EXISTS is PostgreSQL's
+-- idempotent form of "add unique constraint").
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_rule_event ON alerts (rule_id, event_id);
 """
 
 
@@ -174,13 +178,16 @@ class PostgresStore:
         title: str,
         summary: str,
         graph_refs: list[str] | None = None,
-    ) -> int:
+    ) -> int | None:
+        """Insert an alert. Returns its id, or ``None`` if the same (rule, event)
+        already has an alert (idempotency)."""
         with self.engine.begin() as conn:
             result = conn.execute(
                 text(
                     """
                     INSERT INTO alerts (rule_id, event_id, tweet_id, tweet_url, title, summary, graph_refs)
                     VALUES (:rule_id, :event_id, :tweet_id, :tweet_url, :title, :summary, :graph_refs)
+                    ON CONFLICT (rule_id, event_id) DO NOTHING
                     RETURNING id
                     """
                 ),
@@ -194,7 +201,7 @@ class PostgresStore:
                     "graph_refs": json.dumps(graph_refs or []),
                 },
             )
-            return result.scalar_one()
+            return result.scalar_one_or_none()
 
     def get_alerts(self, limit: int = 20) -> list[dict]:
         with self.engine.connect() as conn:

@@ -125,6 +125,14 @@ class AlertEngine:
             logger.exception("failed to persist alert for event %s", event.deterministic_id)
             return None
 
+        if alert_id is None:
+            logger.info(
+                "alert already exists for (rule=%s, event=%s); skipping",
+                rule_name,
+                event.deterministic_id,
+            )
+            return None
+
         alert = {
             "id": alert_id,
             "rule_name": rule_name,
