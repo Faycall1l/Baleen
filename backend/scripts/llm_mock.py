@@ -71,16 +71,45 @@ async def chat_completions(request: Request) -> dict:
 
 
 def _pick_tool(user_text: str, tools: list[dict]) -> tuple[str, dict] | None:
-    """Return a plausible (name, arguments) for the given tweet text."""
+    """Return a plausible (name, arguments) for the given request."""
     lowered = user_text.lower()
     available = {t["function"]["name"]: t["function"] for t in tools}
 
+    # Query agent: generate a read-only Cypher for the question.
+    if "generate_cypher" in available:
+        return "generate_cypher", {
+            "cypher": (
+                "MATCH (p:Politician)<-[:INVOLVES_POLITICIAN]-(e:Event)"
+                "-[:INVOLVES_TICKER]->(t:Ticker)-[:IN_SECTOR]->(s:Sector) "
+                "RETURN p.name AS politician, t.ticker AS ticker, s.name AS sector, "
+                "e.transaction_type AS transaction_type, e.amount_range AS amount_range, "
+                "e.transaction_date AS transaction_date, e.tweet_url AS tweet_url "
+                "ORDER BY e.transaction_date DESC LIMIT 10"
+            )
+        }
+
+    # Query agent: draft the grounded answer from the result rows.
+    if "answer_question" in available:
+        return "answer_question", {
+            "answer": (
+                "Based on the graph, the traded tickers and their sectors are shown "
+                "in the query results. The politician most recently active in an "
+                "oversight sector is listed first."
+            )
+        }
+
     if "sold" in lowered or "purchased" in lowered or "disclosure" in lowered:
         if "extract_congress_trade" in available:
+            ticker = _find_ticker(user_text)
             args = {
-                "ticker": _find_ticker(user_text),
+                "ticker": ticker,
                 "politician_name": "Bill Cassidy",
-                "transaction_type": "sale",
+                "politician_id": "C000261",
+                "chamber": "senate",
+                "party": "R",
+                "committee_ids": ["SSHR"],
+                "transaction_type": "sell" if "sold" in lowered else "buy",
+                "amount_range": "$50,001 - $100,000",
                 "transaction_date": "2026-05-14",
                 "confidence": 0.95,
             }
@@ -109,4 +138,7 @@ def _find_ticker(text: str) -> str:
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    import os
+
+    port = int(os.getenv("PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

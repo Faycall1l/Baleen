@@ -10,6 +10,10 @@ import os
 
 import pytest
 
+# Keep the app-level background scheduler out of tests regardless of .env.
+os.environ["SCHEDULER_ENABLED"] = "false"
+os.environ["SEED_DEFAULT_ALERTS"] = "true"
+
 from app.config import Settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore

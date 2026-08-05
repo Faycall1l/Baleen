@@ -107,7 +107,7 @@ class SampleSource(TweetSource):
                 "sample-1003",
                 "congress_trades",
                 "ctrades",
-                "REPORTED: Rep. Bill Cassidy sold $NVDA shares worth $50,001 - $100,000 on 2026-05-14. "
+                "REPORTED: Rep. Bill Cassidy sold $UNH shares worth $50,001 - $100,000 on 2026-05-14. "
                 "Disclosure #D-2026-001.",
                 now,
             ),

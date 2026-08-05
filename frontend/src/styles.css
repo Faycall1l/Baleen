@@ -1,0 +1,270 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #1b1b1f;
+  color: #d6d6dd;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  font-size: 14px;
+}
+
+a {
+  color: #7ab8e8;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #232328;
+  border-bottom: 1px solid #33333a;
+  flex: 0 0 auto;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.brand h1 {
+  font-size: 18px;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.brand .tagline {
+  color: #9b9ba5;
+  font-size: 12px;
+}
+
+.app-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.panel {
+  background: #232328;
+  border-right: 1px solid #33333a;
+  overflow-y: auto;
+  flex: 0 0 auto;
+}
+
+.panel-sidebar {
+  width: 300px;
+}
+
+.panel-detail {
+  width: 320px;
+  border-right: none;
+  border-left: 1px solid #33333a;
+}
+
+.graph-area {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------- panels */
+
+.panel h2 {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9b9ba5;
+  border-bottom: 1px solid #33333a;
+}
+
+.empty-hint {
+  padding: 16px 14px;
+  color: #9b9ba5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------- query */
+
+.query-bar {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 8px;
+}
+
+.query-bar input {
+  flex: 1 1 auto;
+  background: #2b2b31;
+  border: 1px solid #33333a;
+  border-radius: 6px;
+  color: #d6d6dd;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.query-bar input:focus {
+  outline: none;
+  border-color: #e0a458;
+}
+
+button {
+  background: #2b2b31;
+  color: #d6d6dd;
+  border: 1px solid #33333a;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+button:hover:not(:disabled) {
+  border-color: #e0a458;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.query-result {
+  padding: 14px;
+  border-bottom: 1px solid #33333a;
+}
+
+.query-result .answer {
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.query-result .meta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #9b9ba5;
+}
+
+.query-result pre {
+  background: #1b1b1f;
+  border: 1px solid #33333a;
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.error {
+  color: #e06666;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------ alerts */
+
+.alert-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid #33333a;
+}
+
+.alert-item .alert-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.alert-item .alert-summary {
+  color: #9b9ba5;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.alert-item .alert-meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #6f6f7a;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.alert-badge {
+  display: inline-block;
+  background: #3a2f22;
+  color: #e0a458;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------------ detail */
+
+.node-detail .node-title {
+  padding: 12px 14px;
+  border-bottom: 1px solid #33333a;
+}
+
+.node-detail .node-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.node-detail .node-title .label {
+  color: #9b9ba5;
+  font-size: 12px;
+}
+
+.props {
+  padding: 8px 14px 14px;
+}
+
+.props dl {
+  margin: 0;
+}
+
+.props .prop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #2f2f35;
+  font-size: 13px;
+}
+
+.props dt {
+  color: #9b9ba5;
+}
+
+.props dd {
+  margin: 0;
+  text-align: right;
+  word-break: break-word;
+}

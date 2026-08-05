@@ -64,6 +64,11 @@ class AlertEngine:
         alerts_created: list[dict] = []
         active_rules = self.store.get_active_rules()
         if not active_rules:
+            # Self-heal: a fresh database has no rules until the app lifespan
+            # runs; ensure them so every entry point behaves the same.
+            self.ensure_default_rules()
+            active_rules = self.store.get_active_rules()
+        if not active_rules:
             logger.info("no active alert rules; skipping evaluation")
             return alerts_created
 

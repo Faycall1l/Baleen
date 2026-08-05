@@ -23,15 +23,20 @@ class Neo4jStore:
             settings.neo4j_uri,
             auth=(settings.neo4j_user, settings.neo4j_password),
         )
-        read_uri = settings.neo4j_read_uri or settings.neo4j_uri
-        self._read_driver: Driver = GraphDatabase.driver(
-            read_uri,
-            auth=(settings.neo4j_read_user, settings.neo4j_read_password),
-        )
+        # A dedicated read-only role is optional defense-in-depth (see
+        # docs/SETUP.md). Until NEO4J_READ_URI is configured we fall back to the
+        # writer driver; the query agent's real guardrail is the Cypher allowlist.
+        self._read_driver: Driver | None = None
+        if settings.neo4j_read_uri:
+            self._read_driver = GraphDatabase.driver(
+                settings.neo4j_read_uri,
+                auth=(settings.neo4j_read_user, settings.neo4j_read_password),
+            )
 
     def close(self) -> None:
         self._driver.close()
-        self._read_driver.close()
+        if self._read_driver is not None:
+            self._read_driver.close()
 
     def run(self, query: str, **params) -> list[dict]:
         """Execute a write-capable statement (graph writer / seeding)."""
@@ -40,7 +45,12 @@ class Neo4jStore:
             return [record.data() for record in result]
 
     def run_read(self, query: str, **params) -> list[dict]:
-        """Execute a read-only statement via the read-only user (query agent)."""
-        with self._read_driver.session() as session:
+        """Execute a read-only statement via the read-only user (query agent).
+
+        Uses the dedicated read-only driver when configured, otherwise the
+        writer driver (fine for local dev; production should pin the role).
+        """
+        driver = self._read_driver or self._driver
+        with driver.session() as session:
             result = session.run(query, **params)
             return [record.data() for record in result]
