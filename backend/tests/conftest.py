@@ -48,7 +48,12 @@ def postgres_store():
 
 @pytest.fixture
 def neo4j_store():
-    """Neo4jStore for integration tests. Skipped when Neo4j is unreachable."""
+    """Neo4jStore for integration tests. Skipped when Neo4j is unreachable.
+
+    The read-only role (see docs/SETUP.md) is not provisioned in CI, so the
+    test store points the read driver at the same admin credentials. The
+    read-only guardrail itself is enforced by the Cypher allowlist.
+    """
     from app.config import Settings
 
     settings = Settings(
@@ -56,6 +61,9 @@ def neo4j_store():
         neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
         neo4j_password=os.getenv("NEO4J_PASSWORD", "baleen_dev_pass"),
+        neo4j_read_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        neo4j_read_user=os.getenv("NEO4J_USER", "neo4j"),
+        neo4j_read_password=os.getenv("NEO4J_PASSWORD", "baleen_dev_pass"),
     )
     try:
         store = Neo4jStore(settings)

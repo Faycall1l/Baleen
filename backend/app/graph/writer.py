@@ -95,6 +95,8 @@ class GraphWriter:
 
     def _merge_event(self, event: Event) -> None:
         props = event.model_dump(mode="json", exclude={"tweet_id", "tweet_url"})
+        # The schema exposes the event kind as `type` on the Event node.
+        props["type"] = props.pop("event_type")
         props["id"] = event.deterministic_id
         self._merge_node("Event", props, self._provenance(event))
 
