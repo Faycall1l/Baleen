@@ -42,7 +42,8 @@ class AlertRules:
     def __init__(self, neo4j: Neo4jStore) -> None:
         self.neo4j = neo4j
 
-    def definitions(self) -> dict[str, dict]:
+    @classmethod
+    def definitions(cls) -> dict[str, dict]:
         return {
             "politician_trades_in_oversight_sector": {
                 "description": (

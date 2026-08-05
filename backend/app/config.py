@@ -48,6 +48,7 @@ class Settings(BaseSettings):
 
     # --- Scheduler ---
     scheduler_enabled: bool = True
+    seed_default_alerts: bool = True
 
     @property
     def postgres_dsn(self) -> str:

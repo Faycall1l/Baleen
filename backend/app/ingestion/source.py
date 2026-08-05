@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
@@ -53,3 +53,77 @@ class TweetSource(ABC):
     def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
         """Fetch tweets for ``handles`` published within the last
         ``since_seconds``. Never raises; returns errors in ``FetchResult``."""
+
+
+# ---------------------------------------------------------------------------
+# Sample source (local demos without X API credentials)
+# ---------------------------------------------------------------------------
+
+
+def _sample(  # noqa: PLR0913
+    tweet_id: str,
+    handle: str,
+    author_id: str,
+    text: str,
+    when: datetime,
+) -> RawTweet:
+    return RawTweet(
+        tweet_id=tweet_id,
+        author_handle=handle,
+        author_id=author_id,
+        text=text,
+        created_at=when,
+        url=f"https://x.com/{handle}/status/{tweet_id}",
+    )
+
+
+class SampleSource(TweetSource):
+    """A small bundled corpus of realistic financial tweets.
+
+    Covers options-flow reports, a congressional trade, and noise, so the full
+    stack can be exercised end-to-end without X API credentials. Deduplicated
+    on re-runs by ``tweet_id``.
+    """
+
+    def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
+        now = datetime.now(timezone.utc)
+        tweets = [
+            _sample(
+                "sample-1001",
+                "unusual_whales",
+                "uwhales",
+                "BIG ALERT: $NVDA 7,500 calls at $130 expiring 06/20 are filling right now. "
+                "Notional ~$97M, unusual volume vs open interest.",
+                now,
+            ),
+            _sample(
+                "sample-1002",
+                "unusual_whales",
+                "uwhales",
+                "$AMD sweep 1,200 puts at $180. Looking like a large buyer.",
+                now,
+            ),
+            _sample(
+                "sample-1003",
+                "congress_trades",
+                "ctrades",
+                "REPORTED: Rep. Bill Cassidy sold $NVDA shares worth $50,001 - $100,000 on 2026-05-14. "
+                "Disclosure #D-2026-001.",
+                now,
+            ),
+            _sample(
+                "sample-1004",
+                "unusual_whales",
+                "uwhales",
+                "Markets are green today, retail sentiment improving after the last CPI print.",
+                now,
+            ),
+            _sample(
+                "sample-1005",
+                "unusual_whales",
+                "uwhales",
+                "$TSLA 2,000 puts at $320, 06/20 expiry printing now. High IV.",
+                now,
+            ),
+        ]
+        return FetchResult(tweets=tweets)
