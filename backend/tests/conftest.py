@@ -41,7 +41,7 @@ def postgres_store():
     with store.engine.begin() as conn:
         from sqlalchemy import text
 
-        conn.execute(text("TRUNCATE raw_tweets"))
+        conn.execute(text("TRUNCATE raw_tweets, alerts, alert_rules"))
     yield store
     store.engine.dispose()
 
@@ -102,11 +102,18 @@ class StubLLM:
 
     ``rules`` maps a substring of the tweet text to an :class:`LLMResponse`
     (or a list of responses consumed in order). Anything unmatched returns an
-    empty response (no tool call).
+    empty response (no tool call). ``chat`` (plain completion) returns a canned
+    summary.
     """
 
-    def __init__(self, rules=None):
+    def __init__(self, rules=None, summary="Stub alert summary with source link."):
         self.rules = list(rules or [])
+        self.summary = summary
+
+    def chat(self, messages, **kwargs):
+        from app.extraction.client import LLMResponse
+
+        return LLMResponse(content=self.summary)
 
     def chat_with_tools(self, messages, tools, tool_choice="auto"):
         from app.extraction.client import LLMResponse
