@@ -1,0 +1,28 @@
+"""Settings validation: bad env values fail fast at construction."""
+
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings
+
+
+def test_invalid_llm_tool_mode_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_tool_mode="yolo")
+
+
+def test_out_of_range_confidence_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, confidence_threshold=1.5)
+
+
+def test_negative_retries_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_max_retries=-1)
+
+
+def test_llm_base_url_is_trailing_slash_stripped():
+    settings = Settings(_env_file=None, llm_base_url="http://localhost:8001/v1/")
+    assert settings.llm_base_url == "http://localhost:8001/v1"

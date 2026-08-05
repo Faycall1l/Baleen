@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
 
     if scheduler is not None:
         scheduler.stop()
+    routes.close_services()
 
 
 app = FastAPI(title="Baleen API", version="0.1.0", lifespan=lifespan)

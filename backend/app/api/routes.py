@@ -187,3 +187,22 @@ def _get_processing() -> "ProcessingPipeline":
         alert_engine=get_alert_engine(),
         store=_get_store(),
     )
+
+
+def close_services() -> None:
+    """Close lazily-created clients (drivers, engines) for graceful shutdown."""
+    global _store, _neo4j, _llm
+    if _neo4j is not None:
+        try:
+            _neo4j.close()
+        except Exception:
+            logger.exception("neo4j close failed")
+        _neo4j = None
+    if _store is not None:
+        try:
+            _store.engine.dispose()
+        except Exception:
+            logger.exception("postgres dispose failed")
+        _store = None
+    _llm = None
+    logger.info("shared service clients closed")

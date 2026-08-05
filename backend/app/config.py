@@ -1,5 +1,7 @@
 from functools import lru_cache
+from typing import Literal
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,7 +10,8 @@ class Settings(BaseSettings):
 
     Values are read from environment variables (or a local ``.env`` file),
     matching ``.env.example`` at the repository root. Secrets are never
-    hardcoded here.
+    hardcoded here. Invalid values fail fast at startup instead of surfacing
+    as confusing runtime errors.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -16,20 +19,20 @@ class Settings(BaseSettings):
     # --- X (Twitter) API v2 ---
     x_api_bearer_token: str = "placeholder-bearer-token"
     x_user_handles: str = "unusual_whales,congress_trades"
-    x_search_window_seconds: int = 3600
-    poll_interval_seconds: int = 300
+    x_search_window_seconds: int = Field(default=3600, ge=1, le=7 * 24 * 3600)
+    poll_interval_seconds: int = Field(default=300, ge=5)
 
     # --- LLM (vLLM, OpenAI-compatible) ---
     llm_base_url: str = "http://localhost:8001/v1"
     llm_api_key: str = "placeholder-key"
     llm_model_name: str = "placeholder-model"
-    llm_tool_mode: str = "auto"
-    llm_max_retries: int = 2
-    confidence_threshold: float = 0.6
+    llm_tool_mode: Literal["auto", "tools", "json"] = "auto"
+    llm_max_retries: int = Field(default=2, ge=0, le=5)
+    confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # --- PostgreSQL ---
     postgres_host: str = "localhost"
-    postgres_port: int = 5432
+    postgres_port: int = Field(default=5432, ge=1, le=65535)
     postgres_db: str = "baleen"
     postgres_user: str = "baleen"
     postgres_password: str = "baleen"
@@ -49,6 +52,11 @@ class Settings(BaseSettings):
     # --- Scheduler ---
     scheduler_enabled: bool = True
     seed_default_alerts: bool = True
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def _trim_llm_url(cls, value: str) -> str:
+        return value.rstrip("/")
 
     @property
     def postgres_dsn(self) -> str:
