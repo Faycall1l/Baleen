@@ -62,10 +62,12 @@ tool calls / JSON extraction and query-answering with deterministic canned
 output:
 
 ```bash
-cd backend && python scripts/llm_mock.py   # listens on :8001
+cd backend && python -m scripts.llm_mock   # listens on :8001 (set PORT=8002 to override)
 ```
 
-Tests use an in-process stub, so they don't require the mock to be running.
+Point Baleen at it with `LLM_BASE_URL=http://localhost:8001/v1` (or the port you
+chose). Tests use an in-process stub, so they don't require the mock to be
+running.
 
 ## 3. Run everything
 
@@ -98,7 +100,15 @@ docker-compose exec backend python -m scripts.ingest_once
 
 Polls the configured handles once (not on a timer), runs extraction, writes to
 the graph, and evaluates alerts. Useful for smoke tests and for hand-inserting
-example tweets.
+example tweets. With no X API credentials it falls back to a bundled sample
+corpus so the full stack can be demoed end-to-end:
+
+```bash
+docker-compose exec backend python -m scripts.ingest_once --seed-ref
+```
+
+`--seed-ref` seeds the reference graph (politicians/committees/sectors) first —
+needed when the graph is empty.
 
 ## 6. Neo4j read-only role (query agent)
 
@@ -117,8 +127,10 @@ GRANT ROLE baleen_reader TO baleen_reader;
 ```
 
 Set the agent's credentials via `NEO4J_READ_URI` / `NEO4J_READ_USER` /
-`NEO4J_READ_PASSWORD` (defaults in `docker-compose.yml` fall back to the writer
-credentials; override them in `.env` once the role exists).
+`NEO4J_READ_PASSWORD`. Until `NEO4J_READ_URI` is configured, read queries fall
+back to the writer driver (fine for local dev — the real guardrail is the Cypher
+allowlist); once the role above exists, pin `NEO4J_READ_URI`/`NEO4J_READ_USER`/
+`NEO4J_READ_PASSWORD` in `.env` to enforce defense-in-depth.
 
 ## 7. Run tests
 

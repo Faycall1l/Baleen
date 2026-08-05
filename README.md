@@ -84,6 +84,32 @@ Baleen/
 Full configuration, vLLM wiring, the Neo4j read-only role, and troubleshooting
 live in [docs/SETUP.md](docs/SETUP.md).
 
+### Local demo (no X API, no GPU)
+
+Without credentials or a model, run the whole stack with the bundled mock:
+
+```bash
+# 1. services up
+docker-compose up -d postgres neo4j
+
+# 2. mock LLM (deterministic extraction + query answers)
+cd backend && LLM_BASE_URL=http://localhost:8002/v1 PORT=8002 python -m scripts.llm_mock
+
+# 3. seed the reference graph + ingest the sample corpus + run the pipeline
+LLM_BASE_URL=http://localhost:8002/v1 python -m scripts.ingest_once --seed-ref
+
+# 4. backend (points at the mock)
+LLM_BASE_URL=http://localhost:8002/v1 SCHEDULER_ENABLED=false \
+  python -m uvicorn app.main:app --port 8000
+
+# 5. frontend
+cd ../frontend && npm install && npm run dev   # → http://localhost:5173
+```
+
+The sample corpus (see `backend/app/ingestion/source.py`) includes an unusual
+options sweep, a congressional trade that **triggers the alert rule**, and noise,
+so all three panels — graph, query, alerts — are populated immediately.
+
 ## Ask the graph
 
 Type a question in the query bar, e.g.:
@@ -92,9 +118,9 @@ Type a question in the query bar, e.g.:
 - *"Which tickers has Nancy Pelosi traded recently, and when?"*
 - *"Show unusual options flow in the last 24 hours by sector."*
 
-The agent answers with citations to the source tweets and highlights the
-subgraph it used. If the graph has no data for a question, it tells you instead
-of guessing.
+The agent answers grounded in the graph rows, citing the source tweets, and
+shows the (allowlisted) Cypher it generated. If the graph has no data for a
+question, it tells you instead of guessing.
 
 ## MVP scope
 

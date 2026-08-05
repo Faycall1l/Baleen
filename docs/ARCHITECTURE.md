@@ -142,8 +142,9 @@ Three surfaces only (no dashboards, no extra pages):
 - **Graph view** — force-directed rendering of the Neo4j graph fetched from
   `/api/graph`, dark Obsidian theme, click-to-expand node detail panel showing
   linked source tweets.
-- **Query bar** — always visible; calls `/api/query`; highlights the subgraph
-  used in the answer.
+- **Query bar** — always visible; calls `/api/query`; shows the generated
+  (allowlisted) Cypher and answers grounded in the result rows, citing source
+  tweets.
 - **Alerts panel** — collapsible; lists recent alerts with links to relevant
   graph nodes.
 
