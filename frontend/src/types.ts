@@ -21,6 +21,8 @@ export interface GraphData {
   links: GraphLink[];
   node_count: number;
   link_count: number;
+  event_count?: number;
+  truncated?: boolean;
 }
 
 export interface QueryResponse {

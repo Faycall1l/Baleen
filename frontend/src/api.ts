@@ -17,8 +17,8 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchGraph(): Promise<GraphData> {
-  return json<GraphData>('/api/graph');
+export function fetchGraph(limit = 500): Promise<GraphData> {
+  return json<GraphData>(`/api/graph?limit=${limit}`);
 }
 
 export function askQuestion(question: string): Promise<QueryResponse> {

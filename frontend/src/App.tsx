@@ -125,6 +125,9 @@ export default function App() {
         <QueryBar onResult={setQueryResult} />
         <span className="graph-stats">
           {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
+          {graph?.truncated && graph.event_count
+            ? ` · showing recent ${graph.event_count} events`
+            : ''}
         </span>
         <HealthPill health={health} />
         <button onClick={refresh} disabled={refreshing}>

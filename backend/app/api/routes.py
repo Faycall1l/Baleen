@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.alerts.engine import AlertEngine
@@ -82,17 +82,48 @@ def _node_key(label: str, props: dict) -> str:
 
 
 @router.get("/graph")
-def graph() -> dict:
-    """Serialize the full graph as {nodes, links} for the force-directed UI."""
+def graph(limit: int = Query(default=500, ge=0)) -> dict:
+    """Serialize a subgraph for the force-directed UI.
+
+    With ``limit`` > 0, only the ``limit`` most-recent events and their direct
+    neighbors (tickers, politicians, committees, sectors) are returned, so a
+    large live graph stays responsive. ``limit=0`` returns everything (demo /
+    small graphs). The response carries ``truncated``/``event_count`` so the UI
+    can tell a partial view from a full one.
+    """
     neo4j = _get_neo4j()
     try:
-        node_rows = neo4j.run("MATCH (n) RETURN n AS node, labels(n) AS labels")
+        total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
+        keep_ids: list[int] | None = None
+        if limit > 0:
+            rows = neo4j.run(
+                """
+                MATCH (e:Event)
+                WITH e ORDER BY COALESCE(e.event_time, datetime('1900-01-01T00:00:00Z')) DESC
+                LIMIT $limit
+                OPTIONAL MATCH (e)--(n)
+                WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
+                UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
+                RETURN DISTINCT id(kept) AS internal_id
+                """,
+                limit=limit,
+            )
+            keep_ids = [row["internal_id"] for row in rows]
+
+        node_where = "WHERE id(n) IN $keep_ids" if keep_ids is not None else ""
+        node_rows = neo4j.run(
+            f"MATCH (n) {node_where} RETURN n AS node, labels(n) AS labels",
+            keep_ids=keep_ids or [],
+        )
+        link_where = "WHERE id(a) IN $keep_ids AND id(b) IN $keep_ids" if keep_ids is not None else ""
         link_rows = neo4j.run(
-            """
+            f"""
             MATCH (a)-[r]->(b)
+            {link_where}
             RETURN a AS source, labels(a) AS a_label, type(r) AS rel,
                    b AS target, labels(b) AS b_label
-            """
+            """,
+            keep_ids=keep_ids or [],
         )
     except Exception as exc:
         logger.exception("graph export failed")
@@ -134,7 +165,14 @@ def graph() -> dict:
                 }
             )
 
-    return {"nodes": nodes, "links": links, "node_count": len(nodes), "link_count": len(links)}
+    return {
+        "nodes": nodes,
+        "links": links,
+        "node_count": len(nodes),
+        "link_count": len(links),
+        "event_count": total,
+        "truncated": keep_ids is not None and total > limit,
+    }
 
 
 # ---------------------------------------------------------------------------

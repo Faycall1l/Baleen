@@ -7,11 +7,14 @@ a live LLM, so it is not exercised here.
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
+from app.models.events import CongressTradeEvent, OptionsFlowEvent
 
 
 def _client():
@@ -57,6 +60,53 @@ def test_graph_export():
         body = c.get("/api/graph").json()
         assert "nodes" in body and "links" in body
         assert body["node_count"] == len(body["nodes"])
+        assert body["event_count"] >= 0
+        assert "truncated" in body
+
+
+def test_graph_limit_truncates_to_recent_events(neo4j_store):
+    from app.graph.writer import GraphWriter
+
+    writer = GraphWriter(neo4j_store)
+    old = CongressTradeEvent(
+        tweet_id="g-limit-old",
+        tweet_url="https://x.com/congress_trades/status/g-limit-old",
+        confidence=0.95,
+        politician_name="Old Person",
+        politician_id="P1",
+        chamber="house",
+        party="D",
+        committee_ids=["HSBA"],
+        ticker="NVDA",
+        transaction_type="buy",
+        amount_range="$1,001 - $15,000",
+        transaction_date=date(2020, 1, 1),
+        event_time=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    recent = OptionsFlowEvent(
+        tweet_id="g-limit-new",
+        tweet_url="https://x.com/unusual_whales/status/g-limit-new",
+        confidence=0.9,
+        ticker="ZZZZ",
+        contract_type="call",
+        strike=250.0,
+        sentiment="bullish",
+        event_time=datetime(2030, 6, 1, tzinfo=timezone.utc),
+    )
+    writer.write_event(old)
+    writer.write_event(recent)
+
+    with _client() as c:
+        full = c.get("/api/graph?limit=0").json()
+        assert full["event_count"] >= 2
+
+        partial = c.get("/api/graph?limit=1").json()
+        assert partial["event_count"] == full["event_count"]
+        assert partial["truncated"] is True
+        assert len(partial["nodes"]) < len(full["nodes"])
+        titles = {n["title"] for n in partial["nodes"]}
+        assert "ZZZZ" in titles  # newest event + its neighborhood
+        assert "Old Person" not in titles  # oldest event excluded
 
 
 def test_alerts_list():
