@@ -54,6 +54,20 @@ def test_insert_raw_tweet_dedups_on_tweet_id(postgres_store):
     assert [t.tweet_id for t in remaining] == ["100"]
 
 
+def test_reset_status_requeues_tweets_for_processing(postgres_store):
+    tweets = [_tweet("300"), _tweet("301")]
+    for t in tweets:
+        postgres_store.insert_raw_tweet(t)
+
+    postgres_store.mark_extracted(["300", "301"])
+    assert postgres_store.get_new_tweets() == []
+
+    assert postgres_store.reset_status(["300", "301"]) == 2
+    assert sorted(t.tweet_id for t in postgres_store.get_new_tweets()) == ["300", "301"]
+
+    assert postgres_store.reset_status([], "new") == 0
+
+
 def test_pipeline_rerun_is_idempotent(settings, postgres_store):
     tweets = [_tweet("200"), _tweet("201")]
     source = _FakeSource(tweets)

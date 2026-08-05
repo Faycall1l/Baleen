@@ -138,6 +138,18 @@ class PostgresStore:
                 {"ids": tweet_ids},
             )
 
+    def reset_status(self, tweet_ids: list[str], status: str = "new") -> int:
+        """Flip the processing status of specific tweets (e.g. re-queue
+        unparsed ones for re-extraction). Returns the number updated."""
+        if not tweet_ids:
+            return 0
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("UPDATE raw_tweets SET status = :status WHERE tweet_id = ANY(:ids)"),
+                {"status": status, "ids": tweet_ids},
+            )
+            return result.rowcount
+
     # ------------------------------------------------------------------
     # alert_rules
     # ------------------------------------------------------------------

@@ -1,19 +1,23 @@
-"""One-shot demo ingest + full processing pipeline.
+"""One-shot ingest + full processing pipeline.
 
-Pushes the bundled sample tweets through the entire stack:
+Pushes tweets through the entire stack:
 
-    ingest (sample source) -> store -> extract (LLM) -> graph -> alerts
+    ingest -> store -> extract (LLM) -> graph -> alerts
 
-Intended for local demos where X API credentials are placeholders: it loads
-``SampleSource`` tweets (the same corpus the tests use) so the graph and the
-alert panel are populated end-to-end. Skips tweets already stored.
+Default is a local demo: it loads ``SampleSource`` tweets (the same corpus the
+tests use) so the graph and the alert panel are populated end-to-end. Skips
+tweets already stored.
+
+With ``--live`` it instead pulls from the real X API for the configured
+handles and the search window from env, using the configured LLM endpoint
+(vLLM or ``scripts/llm_mock.py``).
 
 Usage:
-    python -m scripts.ingest_once            # ingest + process
-    python -m scripts.ingest_once --seed-ref # also seed reference graph first
+    python -m scripts.ingest_once                 # demo corpus
+    python -m scripts.ingest_once --seed-ref      # also seed reference graph first
+    python -m scripts.ingest_once --live          # real X API + configured LLM
 
-Needs the Postgres and Neo4j containers running (``docker compose up -d``) and,
-for real extraction, an LLM endpoint (vLLM or ``scripts/llm_mock.py``).
+Needs the Postgres and Neo4j containers running (``docker compose up -d``).
 """
 
 from __future__ import annotations
@@ -56,8 +60,9 @@ def build_pipeline(settings: Settings) -> ProcessingPipeline:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Baleen one-shot demo ingest")
+    parser = argparse.ArgumentParser(description="Baleen one-shot ingest")
     parser.add_argument("--seed-ref", action="store_true", help="seed the reference graph first")
+    parser.add_argument("--live", action="store_true", help="use the real X API instead of the sample corpus")
     args = parser.parse_args()
 
     settings = get_settings()
@@ -71,7 +76,24 @@ def main() -> None:
         counts = seed_reference(neo4j)
         logger.info("reference graph seeded: %s", counts)
 
-    source = SampleSource()
+    if args.live:
+        if not settings.x_api_bearer_token:
+            raise SystemExit(
+                "X_API_BEARER_TOKEN is not set. Add it to your env (or .env) and retry."
+            )
+        from app.ingestion.x_api import XApiSource
+
+        source = XApiSource(settings.x_api_bearer_token)
+        logger.info(
+            "live source: handles=%s window=%ss llm=%s/%s",
+            settings.x_handles,
+            settings.x_search_window_seconds,
+            settings.llm_base_url,
+            settings.llm_model_name,
+        )
+    else:
+        source = SampleSource()
+
     pipeline = IngestionPipeline(source, store, settings)
     metrics = pipeline.run_once()
     inserted, skipped = metrics["inserted"], metrics["duplicates_skipped"]
