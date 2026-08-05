@@ -38,7 +38,16 @@ def _services_available() -> bool:
 
 def test_health():
     with _client() as c:
-        assert c.get("/health").json() == {"status": "ok", "app": "baleen"}
+        res = c.get("/health")
+        assert res.json()["app"] == "baleen"
+        if not _services_available():
+            assert res.status_code == 503
+            return
+        assert res.status_code == 200
+        assert res.json()["status"] == "ok"
+        assert set(res.json()["checks"]) == {"postgres", "neo4j"}
+        assert res.json()["checks"]["postgres"]["status"] == "ok"
+        assert res.json()["checks"]["neo4j"]["status"] == "ok"
 
 
 def test_graph_export():

@@ -16,7 +16,8 @@ import logging
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from sqlalchemy import text
 
 from app.alerts.rules import AlertRules
 from app.api import routes
@@ -58,5 +59,33 @@ app.include_router(routes.router)
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok", "app": "baleen"}
+def health(response: Response) -> dict:
+    """Liveness + component checks (Postgres, Neo4j).
+
+    Returns 503 when a core dependency is down; the body names which one.
+    The LLM / X API are intentionally absent: placeholders are valid in dev.
+    """
+    checks = {}
+    for name, probe in (
+        ("postgres", _check_postgres),
+        ("neo4j", _check_neo4j),
+    ):
+        try:
+            probe()
+            checks[name] = {"status": "ok"}
+        except Exception as exc:
+            checks[name] = {"status": "down", "detail": str(exc)[:200]}
+
+    overall = "ok" if all(c["status"] == "ok" for c in checks.values()) else "degraded"
+    status_code = 200 if overall == "ok" else 503
+    response.status_code = status_code
+    return {"status": overall, "app": "baleen", "checks": checks}
+
+
+def _check_postgres() -> None:
+    with routes._get_store().engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+
+def _check_neo4j() -> None:
+    routes._get_neo4j().run("RETURN 1")
