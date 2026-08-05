@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     llm_model_name: str = "placeholder-model"
     llm_tool_mode: Literal["auto", "tools", "json"] = "auto"
     llm_max_retries: int = Field(default=2, ge=0, le=5)
+    llm_timeout_seconds: int = Field(default=90, ge=5, le=600)
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # --- PostgreSQL ---

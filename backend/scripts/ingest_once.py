@@ -48,6 +48,8 @@ def build_pipeline(settings: Settings) -> ProcessingPipeline:
         api_key=settings.llm_api_key,
         model_name=settings.llm_model_name,
         tool_mode=settings.llm_tool_mode,
+        max_retries=settings.llm_max_retries,
+        timeout_seconds=settings.llm_timeout_seconds,
     )
     from app.alerts.engine import AlertEngine
 
@@ -82,6 +84,21 @@ def main() -> None:
                 "X_API_BEARER_TOKEN is not set (or is a placeholder). "
                 "Add a real token to your env (or repo-root .env) and retry."
             )
+        llm = LLMClient(
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model_name=settings.llm_model_name,
+            tool_mode=settings.llm_tool_mode,
+            max_retries=settings.llm_max_retries,
+            timeout_seconds=settings.llm_timeout_seconds,
+        )
+        if not llm.health():
+            raise SystemExit(
+                f"LLM endpoint is unreachable at {settings.llm_base_url} "
+                "(probed GET /models). Is vLLM running? Check LLM_BASE_URL."
+            )
+        logger.info("LLM endpoint reachable: %s (model=%s)", settings.llm_base_url, settings.llm_model_name)
+
         from app.ingestion.x_api import XApiSource
 
         source = XApiSource(settings.x_api_bearer_token)

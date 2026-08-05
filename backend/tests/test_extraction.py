@@ -221,7 +221,6 @@ def test_auto_mode_falls_back_to_json(monkeypatch):
     from app.extraction.client import LLMError
 
     client = LLMClient("http://x", "k", "m", tool_mode="auto")
-
     def broken_tools(messages, tools, tool_choice):
         raise LLMError("tools unsupported")
 
@@ -243,3 +242,37 @@ def test_auto_mode_falls_back_to_json(monkeypatch):
     response = client.chat_with_tools([{"role": "user", "content": "hi"}], tools)
 
     assert response.has_tool_call
+
+
+# ---------------------------------------------------------------------------
+# LLM endpoint health probe
+# ---------------------------------------------------------------------------
+
+
+class _FakeResponse:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
+def test_health_true_when_models_endpoint_reachable(monkeypatch):
+    client = LLMClient("http://llm", "k", "m")
+    monkeypatch.setattr("app.extraction.client.httpx.get", lambda *a, **k: _FakeResponse(200))
+    assert client.health() is True
+
+
+def test_health_false_when_endpoint_errors(monkeypatch):
+    client = LLMClient("http://llm", "k", "m")
+    monkeypatch.setattr("app.extraction.client.httpx.get", lambda *a, **k: _FakeResponse(500))
+    assert client.health() is False
+
+
+def test_health_false_when_endpoint_unreachable(monkeypatch):
+    import httpx
+
+    client = LLMClient("http://llm", "k", "m")
+
+    def raise_timeout(*a, **k):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr("app.extraction.client.httpx.get", raise_timeout)
+    assert client.health() is False

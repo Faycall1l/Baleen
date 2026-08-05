@@ -56,6 +56,8 @@ def _get_llm() -> LLMClient:
             api_key=s.llm_api_key,
             model_name=s.llm_model_name,
             tool_mode=s.llm_tool_mode,
+            max_retries=s.llm_max_retries,
+            timeout_seconds=s.llm_timeout_seconds,
         )
     return _llm
 

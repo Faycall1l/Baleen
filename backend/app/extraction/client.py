@@ -119,6 +119,18 @@ class LLMClient:
         """
         return self.chat(messages, tools=tools, tool_choice=tool_choice)
 
+    def health(self) -> bool:
+        """Probe the OpenAI-compatible ``/models`` endpoint. Never raises.
+
+        Used as a preflight check before live runs so a misconfigured vLLM
+        address fails fast with a clear message instead of mid-pipeline.
+        """
+        try:
+            response = httpx.get(f"{self.base_url}/models", timeout=min(self.timeout, 10))
+            return response.status_code < 400
+        except httpx.HTTPError:
+            return False
+
     # ------------------------------------------------------------------
     # Mode implementations
     # ------------------------------------------------------------------

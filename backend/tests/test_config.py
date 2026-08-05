@@ -23,6 +23,14 @@ def test_negative_retries_rejected():
         Settings(_env_file=None, llm_max_retries=-1)
 
 
+def test_llm_timeout_bounds_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_timeout_seconds=1)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_timeout_seconds=10000)
+    assert Settings(_env_file=None, llm_timeout_seconds=120).llm_timeout_seconds == 120
+
+
 def test_llm_base_url_is_trailing_slash_stripped():
     settings = Settings(_env_file=None, llm_base_url="http://localhost:8001/v1/")
     assert settings.llm_base_url == "http://localhost:8001/v1"
