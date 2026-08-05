@@ -7,6 +7,7 @@ with raw ``text()`` statements so the schema stays explicit and auditable.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from sqlalchemy import create_engine, text
@@ -70,7 +71,7 @@ class PostgresStore:
                     "text": tweet.text,
                     "created_at": tweet.created_at,
                     "url": tweet.url,
-                    "raw_json": tweet.raw_json,
+                    "raw_json": json.dumps(tweet.raw_json),
                 },
             )
         return result.rowcount == 1

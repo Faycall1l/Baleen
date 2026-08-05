@@ -38,6 +38,10 @@ def postgres_store():
         pytest.skip(f"postgres not available: {exc}")
 
     store.init_schema()
+    with store.engine.begin() as conn:
+        from sqlalchemy import text
+
+        conn.execute(text("TRUNCATE raw_tweets"))
     yield store
     store.engine.dispose()
 
