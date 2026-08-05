@@ -89,3 +89,21 @@ def test_exception_in_tick_also_triggers_backoff(settings):
     scheduler._tick()
     assert scheduler._consecutive_failures == 2
     assert _interval_of(scheduler) == 120
+
+
+def test_build_scheduler_uses_poll_interval(monkeypatch):
+    import app.main as main
+
+    captured = {}
+
+    class FakeScheduler:
+        def __init__(self, settings, processing, interval_seconds=60):
+            captured["interval_seconds"] = interval_seconds
+
+    monkeypatch.setattr(main, "BaleenScheduler", FakeScheduler)
+    monkeypatch.setattr(main.routes, "_get_processing", lambda: object())
+    settings = Settings(_env_file=None, poll_interval_seconds=321)
+
+    main._build_scheduler(settings)
+
+    assert captured["interval_seconds"] == 321

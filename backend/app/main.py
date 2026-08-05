@@ -43,8 +43,7 @@ async def lifespan(app: FastAPI):
 
     scheduler = None
     if settings.scheduler_enabled:
-        processing = routes._get_processing()
-        scheduler = BaleenScheduler(settings=settings, processing=processing)
+        scheduler = _build_scheduler(settings)
         scheduler.start()
 
     yield
@@ -52,6 +51,14 @@ async def lifespan(app: FastAPI):
     if scheduler is not None:
         scheduler.stop()
     routes.close_services()
+
+
+def _build_scheduler(settings: Settings) -> BaleenScheduler:
+    return BaleenScheduler(
+        settings=settings,
+        processing=routes._get_processing(),
+        interval_seconds=settings.poll_interval_seconds,
+    )
 
 
 app = FastAPI(title="Baleen API", version="0.1.0", lifespan=lifespan)
