@@ -11,6 +11,7 @@ import os
 import pytest
 
 from app.config import Settings
+from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 
 TEST_DATABASE_URL = os.getenv(
@@ -39,6 +40,27 @@ def postgres_store():
     store.init_schema()
     yield store
     store.engine.dispose()
+
+
+@pytest.fixture
+def neo4j_store():
+    """Neo4jStore for integration tests. Skipped when Neo4j is unreachable."""
+    from app.config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
+        neo4j_password=os.getenv("NEO4J_PASSWORD", "baleen"),
+    )
+    try:
+        store = Neo4jStore(settings)
+        store.run("RETURN 1")
+    except Exception as exc:  # pragma: no cover - depends on environment
+        pytest.skip(f"neo4j not available: {exc}")
+
+    yield store
+    store.close()
 
 
 class FakeTweetSource:
