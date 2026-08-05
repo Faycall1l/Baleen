@@ -21,7 +21,7 @@ services:
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j
     environment:
-      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-baleen}
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-baleen_dev_pass}
       NEO4J_server_memory_heap_max__size: 512M
       NEO4J_server_memory_pagecache_size: 256M
     ports:
