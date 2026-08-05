@@ -250,8 +250,12 @@ class LLMClient:
             name = raw.get("name") or raw.get("event_type")
             if name in known:
                 tool_calls.append(ToolCall(name=name, arguments=raw))
-            else:
+            elif name:
                 raise InvalidJSONError(f"unknown tool target: {name}")
+            else:
+                # No name given — leave it to the caller to match against the
+                # known schemas (the extractor validates against each model).
+                tool_calls.append(ToolCall(name="", arguments=raw))
 
         if not tool_calls:
             raise InvalidJSONError("no tool call matched a known tool")

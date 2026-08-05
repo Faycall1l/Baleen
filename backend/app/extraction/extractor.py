@@ -149,10 +149,20 @@ class EventExtractor:
         return f"### {tool['function']['name']}\n{params}"
 
     def _validate_call(self, tweet: RawTweet, name: str, arguments: dict) -> Event | None:
-        if name not in TOOLS:
-            logger.warning("unknown tool called: %s", name)
-            return None
-        _, model = TOOLS[name]
+        if name in TOOLS:
+            _, model = TOOLS[name]
+            return self._try_model(tweet, model, arguments)
+        if name == "":
+            # No tool name provided (constrained-JSON single object): match the
+            # first schema that fully validates, options-flow then congress.
+            for _, model in TOOLS.values():
+                event = self._try_model(tweet, model, arguments)
+                if event is not None:
+                    return event
+        logger.warning("unknown tool called: %s", name)
+        return None
+
+    def _try_model(self, tweet: RawTweet, model: type, arguments: dict) -> Event | None:
         payload = {
             "tweet_id": tweet.tweet_id,
             "tweet_url": tweet.url,

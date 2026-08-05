@@ -61,3 +61,34 @@ def _fetch_result(tweets, errors):
     result.tweets = list(tweets)
     result.errors = list(errors)
     return result
+
+
+class StubLLM:
+    """Deterministic LLM stub for extraction tests.
+
+    ``rules`` maps a substring of the tweet text to an :class:`LLMResponse`
+    (or a list of responses consumed in order). Anything unmatched returns an
+    empty response (no tool call).
+    """
+
+    def __init__(self, rules=None):
+        self.rules = list(rules or [])
+
+    def chat_with_tools(self, messages, tools, tool_choice="auto"):
+        from app.extraction.client import LLMResponse
+
+        user = next((m["content"] for m in messages if m["role"] == "user"), "")
+        for substring, response in self.rules:
+            if substring in user:
+                if isinstance(response, list):
+                    if response:
+                        return response.pop(0)
+                    continue
+                return response
+        return LLMResponse(content="")
+
+
+def stub_tool_call(name, arguments):
+    from app.extraction.client import LLMResponse, ToolCall
+
+    return LLMResponse(tool_calls=[ToolCall(name=name, arguments=arguments)])
