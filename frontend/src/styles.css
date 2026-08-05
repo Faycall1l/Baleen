@@ -129,6 +129,33 @@ a:hover {
   white-space: nowrap;
 }
 
+.health-pill {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.health-pill.ok {
+  color: #7ee787;
+  background: rgba(46, 160, 67, 0.15);
+  border: 1px solid rgba(46, 160, 67, 0.4);
+}
+
+.health-pill.degraded {
+  color: #e3b341;
+  background: rgba(210, 153, 34, 0.15);
+  border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.health-pill.offline {
+  color: #ff7b72;
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+}
+
 .query-bar input {
   flex: 1 1 auto;
   background: #2b2b31;

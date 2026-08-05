@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { fetchAlerts, fetchGraph } from './api';
+import { fetchAlerts, fetchGraph, fetchHealth } from './api';
 import AlertsPanel from './components/AlertsPanel';
 import GraphView from './components/GraphView';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
 import { theme } from './theme';
-import type { Alert, GraphData, GraphNode, QueryResponse } from './types';
+import type { Alert, GraphData, GraphNode, Health, QueryResponse } from './types';
 
 function QueryResultView({ result }: { result: QueryResponse }) {
   return (
@@ -43,6 +43,31 @@ function QueryResultView({ result }: { result: QueryResponse }) {
   );
 }
 
+function HealthPill({ health }: { health: Health | null }) {
+  if (!health) {
+    return (
+      <span className="health-pill offline" title="Backend unreachable">
+        offline
+      </span>
+    );
+  }
+  const down = Object.entries(health.checks)
+    .filter(([, c]) => c.status !== 'ok')
+    .map(([name]) => name);
+  const title =
+    down.length > 0
+      ? `degraded: ${down.join(', ')} down`
+      : 'all systems ok';
+  return (
+    <span
+      className={`health-pill ${health.status === 'ok' ? 'ok' : 'degraded'}`}
+      title={title}
+    >
+      {health.status}
+    </span>
+  );
+}
+
 export default function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -66,6 +91,7 @@ export default function App() {
   }, []);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [health, setHealth] = useState<Health | null>(null);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -79,6 +105,16 @@ export default function App() {
     return () => clearInterval(id);
   }, [loadGraph, loadAlerts]);
 
+  useEffect(() => {
+    const checkHealth = () =>
+      fetchHealth()
+        .then(setHealth)
+        .catch(() => setHealth(null));
+    checkHealth();
+    const id = setInterval(checkHealth, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -90,6 +126,7 @@ export default function App() {
         <span className="graph-stats">
           {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
         </span>
+        <HealthPill health={health} />
         <button onClick={refresh} disabled={refreshing}>
           {refreshing ? '…' : 'Refresh'}
         </button>

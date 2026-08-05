@@ -45,3 +45,14 @@ export interface Alert {
   graph_refs: string[];
   created_at: string;
 }
+
+export interface HealthCheck {
+  status: string;
+  detail?: string;
+}
+
+export interface Health {
+  status: 'ok' | 'degraded';
+  app: string;
+  checks: Record<string, HealthCheck>;
+}
