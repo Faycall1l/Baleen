@@ -77,7 +77,7 @@ POLITICIANS: list[dict] = [
     {"id": "K000393", "name": "John Kennedy", "party": "R", "chamber": "senate", "committees": ["SSBK"]},
     {"id": "C001098", "name": "Ted Cruz", "party": "R", "chamber": "senate", "committees": ["SSEG"]},
     {"id": "S000033", "name": "Bernie Sanders", "party": "I", "chamber": "senate", "committees": ["SSHR"]},
-    {"id": "C000127", "name": "Bill Cassidy", "party": "R", "chamber": "senate", "committees": ["SSHR"]},
+    {"id": "C000261", "name": "Bill Cassidy", "party": "R", "chamber": "senate", "committees": ["SSHR"]},
     {"id": "T000278", "name": "Tommy Tuberville", "party": "R", "chamber": "senate", "committees": ["SSAS"]},
     {"id": "R000122", "name": "Jack Reed", "party": "D", "chamber": "senate", "committees": ["SSAS"]},
     {"id": "T000467", "name": "Glenn Thompson", "party": "R", "chamber": "house", "committees": ["HSAG"]},
