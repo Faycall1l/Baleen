@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -72,6 +73,13 @@ def test_pipeline_rerun_is_idempotent(settings, postgres_store):
 # ---------------------------------------------------------------------------
 
 
+def _rate_limited() -> "tweepy.errors.TooManyRequests":
+    import tweepy
+
+    fake_response = SimpleNamespace(status_code=429, reason="Too Many Requests")
+    return tweepy.errors.TooManyRequests(fake_response, response_json={"errors": []})
+
+
 def test_retry_backoff_on_transient_error(monkeypatch):
     source = XApiSource(bearer_token="test", max_retries=2, base_delay_seconds=0.01)
 
@@ -82,9 +90,7 @@ def test_retry_backoff_on_transient_error(monkeypatch):
         def search_recent_tweets(self, **kwargs):
             self.attempts += 1
             if self.attempts < 3:
-                import tweepy
-
-                raise tweepy.errors.TooManyRequests("rate limited")
+                raise _rate_limited()
             return None
 
     monkeypatch.setattr(source, "_client", FlakyClient())
@@ -102,14 +108,11 @@ def test_gives_up_after_max_retries(monkeypatch):
             pass
 
         def search_recent_tweets(self, **kwargs):
-            import tweepy
-
-            raise tweepy.errors.TooManyRequests("rate limited")
+            raise _rate_limited()
 
     monkeypatch.setattr(source, "_client", AlwaysFail())
     result = source.fetch_recent(["somehandle"], 60)
 
-    assert source._client  # sanity
     assert not result.ok
     assert result.errors
     assert "X API fetch failed" in result.errors[0]
