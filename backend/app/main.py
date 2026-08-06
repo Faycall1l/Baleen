@@ -67,16 +67,23 @@ app.include_router(routes.router)
 
 @app.get("/health")
 def health(response: Response) -> dict:
-    """Liveness + component checks (Postgres, Neo4j).
+    """Liveness + component checks (Postgres, Neo4j, optional LLM).
 
     Returns 503 when a core dependency is down; the body names which one.
-    The LLM / X API are intentionally absent: placeholders are valid in dev.
+    The LLM is probed only when a real model name is configured (placeholders
+    are valid in dev). X API is intentionally absent (a probe costs a rate
+    limit).
     """
+    settings = get_settings()
     checks = {}
-    for name, probe in (
+    checks_spec = [
         ("postgres", _check_postgres),
         ("neo4j", _check_neo4j),
-    ):
+    ]
+    if settings.llm_configured:
+        checks_spec.append(("llm", _check_llm))
+
+    for name, probe in checks_spec:
         try:
             probe()
             checks[name] = {"status": "ok"}
@@ -96,3 +103,10 @@ def _check_postgres() -> None:
 
 def _check_neo4j() -> None:
     routes._get_neo4j().run("RETURN 1")
+
+
+def _check_llm() -> None:
+    if not routes._get_llm().health():
+        raise RuntimeError(
+            f"LLM endpoint unreachable (probe GET {routes._get_llm().base_url}/models)"
+        )

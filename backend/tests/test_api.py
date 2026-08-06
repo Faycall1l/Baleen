@@ -53,6 +53,35 @@ def test_health():
         assert res.json()["checks"]["neo4j"]["status"] == "ok"
 
 
+def test_health_reports_llm_down_when_configured(monkeypatch):
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+
+    import app.main as main
+    from app.config import Settings
+
+    class DownLLM:
+        base_url = "http://llm/v1"
+
+        def health(self):
+            return False
+
+    # A real model name is configured, so /health must probe the LLM.
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: Settings(_env_file=None, llm_model_name="Meta-Llama-3-8B"),
+    )
+    monkeypatch.setattr(main.routes, "_get_llm", lambda: DownLLM())
+
+    with _client() as c:
+        res = c.get("/health")
+        body = res.json()
+        assert res.status_code == 503
+        assert body["checks"]["llm"]["status"] == "down"
+        assert body["checks"]["postgres"]["status"] == "ok"
+
+
 def test_graph_export():
     if not _services_available():
         pytest.skip("postgres/neo4j not available")

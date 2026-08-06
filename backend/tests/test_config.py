@@ -42,6 +42,12 @@ def test_x_api_configured_treats_placeholders_as_unconfigured():
     assert Settings(_env_file=None, x_api_bearer_token="real-token-value").x_api_configured is True
 
 
+def test_llm_configured_treats_placeholders_as_unconfigured():
+    for name in ("", "placeholder-model", "your-model-name"):
+        assert Settings(_env_file=None, llm_model_name=name).llm_configured is False
+    assert Settings(_env_file=None, llm_model_name="Meta-Llama-3-8B-Instruct").llm_configured is True
+
+
 def test_x_max_pages_bounds_rejected():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, x_max_pages=0)

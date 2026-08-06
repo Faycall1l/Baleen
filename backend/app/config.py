@@ -14,6 +14,9 @@ ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 #: "not configured" so the scheduler and live tools refuse to run against them.
 PLACEHOLDER_TOKENS = frozenset({"", "placeholder-bearer-token", "your-x-api-bearer-token"})
 
+#: Placeholder model names treated as "not configured" (no LLM health probe).
+PLACEHOLDER_MODEL_NAMES = frozenset({"", "placeholder-model", "your-model-name"})
+
 
 class Settings(BaseSettings):
     """All environment configuration for the Baleen backend.
@@ -122,6 +125,15 @@ class Settings(BaseSettings):
     def x_api_configured(self) -> bool:
         """True only when a real X API bearer token is supplied."""
         return self.x_api_bearer_token not in PLACEHOLDER_TOKENS
+
+    @property
+    def llm_configured(self) -> bool:
+        """True when a real model name is configured (not a placeholder).
+
+        Used to decide whether /health should probe the LLM endpoint — probing
+        a nonexistent dev endpoint every 15s would be noise.
+        """
+        return self.llm_model_name not in PLACEHOLDER_MODEL_NAMES
 
 
 @lru_cache
