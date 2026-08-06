@@ -324,3 +324,78 @@ def test_post_network_failure_raises_transport(monkeypatch):
 
     with pytest.raises(LLMTransportError):
         client._post({"messages": []})
+
+
+# ---------------------------------------------------------------------------
+# LLM transport retry / backoff
+# ---------------------------------------------------------------------------
+
+
+class _OkResponse:
+    status_code = 200
+
+    def json(self):
+        return {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+
+
+def test_post_retries_transport_then_recovers(monkeypatch):
+    import httpx
+
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise httpx.ConnectError("flaky")
+        return _OkResponse()
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.extraction.client.httpx.post", flaky)
+
+    client = LLMClient("http://llm", "k", "m", max_retries=2)
+    data = client._post({"messages": []})
+
+    assert calls["n"] == 3
+    assert data["choices"][0]["message"]["content"] == "ok"
+
+
+def test_post_gives_up_after_max_retries(monkeypatch):
+    import httpx
+
+    calls = {"n": 0}
+
+    def always_down(*a, **k):
+        calls["n"] += 1
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.extraction.client.httpx.post", always_down)
+
+    from app.extraction.client import LLMTransportError
+
+    client = LLMClient("http://llm", "k", "m", max_retries=2)
+    with pytest.raises(LLMTransportError):
+        client._post({"messages": []})
+    assert calls["n"] == 3  # 1 attempt + 2 retries
+
+
+def test_json_mode_transport_not_double_retried(monkeypatch):
+    """A down endpoint must cost (max_retries + 1) requests, not quadratic."""
+    import httpx
+
+    calls = {"n": 0}
+
+    def always_down(*a, **k):
+        calls["n"] += 1
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.extraction.client.httpx.post", always_down)
+
+    from app.extraction.client import LLMTransportError
+
+    client = LLMClient("http://llm", "k", "m", tool_mode="json", max_retries=1)
+    with pytest.raises(LLMTransportError):
+        client.chat_with_tools([{"role": "user", "content": "hi"}], [])
+
+    assert calls["n"] == 2  # 1 attempt + 1 retry, not 4

@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -145,6 +146,32 @@ class LLMClient:
     # ------------------------------------------------------------------
 
     def _post(self, payload: dict) -> dict:
+        """POST with bounded exponential backoff on transport failures.
+
+        Network errors, HTTP error statuses, and non-JSON gateway responses are
+        retried up to ``max_retries`` times so a transient vLLM restart or
+        network blip does not fail an otherwise-good run. Content errors (bad
+        model output) are the caller's concern and are never retried here.
+        """
+        attempt = 0
+        while True:
+            try:
+                return self._post_once(payload)
+            except LLMTransportError as exc:
+                attempt += 1
+                if attempt > self.max_retries:
+                    raise
+                delay = min(2.0 ** (attempt - 1), 8.0)
+                logger.warning(
+                    "LLM transport failure (%d/%d): %s; retrying in %.1fs",
+                    attempt,
+                    self.max_retries,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+
+    def _post_once(self, payload: dict) -> dict:
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -197,6 +224,10 @@ class LLMClient:
                     tool_calls=self._parse_tool_calls_from_json(response.content, tools),
                     raw=response.raw,
                 )
+            except LLMTransportError:
+                # Already retried with backoff inside _post; do not retry here
+                # (that would make transport attempts quadratic).
+                raise
             except (InvalidJSONError, LLMError) as exc:
                 attempt += 1
                 if attempt > self.max_retries:
