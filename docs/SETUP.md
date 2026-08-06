@@ -142,6 +142,17 @@ python -m scripts.retry_unparsed --process    # reset, then run the pipeline imm
 Tweets that *later* produced a typed event keep only that event — their stale
 `UnparsedEvent` nodes are purged automatically (obsolete records).
 
+### Cleaning up orphaned events
+
+Demo/test runs can leave `Event` nodes whose source tweet is no longer in
+`raw_tweets`. Prune them so the graph only holds verifiable provenance
+(reference nodes — politicians, committees, sectors, tickers — are untouched):
+
+```bash
+python -m scripts.prune_orphan_events --dry-run   # preview
+python -m scripts.prune_orphan_events             # delete orphans
+```
+
 ## 6. Neo4j read-only role (query agent)
 
 The query agent must run against a **read-only** Neo4j user so it can never

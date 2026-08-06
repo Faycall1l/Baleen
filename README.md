@@ -56,7 +56,8 @@ Baleen/
 ├── docs/                     # ARCHITECTURE, SCHEMA, SETUP, ALERTS, ASSUMPTIONS
 ├── backend/                  # FastAPI: ingestion, extraction, graph, query, alerts
 │   ├── app/
-│   ├── scripts/              # seed_reference.py, ingest_once.py, llm_mock.py
+│   ├── scripts/              # seed_reference, ingest_once (--live), llm_mock,
+│   │                         #   retry_unparsed, prune_orphan_events
 │   └── tests/
 └── frontend/                 # React + Vite: graph view, query bar, alerts panel
 ```
