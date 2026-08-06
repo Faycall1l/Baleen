@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import text
 
 from app.ingestion.pipeline import IngestionPipeline
 from app.ingestion.source import RawTweet
@@ -71,6 +72,17 @@ def test_bulk_insert_counts_new_and_skipped(postgres_store):
 
 def test_bulk_insert_empty_batch_is_noop(postgres_store):
     assert postgres_store.insert_raw_tweets([]) == (0, 0)
+
+
+def test_schema_is_idempotent_and_serves_new_tweet_query(postgres_store):
+    postgres_store.init_schema()  # second run must not fail
+    with postgres_store.engine.connect() as conn:
+        indexes = conn.execute(
+            text(
+                "SELECT indexname FROM pg_indexes WHERE tablename = 'raw_tweets'"
+            )
+        ).scalars().all()
+    assert "idx_raw_tweets_status_created" in indexes
 
 
 def test_reset_status_requeues_tweets_for_processing(postgres_store):

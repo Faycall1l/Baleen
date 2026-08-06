@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS raw_tweets (
     status        TEXT NOT NULL DEFAULT 'new'
 );
 CREATE INDEX IF NOT EXISTS idx_raw_tweets_status ON raw_tweets (status);
+CREATE INDEX IF NOT EXISTS idx_raw_tweets_status_created
+    ON raw_tweets (status, created_at);
 
 CREATE TABLE IF NOT EXISTS alert_rules (
     id          SERIAL PRIMARY KEY,
