@@ -193,8 +193,14 @@ Every Cypher statement runs inside a transaction with a server-enforced timeout
 (`NEO4J_QUERY_TIMEOUT_SECONDS`, default 30; set `0` to disable). This protects
 the API and the query agent from pathological queries hanging the stack.
 
-## 7. Run tests
+### Health endpoint
 
+`GET /health` reports Postgres and Neo4j connectivity (503 when either is
+down). Once `LLM_MODEL_NAME` is a real model (not a placeholder), it also
+probes the LLM endpoint (`GET /models`) — useful during the live trial, since
+the frontend health pill reflects it.
+
+## 7. Run tests
 ```bash
 cd backend
 pip install -r requirements-dev.txt
