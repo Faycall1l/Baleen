@@ -15,7 +15,12 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.extraction.client import InvalidJSONError, LLMClient, LLMError
+from app.extraction.client import (
+    InvalidJSONError,
+    LLMClient,
+    LLMError,
+    LLMTransportError,
+)
 from app.ingestion.source import RawTweet
 from app.models.events import (
     CongressTradeEvent,
@@ -93,13 +98,22 @@ class EventExtractor:
     # ------------------------------------------------------------------
 
     def extract(self, tweet: RawTweet) -> Event:
-        """Classify one raw tweet into a typed event (never raises)."""
+        """Classify one raw tweet into a typed event.
+
+        Content failures (invalid JSON, no tool call, bad schema) never raise
+        and become :class:`UnparsedEvent`. Transport failures (LLM endpoint
+        unreachable/down) raise :class:`LLMTransportError` so callers leave the
+        tweet pending and retry later — a down model must not permanently
+        convert a whole batch to unparsed.
+        """
         tools = build_tool_definitions()
         messages = self._messages(tweet, tools)
 
         for attempt in range(self.max_tries):
             try:
                 response = self.client.chat_with_tools(messages, tools)
+            except LLMTransportError:
+                raise
             except LLMError as exc:
                 logger.warning("LLM call failed for tweet %s: %s", tweet.tweet_id, exc)
                 return self._unparsed(tweet, f"LLM call failed: {exc}")

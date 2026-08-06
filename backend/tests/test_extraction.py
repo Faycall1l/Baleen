@@ -170,6 +170,19 @@ def test_malformed_tool_arguments_route_to_unparsed(settings):
     assert "failed after retries" in event.reason
 
 
+def test_transport_failure_raises_instead_of_unparsed(settings):
+    from app.extraction.client import LLMTransportError
+
+    class DownLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            raise LLMTransportError("connection refused")
+
+    extractor = EventExtractor(client=DownLLM())
+
+    with pytest.raises(LLMTransportError):
+        extractor.extract(_tweet(text="big $NVDA options flow"))
+
+
 # ---------------------------------------------------------------------------
 # Constrained-JSON fallback parsing
 # ---------------------------------------------------------------------------
@@ -276,3 +289,38 @@ def test_health_false_when_endpoint_unreachable(monkeypatch):
 
     monkeypatch.setattr("app.extraction.client.httpx.get", raise_timeout)
     assert client.health() is False
+
+
+# ---------------------------------------------------------------------------
+# Transport failures raise LLMTransportError (tweets stay pending, not unparsed)
+# ---------------------------------------------------------------------------
+
+
+def test_post_http_error_status_raises_transport(monkeypatch):
+    from app.extraction.client import LLMTransportError
+
+    class _FakeResponse:
+        status_code = 503
+        text = "service unavailable"
+
+    client = LLMClient("http://llm", "k", "m")
+    monkeypatch.setattr("app.extraction.client.httpx.post", lambda *a, **k: _FakeResponse())
+
+    with pytest.raises(LLMTransportError, match="503"):
+        client._post({"messages": []})
+
+
+def test_post_network_failure_raises_transport(monkeypatch):
+    import httpx
+
+    from app.extraction.client import LLMTransportError
+
+    client = LLMClient("http://llm", "k", "m")
+
+    def raise_connect_error(*a, **k):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr("app.extraction.client.httpx.post", raise_connect_error)
+
+    with pytest.raises(LLMTransportError):
+        client._post({"messages": []})

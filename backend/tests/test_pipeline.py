@@ -24,6 +24,15 @@ class _RaisingExtractor:
         )
 
 
+class _TransportDownExtractor:
+    """Simulates the LLM endpoint being unreachable (transient infrastructure)."""
+
+    def extract(self, tweet: RawTweet):
+        from app.extraction.client import LLMTransportError
+
+        raise LLMTransportError("connection refused")
+
+
 class _FakeWriter:
     def write_event(self, event) -> str:
         return f"evt_{event.tweet_id}"
@@ -69,3 +78,22 @@ def test_failed_tweet_does_not_abort_batch_or_get_marked_extracted(postgres_stor
     # A second run retries only the failed tweet.
     retry = pipeline.process_new()
     assert retry["failed"] == 1
+
+
+def test_transport_failure_leaves_tweet_pending_for_retry(postgres_store):
+    postgres_store.insert_raw_tweet(_raw("t-1"))
+
+    pipeline = ProcessingPipeline(
+        extractor=_TransportDownExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=_NoopAlertEngine(),
+        store=postgres_store,
+    )
+
+    summary = pipeline.process_new()
+
+    assert summary["failed"] == 1
+    # A down LLM must not mark the tweet extracted: it stays new and is retried
+    # on the next run once the endpoint recovers.
+    pending = postgres_store.get_new_tweets(limit=10)
+    assert [t.tweet_id for t in pending] == ["t-1"]

@@ -38,6 +38,15 @@ class LLMError(Exception):
     """Base error for any LLM call failure."""
 
 
+class LLMTransportError(LLMError):
+    """Transient infrastructure failure (network, timeout, HTTP error status).
+
+    Raised for conditions that will not improve by marking the tweet as
+    unparsed — the endpoint is unreachable or misbehaving at the transport
+    level. Callers should leave the tweet pending and retry later.
+    """
+
+
 class InvalidJSONError(LLMError):
     """The model returned content that could not be parsed as JSON."""
 
@@ -144,16 +153,18 @@ class LLMClient:
         try:
             response = httpx.post(url, json=payload, headers=headers, timeout=self.timeout)
         except httpx.HTTPError as exc:
-            raise LLMError(f"LLM transport error: {exc}") from exc
+            raise LLMTransportError(f"LLM transport error: {exc}") from exc
 
         if response.status_code >= 400:
-            raise LLMError(
+            raise LLMTransportError(
                 f"LLM endpoint returned {response.status_code}: {response.text[:300]}"
             )
         try:
             return response.json()
         except json.JSONDecodeError as exc:
-            raise LLMError(f"LLM returned non-JSON response: {response.text[:300]}") from exc
+            raise LLMTransportError(
+                f"LLM returned non-JSON response: {response.text[:300]}"
+            ) from exc
 
     def _chat_plain(self, messages: list[dict]) -> LLMResponse:
         payload = self._payload(messages)
