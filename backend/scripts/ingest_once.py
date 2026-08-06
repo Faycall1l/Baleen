@@ -28,7 +28,7 @@ import logging
 from app.config import Settings, get_settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.extraction.client import LLMClient
+from app.extraction.client import LLMClient, LLMTransportError
 from app.extraction.extractor import EventExtractor
 from app.graph.writer import GraphWriter
 from app.ingestion.pipeline import IngestionPipeline
@@ -121,7 +121,14 @@ def main() -> None:
     logger.info("ingested %s new tweets (%s duplicates skipped)", inserted, skipped)
 
     processing = build_pipeline(settings)
-    summary = processing.process_new(limit=settings.process_batch_size)
+    try:
+        summary = processing.process_new(limit=settings.process_batch_size)
+    except LLMTransportError:
+        raise SystemExit(
+            f"Processing failed because the LLM endpoint is unreachable "
+            f"({settings.llm_base_url}). Tweets are left pending and will be "
+            f"processed once vLLM recovers."
+        )
     logger.info("processing summary: %s", summary)
     print(f"\nDone. Ingested {inserted}, processed {summary}.")
 

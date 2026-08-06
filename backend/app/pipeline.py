@@ -17,6 +17,7 @@ import logging
 
 from app.alerts.engine import AlertEngine
 from app.db.postgres import PostgresStore
+from app.extraction.client import LLMTransportError
 from app.extraction.extractor import EventExtractor
 from app.graph.writer import GraphWriter
 
@@ -43,10 +44,16 @@ class ProcessingPipeline:
         or alert evaluation) is logged and skipped, never aborting the batch.
         Only fully-successful tweets are marked ``extracted``, so a failed tweet
         is retried on the next run (all stages are idempotent).
+
+        If the *entire* batch failed only because the LLM endpoint was
+        unreachable, :class:`LLMTransportError` is raised so the scheduler can
+        back off instead of hammering a dead endpoint every tick. Mixed
+        failures never raise.
         """
         tweets = self.store.get_new_tweets(limit=limit)
         summary = {"processed": 0, "unparsed": 0, "alerts": 0, "failed": 0}
         done_ids: list[str] = []
+        transport_failures = 0
 
         for tweet in tweets:
             try:
@@ -67,6 +74,13 @@ class ProcessingPipeline:
                     event.event_type,
                     event_id,
                 )
+            except LLMTransportError:
+                transport_failures += 1
+                summary["failed"] += 1
+                logger.warning(
+                    "LLM unreachable while processing tweet %s; leaving pending",
+                    tweet.tweet_id,
+                )
             except Exception:
                 summary["failed"] += 1
                 logger.exception(
@@ -76,6 +90,16 @@ class ProcessingPipeline:
 
         if done_ids:
             self.store.mark_extracted(done_ids)
+
+        if (
+            tweets
+            and summary["failed"] == transport_failures
+            and transport_failures > 0
+            and summary["processed"] == 0
+        ):
+            raise LLMTransportError(
+                f"LLM endpoint unreachable for all {transport_failures} tweet(s)"
+            )
 
         logger.info("processing complete: %s", summary)
         return summary

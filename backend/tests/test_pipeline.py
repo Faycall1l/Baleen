@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from app.pipeline import ProcessingPipeline
 from app.ingestion.source import RawTweet
 from app.models.events import OptionsFlowEvent
@@ -30,6 +32,23 @@ class _TransportDownExtractor:
     def extract(self, tweet: RawTweet):
         from app.extraction.client import LLMTransportError
 
+        raise LLMTransportError("connection refused")
+
+
+class _MixedExtractor:
+    """Succeeds for ``ok-*`` tweets, transport-fails for everything else."""
+
+    def extract(self, tweet: RawTweet):
+        from app.extraction.client import LLMTransportError
+
+        if tweet.tweet_id.startswith("ok-"):
+            return OptionsFlowEvent(
+                tweet_id=tweet.tweet_id,
+                tweet_url=tweet.url,
+                confidence=0.9,
+                ticker="JPM",
+                contract_type="call",
+            )
         raise LLMTransportError("connection refused")
 
 
@@ -81,6 +100,8 @@ def test_failed_tweet_does_not_abort_batch_or_get_marked_extracted(postgres_stor
 
 
 def test_transport_failure_leaves_tweet_pending_for_retry(postgres_store):
+    from app.extraction.client import LLMTransportError
+
     postgres_store.insert_raw_tweet(_raw("t-1"))
 
     pipeline = ProcessingPipeline(
@@ -90,10 +111,51 @@ def test_transport_failure_leaves_tweet_pending_for_retry(postgres_store):
         store=postgres_store,
     )
 
-    summary = pipeline.process_new()
+    with pytest.raises(LLMTransportError):
+        pipeline.process_new()
 
-    assert summary["failed"] == 1
     # A down LLM must not mark the tweet extracted: it stays new and is retried
     # on the next run once the endpoint recovers.
     pending = postgres_store.get_new_tweets(limit=10)
     assert [t.tweet_id for t in pending] == ["t-1"]
+
+
+def test_whole_batch_transport_failure_raises_for_backoff(postgres_store):
+    """When the LLM is fully down, signal the scheduler to back off."""
+    from app.extraction.client import LLMTransportError
+
+    postgres_store.insert_raw_tweet(_raw("t-1"))
+    postgres_store.insert_raw_tweet(_raw("t-2"))
+
+    pipeline = ProcessingPipeline(
+        extractor=_TransportDownExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=_NoopAlertEngine(),
+        store=postgres_store,
+    )
+
+    with pytest.raises(LLMTransportError):
+        pipeline.process_new()
+
+    pending = postgres_store.get_new_tweets(limit=10)
+    assert [t.tweet_id for t in pending] == ["t-1", "t-2"]
+
+
+def test_mixed_transport_and_success_does_not_raise(postgres_store):
+    postgres_store.insert_raw_tweet(_raw("ok-good"))
+    postgres_store.insert_raw_tweet(_raw("bad-down"))
+
+    pipeline = ProcessingPipeline(
+        extractor=_MixedExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=_NoopAlertEngine(),
+        store=postgres_store,
+    )
+
+    summary = pipeline.process_new()
+
+    assert summary["processed"] == 1
+    assert summary["failed"] == 1
+    # Only the successfully-processed tweet is marked extracted.
+    pending = postgres_store.get_new_tweets(limit=10)
+    assert [t.tweet_id for t in pending] == ["bad-down"]

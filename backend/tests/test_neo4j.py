@@ -34,7 +34,7 @@ def test_query_timeout_kills_long_running_statement():
         with pytest.raises(Exception) as excinfo:
             store.run(
                 "UNWIND range(1,10000000) AS x WITH sum(x) AS s RETURN s",
-                timeout=1,
+                timeout=0.2,
             )
         assert "TransactionTimedOut" in str(excinfo.value)
     finally:
@@ -50,8 +50,10 @@ def test_configured_cap_applies_to_default_calls():
     if not _available(store):
         pytest.skip("neo4j not available")
     try:
+        # 60M rows takes ~3.3s uncapped: far past the 1s cap regardless of
+        # machine load, so the timeout is not flaky.
         with pytest.raises(Exception) as excinfo:
-            store.run("UNWIND range(1,10000000) AS x WITH sum(x) AS s RETURN s")
+            store.run("UNWIND range(1,60000000) AS x WITH sum(x) AS s RETURN s")
         assert "TransactionTimedOut" in str(excinfo.value)
     finally:
         store.close()
