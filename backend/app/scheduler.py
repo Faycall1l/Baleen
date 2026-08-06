@@ -41,7 +41,10 @@ class BaleenScheduler:
         self.interval_seconds = interval_seconds
         self.max_backoff_seconds = max_backoff_seconds
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.source = XApiSource(settings.x_api_bearer_token)
+        self.source = XApiSource(
+            settings.x_api_bearer_token,
+            max_pages=settings.x_max_pages,
+        )
         self.ingestion = IngestionPipeline(self.source, processing.store, self.settings)
         self._consecutive_failures = 0
         self._job_id = "baleen-tick"

@@ -40,3 +40,11 @@ def test_x_api_configured_treats_placeholders_as_unconfigured():
     for token in ("", "placeholder-bearer-token", "your-x-api-bearer-token"):
         assert Settings(_env_file=None, x_api_bearer_token=token).x_api_configured is False
     assert Settings(_env_file=None, x_api_bearer_token="real-token-value").x_api_configured is True
+
+
+def test_x_max_pages_bounds_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, x_max_pages=0)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, x_max_pages=100)
+    assert Settings(_env_file=None, x_max_pages=5).x_max_pages == 5

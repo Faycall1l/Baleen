@@ -101,7 +101,10 @@ def main() -> None:
 
         from app.ingestion.x_api import XApiSource
 
-        source = XApiSource(settings.x_api_bearer_token)
+        source = XApiSource(
+            settings.x_api_bearer_token,
+            max_pages=settings.x_max_pages,
+        )
         logger.info(
             "live source: handles=%s window=%ss llm=%s/%s",
             settings.x_handles,

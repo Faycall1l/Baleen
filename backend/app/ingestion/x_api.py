@@ -30,6 +30,7 @@ class XApiSource(TweetSource):
         base_delay_seconds: float = 2.0,
         backoff_factor: float = 2.0,
         max_results: int = 100,
+        max_pages: int = 3,
     ) -> None:
         if not isinstance(bearer_token, str) or not bearer_token:
             raise TypeError("bearer_token must be a non-empty string")
@@ -38,6 +39,7 @@ class XApiSource(TweetSource):
         self._base_delay = base_delay_seconds
         self._backoff_factor = backoff_factor
         self._max_results = max_results
+        self._max_pages = max_pages
 
     # ------------------------------------------------------------------
     # TweetSource interface
@@ -50,59 +52,77 @@ class XApiSource(TweetSource):
 
         query = " OR ".join(f"from:{h}" for h in handles)
         start_time = datetime.now(timezone.utc) - timedelta(seconds=since_seconds)
+        seen_ids: set[str] = set()
+        next_token: str | None = None
 
-        logger.info("fetching recent tweets [query=%r start_time=%s]", query, start_time)
-        try:
-            response = self._with_retry(
-                lambda: self._client.search_recent_tweets(
-                    query=query,
-                    start_time=start_time,
-                    max_results=self._max_results,
-                    tweet_fields=["id", "created_at", "author_id", "text"],
-                    user_fields=["username", "name"],
-                    expansions=["author_id"],
-                )
+        for page in range(1, self._max_pages + 1):
+            logger.info(
+                "fetching recent tweets page %d [query=%r start_time=%s]",
+                page,
+                query,
+                start_time,
             )
-        except tweepy.errors.Unauthorized:
-            message = "X API unauthorized — check X_API_BEARER_TOKEN"
-            logger.error(message)
-            result.errors.append(message)
-            return result
-        except tweepy.errors.TweepyException as exc:
-            message = f"X API fetch failed: {exc}"
-            logger.error(message)
-            result.errors.append(message)
-            return result
-
-        if not response or not response.data:
-            logger.info("no tweets returned")
-            return result
-
-        users = {u.id: u.username for u in (response.includes.get("users", []) or [])}
-        for tweet in response.data:
-            handle = users.get(tweet.author_id, "unknown")
-            created_at = tweet.created_at
-            if created_at.tzinfo is None:
-                # X API timestamps are UTC; normalize naive datetimes so
-                # Postgres TIMESTAMPTZ round-trips correctly.
-                created_at = created_at.replace(tzinfo=timezone.utc)
-            result.tweets.append(
-                RawTweet(
-                    tweet_id=str(tweet.id),
-                    author_handle=handle,
-                    author_id=str(tweet.author_id),
-                    text=tweet.text,
-                    created_at=created_at,
-                    url=f"https://x.com/{handle}/status/{tweet.id}",
-                    raw_json=tweet.data,
+            try:
+                response = self._with_retry(
+                    lambda: self._client.search_recent_tweets(
+                        query=query,
+                        start_time=start_time,
+                        max_results=self._max_results,
+                        tweet_fields=["id", "created_at", "author_id", "text"],
+                        user_fields=["username", "name"],
+                        expansions=["author_id"],
+                        next_token=next_token,
+                    )
                 )
-            )
+            except tweepy.errors.Unauthorized:
+                message = "X API unauthorized — check X_API_BEARER_TOKEN"
+                logger.error(message)
+                result.errors.append(message)
+                return result
+            except tweepy.errors.TweepyException as exc:
+                message = f"X API fetch failed: {exc}"
+                logger.error(message)
+                result.errors.append(message)
+                return result
 
-        logger.info(
-            "fetched %d tweets [query=%r]",
-            len(result.tweets),
-            query,
-        )
+            if not response or not response.data:
+                logger.info("no tweets returned")
+                return result
+
+            users = {u.id: u.username for u in (response.includes.get("users", []) or [])}
+            page_new = 0
+            for tweet in response.data:
+                tweet_id = str(tweet.id)
+                if tweet_id in seen_ids:
+                    continue
+                seen_ids.add(tweet_id)
+                page_new += 1
+                handle = users.get(tweet.author_id, "unknown")
+                created_at = tweet.created_at
+                if created_at.tzinfo is None:
+                    # X API timestamps are UTC; normalize naive datetimes so
+                    # Postgres TIMESTAMPTZ round-trips correctly.
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                result.tweets.append(
+                    RawTweet(
+                        tweet_id=tweet_id,
+                        author_handle=handle,
+                        author_id=str(tweet.author_id),
+                        text=tweet.text,
+                        created_at=created_at,
+                        url=f"https://x.com/{handle}/status/{tweet.id}",
+                        raw_json=tweet.data,
+                    )
+                )
+
+            logger.info("page %d: %d new tweet(s)", page, page_new)
+
+            meta = getattr(response, "meta", None) or {}
+            next_token = meta.get("next_token")
+            if not next_token:
+                break
+
+        logger.info("fetched %d tweets [query=%r]", len(result.tweets), query)
         return result
 
     # ------------------------------------------------------------------

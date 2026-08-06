@@ -188,6 +188,94 @@ def test_x_api_source_normalizes_naive_created_at(monkeypatch):
     assert result.tweets[0].created_at.utcoffset() == timedelta(0)
 
 
+# ---------------------------------------------------------------------------
+# Pagination (next_token)
+# ---------------------------------------------------------------------------
+
+
+def _page(tweets, next_token=None):
+    return SimpleNamespace(
+        data=tweets,
+        includes={"users": [SimpleNamespace(id="7", username="unusual_whales")]},
+        meta={"next_token": next_token},
+    )
+
+
+def _page_tweet(tweet_id):
+    return SimpleNamespace(
+        id=tweet_id,
+        author_id="7",
+        text=f"tweet {tweet_id}",
+        created_at=datetime(2026, 1, 1, 12, 0, 0),
+        data={},
+    )
+
+
+def test_pagination_follows_next_token(monkeypatch):
+    source = XApiSource(bearer_token="test", max_pages=3)
+    pages = [
+        _page([_page_tweet("1"), _page_tweet("2")], next_token="tok"),
+        _page([_page_tweet("2"), _page_tweet("3")], next_token=None),  # overlap dedup
+    ]
+
+    class PagedClient:
+        def __init__(self, bearer_token=None):
+            self.calls = 0
+            self.tokens = []
+
+        def search_recent_tweets(self, **kwargs):
+            self.calls += 1
+            self.tokens.append(kwargs.get("next_token"))
+            return pages.pop(0)
+
+    client = PagedClient()
+    monkeypatch.setattr(source, "_client", client)
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert client.calls == 2
+    assert client.tokens == [None, "tok"]
+    assert [t.tweet_id for t in result.tweets] == ["1", "2", "3"]
+
+
+def test_pagination_stops_without_next_token(monkeypatch):
+    source = XApiSource(bearer_token="test", max_pages=3)
+    pages = [_page([_page_tweet("1")], next_token=None)]
+
+    class SinglePageClient:
+        def __init__(self, bearer_token=None):
+            self.calls = 0
+
+        def search_recent_tweets(self, **kwargs):
+            self.calls += 1
+            return pages.pop(0)
+
+    client = SinglePageClient()
+    monkeypatch.setattr(source, "_client", client)
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert client.calls == 1
+    assert len(result.tweets) == 1
+
+
+def test_pagination_respects_max_pages(monkeypatch):
+    source = XApiSource(bearer_token="test", max_pages=2)
+
+    class InfiniteClient:
+        def __init__(self, bearer_token=None):
+            self.calls = 0
+
+        def search_recent_tweets(self, **kwargs):
+            self.calls += 1
+            return _page([_page_tweet(str(self.calls))], next_token="more")
+
+    client = InfiniteClient()
+    monkeypatch.setattr(source, "_client", client)
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert client.calls == 2
+    assert [t.tweet_id for t in result.tweets] == ["1", "2"]
+
+
 def test_pipeline_records_source_errors(settings, postgres_store):
     class ErrorSource:
         def fetch_recent(self, handles, since_seconds):
