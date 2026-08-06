@@ -19,6 +19,7 @@ results.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from app.db.neo4j import Neo4jStore
@@ -29,6 +30,13 @@ from app.query.validate import validate_cypher
 logger = logging.getLogger(__name__)
 
 MAX_GENERATION_ATTEMPTS = 2
+
+#: Result cap enforced on generated Cypher. A model that forgets LIMIT must not
+#: dump the whole graph into the answer prompt / API response.
+MAX_RESULT_ROWS = 200
+
+_LIMIT_RE = re.compile(r"\bLIMIT\b", re.IGNORECASE)
+_AGGREGATION_RE = re.compile(r"\b(?:count|collect|sum|avg|min|max)\s*\(", re.IGNORECASE)
 
 GENERATE_TOOL = {
     "type": "function",
@@ -145,7 +153,9 @@ class QueryAgent:
                 continue
 
             try:
-                result.rows = self.store.run_read(cypher)
+                bounded = self._bounded(cypher)
+                result.cypher = bounded
+                result.rows = self.store.run_read(bounded)
             except Exception as exc:  # syntax / runtime errors from the graph
                 logger.warning("Cypher execution failed: %s", exc)
                 messages.append(self._feedback([f"execution error: {exc}"]))
@@ -199,6 +209,21 @@ class QueryAgent:
                 return str(call.arguments.get("cypher", "")).strip()
         logger.warning("LLM returned no generate_cypher tool call")
         return ""
+
+    @staticmethod
+    def _bounded(query: str) -> str:
+        """Cap result size when the generated query has no LIMIT.
+
+        Aggregations return a handful of rows and keep their shape, so they are
+        left untouched. Applied only at execution time — rejected queries are
+        surfaced to the user exactly as generated.
+        """
+        cleaned = query.strip().rstrip(";").strip()
+        if not cleaned:
+            return cleaned
+        if _LIMIT_RE.search(cleaned) or _AGGREGATION_RE.search(cleaned):
+            return cleaned
+        return f"{cleaned}\nLIMIT {MAX_RESULT_ROWS}"
 
     def _grounded_answer(self, question: str, rows: list[dict]) -> tuple[str, list[str]]:
         messages = [

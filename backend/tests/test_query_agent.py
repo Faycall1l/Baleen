@@ -125,6 +125,64 @@ def _tool_text() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Result-size cap (no unbounded RETURNs)
+# ---------------------------------------------------------------------------
+
+
+def test_bounded_appends_limit_when_missing():
+    from app.query.agent import MAX_RESULT_ROWS, QueryAgent
+
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    bounded = agent._bounded("MATCH (e:Event) RETURN e")
+    assert bounded.endswith(f"LIMIT {MAX_RESULT_ROWS}")
+
+
+def test_bounded_keeps_existing_limit():
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    query = "MATCH (e:Event) RETURN e ORDER BY e.event_time DESC LIMIT 10"
+    assert agent._bounded(query) == query
+
+
+def test_bounded_leaves_aggregations_alone():
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    query = (
+        "MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker) "
+        "RETURN t.ticker AS ticker, count(e) AS n ORDER BY n DESC"
+    )
+    assert agent._bounded(query) == query
+
+
+def test_bounded_strips_trailing_semicolon():
+    from app.query.agent import MAX_RESULT_ROWS
+
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    bounded = agent._bounded("MATCH (e:Event) RETURN e;")
+    assert bounded.endswith(f"LIMIT {MAX_RESULT_ROWS}")
+
+
+def test_agent_caps_unbounded_query_at_execution():
+    from app.query.agent import MAX_RESULT_ROWS
+
+    captured = {}
+
+    class RecordingStore:
+        def run_read(self, cypher, **params):
+            captured["cypher"] = cypher
+            return [{"e": "row"}]
+
+    agent = QueryAgent(
+        llm=_stub_llm(cypher="MATCH (e:Event) RETURN e"),
+        store=RecordingStore(),
+    )
+    result = agent.ask("Show me all events.")
+
+    assert captured["cypher"].endswith(f"LIMIT {MAX_RESULT_ROWS}")
+    assert result.cypher == captured["cypher"]
+    assert result.rows == [{"e": "row"}]
+    assert result.answer
+
+
+# ---------------------------------------------------------------------------
 # Integration: the 3 example queries (spec §5.4)
 # ---------------------------------------------------------------------------
 
