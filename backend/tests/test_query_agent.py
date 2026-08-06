@@ -107,6 +107,23 @@ def test_agent_refuses_disallowed_generated_cypher():
     assert "disallowed" in result.answer
 
 
+def test_agent_prompt_instructs_inlining_literals():
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    system = agent._system_prompt()
+    # The executor never binds $parameters, so the model must inline literals.
+    assert "Parameterize" not in system
+    assert "Inline literal user values" in system
+    assert "Do NOT use $parameters" in system
+    assert "Use $parameters" not in _tool_text()
+    assert "Do NOT use $parameters" in _tool_text()
+
+
+def _tool_text() -> str:
+    from app.query.agent import GENERATE_TOOL
+
+    return GENERATE_TOOL["function"]["description"]
+
+
 # ---------------------------------------------------------------------------
 # Integration: the 3 example queries (spec §5.4)
 # ---------------------------------------------------------------------------

@@ -36,9 +36,10 @@ GENERATE_TOOL = {
         "name": "generate_cypher",
         "description": (
             "Write a read-only Cypher query that answers the user's question "
-            "against the provided schema. Use $parameters for user-supplied "
-            "values. Only MATCH/OPTIONAL MATCH/WHERE/RETURN/ORDER BY/LIMIT/WITH "
-            "are allowed."
+            "against the provided schema. Inline literal user values directly "
+            "in the query (quote strings). Do NOT use $parameters — the executor "
+            "does not bind them. Only MATCH/OPTIONAL MATCH/WHERE/RETURN/ORDER "
+            "BY/LIMIT/WITH are allowed."
         ),
         "parameters": {
             "type": "object",
@@ -180,10 +181,11 @@ class QueryAgent:
             "answer them factually from query results.\n\n"
             f"GRAPH SCHEMA (authoritative):\n{schema_context()}\n\n"
             "When generating Cypher, always call the `generate_cypher` tool. "
-            "Parameterize literal user values (e.g. names, tickers) with "
-            "$parameters. Never use CREATE, MERGE, SET, DELETE, or CALL. If the "
-            "question cannot be answered from this schema, call `generate_cypher` "
-            "with a query that returns nothing."
+            "Inline literal user values directly (quote strings); never use "
+            "$parameters — the executor does not bind them. Never use CREATE, "
+            "MERGE, SET, DELETE, or CALL. If the question cannot be answered "
+            "from this schema, call `generate_cypher` with a query that returns "
+            "nothing."
         )
 
     def _generate_cypher(self, messages: list[dict]) -> str:

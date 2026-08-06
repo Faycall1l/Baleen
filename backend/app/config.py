@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     neo4j_read_user: str = "baleen_reader"
     neo4j_read_password: str = "baleen_reader"
 
+    # Cap on any single Cypher statement (query agent, graph export, etc.) so a
+    # pathological query can't hang the API. 0 disables the cap.
+    neo4j_query_timeout_seconds: int = Field(default=30, ge=0, le=600)
+
     # --- Scheduler ---
     scheduler_enabled: bool = True
     seed_default_alerts: bool = True

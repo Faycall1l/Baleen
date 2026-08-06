@@ -32,19 +32,24 @@ class Neo4jStore:
                 settings.neo4j_read_uri,
                 auth=(settings.neo4j_read_user, settings.neo4j_read_password),
             )
+        # Transaction timeout in seconds; ``None`` (or 0) means "no cap".
+        self._timeout: float | None = settings.neo4j_query_timeout_seconds or None
 
     def close(self) -> None:
         self._driver.close()
         if self._read_driver is not None:
             self._read_driver.close()
 
-    def run(self, query: str, **params) -> list[dict]:
-        """Execute a write-capable statement (graph writer / seeding)."""
-        with self._driver.session() as session:
-            result = session.run(query, **params)
-            return [record.data() for record in result]
+    def run(self, query: str, timeout: float | None = None, **params) -> list[dict]:
+        """Execute a write-capable statement (graph writer / seeding).
 
-    def run_read(self, query: str, **params) -> list[dict]:
+        ``timeout`` overrides the store's configured query timeout (seconds)
+        for this single statement; ``0``/``None`` means no cap.
+        """
+        with self._driver.session() as session:
+            return self._execute(session, query, timeout, params)
+
+    def run_read(self, query: str, timeout: float | None = None, **params) -> list[dict]:
         """Execute a read-only statement via the read-only user (query agent).
 
         Uses the dedicated read-only driver when configured, otherwise the
@@ -52,5 +57,18 @@ class Neo4jStore:
         """
         driver = self._read_driver or self._driver
         with driver.session() as session:
-            result = session.run(query, **params)
-            return [record.data() for record in result]
+            return self._execute(session, query, timeout, params)
+
+    @staticmethod
+    def _execute(session, query: str, timeout: float | None, params: dict) -> list[dict]:
+        """Run a statement inside an explicit transaction with a server-enforced
+        timeout. `timeout=None` leaves the server default in place."""
+        tx = session.begin_transaction(timeout=timeout)
+        try:
+            result = tx.run(query, **params)
+            rows = [record.data() for record in result]
+            tx.commit()
+            return rows
+        except Exception:
+            tx.rollback()
+            raise

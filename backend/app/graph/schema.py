@@ -79,7 +79,8 @@ Rules for writing Cypher:
   INVOLVES_TICKER, INVOLVES_POLITICIAN, IN_COMMITTEE.
 - Queries are READ-ONLY: only MATCH, OPTIONAL MATCH, WHERE, RETURN, ORDER BY,
   LIMIT, WITH, collect, count, DISTINCT. Never use CREATE, MERGE, SET, DELETE.
-- Parameterize user-provided values with $parameters.
+- Inline literal user-provided values directly in the query (quote strings).
+  Do NOT use $parameters — the executor does not bind them.
 - Use the exact property names shown above.
 """
 
