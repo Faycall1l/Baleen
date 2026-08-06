@@ -43,11 +43,13 @@ class Neo4jStore:
     def run(self, query: str, timeout: float | None = None, **params) -> list[dict]:
         """Execute a write-capable statement (graph writer / seeding).
 
-        ``timeout`` overrides the store's configured query timeout (seconds)
-        for this single statement; ``0``/``None`` means no cap.
+        ``timeout`` overrides the store's configured query timeout for this
+        single statement; ``0`` disables it for this statement. Without an
+        override, the configured ``NEO4J_QUERY_TIMEOUT_SECONDS`` cap applies.
         """
+        effective = self._resolve_timeout(timeout)
         with self._driver.session() as session:
-            return self._execute(session, query, timeout, params)
+            return self._execute(session, query, effective, params)
 
     def run_read(self, query: str, timeout: float | None = None, **params) -> list[dict]:
         """Execute a read-only statement via the read-only user (query agent).
@@ -55,9 +57,16 @@ class Neo4jStore:
         Uses the dedicated read-only driver when configured, otherwise the
         writer driver (fine for local dev; production should pin the role).
         """
+        effective = self._resolve_timeout(timeout)
         driver = self._read_driver or self._driver
         with driver.session() as session:
-            return self._execute(session, query, timeout, params)
+            return self._execute(session, query, effective, params)
+
+    def _resolve_timeout(self, timeout: float | None) -> float | None:
+        """Per-call override: ``None`` -> configured cap, ``0`` -> no cap."""
+        if timeout is None:
+            return self._timeout
+        return None if timeout == 0 else timeout
 
     @staticmethod
     def _execute(session, query: str, timeout: float | None, params: dict) -> list[dict]:

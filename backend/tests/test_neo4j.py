@@ -41,6 +41,22 @@ def test_query_timeout_kills_long_running_statement():
         store.close()
 
 
+def test_configured_cap_applies_to_default_calls():
+    """The NEO4J_QUERY_TIMEOUT_SECONDS setting must cap plain run() calls,
+    not just explicit per-call timeouts."""
+    from app.db.neo4j import Neo4jStore
+
+    store = Neo4jStore(Settings(_env_file=None, neo4j_query_timeout_seconds=1))
+    if not _available(store):
+        pytest.skip("neo4j not available")
+    try:
+        with pytest.raises(Exception) as excinfo:
+            store.run("UNWIND range(1,10000000) AS x WITH sum(x) AS s RETURN s")
+        assert "TransactionTimedOut" in str(excinfo.value)
+    finally:
+        store.close()
+
+
 def test_default_timeout_from_settings():
     from app.db.neo4j import Neo4jStore
 
