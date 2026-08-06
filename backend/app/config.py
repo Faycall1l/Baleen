@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -71,6 +72,38 @@ class Settings(BaseSettings):
     @classmethod
     def _trim_llm_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def _require_http_scheme(cls, value: str) -> str:
+        if urlparse(value).scheme not in ("http", "https"):
+            raise ValueError(
+                f"llm_base_url must be an http(s) URL (got {value!r}; "
+                "e.g. http://localhost:8001/v1)"
+            )
+        return value
+
+    @field_validator("neo4j_uri", "neo4j_read_uri")
+    @classmethod
+    def _require_bolt_scheme(cls, value: str) -> str:
+        if not value:
+            return value  # read URI is optional
+        if urlparse(value).scheme not in ("bolt", "bolt+s", "neo4j", "neo4j+s"):
+            raise ValueError(
+                f"Neo4j URIs must be bolt(s):// or neo4j(s):// (got {value!r})"
+            )
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def _require_postgres_scheme(cls, value: str) -> str:
+        if not value:
+            return value  # optional; derived from *_host fields otherwise
+        if not urlparse(value).scheme.startswith(("postgresql", "postgres")):
+            raise ValueError(
+                f"database_url must be postgresql:// (got {value!r})"
+            )
+        return value
 
     @property
     def postgres_dsn(self) -> str:

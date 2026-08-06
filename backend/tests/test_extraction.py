@@ -394,8 +394,9 @@ def test_json_mode_transport_not_double_retried(monkeypatch):
 
     from app.extraction.client import LLMTransportError
 
+    tools = build_tool_definitions()
     client = LLMClient("http://llm", "k", "m", tool_mode="json", max_retries=1)
     with pytest.raises(LLMTransportError):
-        client.chat_with_tools([{"role": "user", "content": "hi"}], [])
+        client.chat_with_tools([{"role": "user", "content": "hi"}], tools)
 
     assert calls["n"] == 2  # 1 attempt + 1 retry, not 4
