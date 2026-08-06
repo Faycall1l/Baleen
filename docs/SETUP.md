@@ -193,6 +193,22 @@ Every Cypher statement runs inside a transaction with a server-enforced timeout
 (`NEO4J_QUERY_TIMEOUT_SECONDS`, default 30; set `0` to disable). This protects
 the API and the query agent from pathological queries hanging the stack.
 
+### Preflight check (before a live run)
+
+Before pointing Baleen at the real X API and vLLM, run the preflight script —
+one command that validates every config value and dependency (X token, LLM
+reachability incl. the `GET /models` probe, Postgres, Neo4j, scheduler) and
+exits non-zero with a clear message when anything is missing or unreachable:
+
+```bash
+cd backend
+.venv/bin/python -m scripts.preflight
+```
+
+The LLM probe also catches the classic mistake of leaving `LLM_BASE_URL`
+pointing at a port that serves something other than vLLM (non-2xx `GET /models`
+is reported as FAIL).
+
 ### Health endpoint
 
 `GET /health` reports Postgres and Neo4j connectivity (503 when either is
