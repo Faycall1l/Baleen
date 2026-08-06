@@ -197,7 +197,7 @@ def ask_question(request: QueryRequest) -> dict:
 
 
 @router.get("/alerts")
-def alerts(limit: int = 20) -> dict:
+def alerts(limit: int = Query(default=20, ge=1, le=100)) -> dict:
     try:
         rows = _get_store().get_alerts(limit=limit)
     except Exception as exc:

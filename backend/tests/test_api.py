@@ -116,3 +116,12 @@ def test_alerts_list():
         body = c.get("/api/alerts").json()
         assert "alerts" in body and "count" in body
         assert body["count"] == len(body["alerts"])
+
+
+def test_alerts_limit_is_bounded():
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+    with _client() as c:
+        assert c.get("/api/alerts?limit=0").status_code == 422
+        assert c.get("/api/alerts?limit=1000").status_code == 422
+        assert c.get("/api/alerts?limit=50").status_code == 200
