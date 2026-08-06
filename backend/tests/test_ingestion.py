@@ -54,6 +54,25 @@ def test_insert_raw_tweet_dedups_on_tweet_id(postgres_store):
     assert [t.tweet_id for t in remaining] == ["100"]
 
 
+def test_bulk_insert_counts_new_and_skipped(postgres_store):
+    postgres_store.insert_raw_tweet(_tweet("500"))  # pre-existing
+
+    tweets = [_tweet("500"), _tweet("501"), _tweet("502")]
+    inserted, skipped = postgres_store.insert_raw_tweets(tweets)
+
+    assert inserted == 2
+    assert skipped == 1
+    assert sorted(t.tweet_id for t in postgres_store.get_new_tweets(limit=10)) == [
+        "500",
+        "501",
+        "502",
+    ]
+
+
+def test_bulk_insert_empty_batch_is_noop(postgres_store):
+    assert postgres_store.insert_raw_tweets([]) == (0, 0)
+
+
 def test_reset_status_requeues_tweets_for_processing(postgres_store):
     tweets = [_tweet("300"), _tweet("301")]
     for t in tweets:

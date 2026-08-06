@@ -79,8 +79,28 @@ class PostgresStore:
     def insert_raw_tweet(self, tweet: RawTweet) -> bool:
         """Insert a tweet. Returns ``True`` if newly inserted, ``False`` if a
         duplicate was skipped (idempotency)."""
+        inserted, _ = self.insert_raw_tweets([tweet])
+        return inserted == 1
+
+    def insert_raw_tweets(self, tweets: list[RawTweet]) -> tuple[int, int]:
+        """Bulk insert; returns ``(inserted, skipped)``.
+
+        A full X API page is persisted with one batched ``INSERT ... ON
+        CONFLICT DO NOTHING`` (plus one COUNT) instead of N per-row statements,
+        so backfills and multi-handle polls round-trip in a handful of calls.
+        """
+        if not tweets:
+            return 0, 0
+
+        tweet_ids = [t.tweet_id for t in tweets]
         with self.engine.begin() as conn:
-            result = conn.execute(
+            existing = conn.execute(
+                text(
+                    "SELECT count(*) FROM raw_tweets WHERE tweet_id = ANY(:ids)"
+                ),
+                {"ids": tweet_ids},
+            ).scalar()
+            conn.execute(
                 text(
                     """
                     INSERT INTO raw_tweets
@@ -89,28 +109,21 @@ class PostgresStore:
                     ON CONFLICT (tweet_id) DO NOTHING
                     """
                 ),
-                {
-                    "tweet_id": tweet.tweet_id,
-                    "author_handle": tweet.author_handle,
-                    "author_id": tweet.author_id,
-                    "text": tweet.text,
-                    "created_at": tweet.created_at,
-                    "url": tweet.url,
-                    "raw_json": json.dumps(tweet.raw_json),
-                },
+                [
+                    {
+                        "tweet_id": t.tweet_id,
+                        "author_handle": t.author_handle,
+                        "author_id": t.author_id,
+                        "text": t.text,
+                        "created_at": t.created_at,
+                        "url": t.url,
+                        "raw_json": json.dumps(t.raw_json),
+                    }
+                    for t in tweets
+                ],
             )
-        return result.rowcount == 1
-
-    def insert_raw_tweets(self, tweets: list[RawTweet]) -> tuple[int, int]:
-        """Bulk insert; returns ``(inserted, skipped)``."""
-        inserted = 0
-        skipped = 0
-        for tweet in tweets:
-            if self.insert_raw_tweet(tweet):
-                inserted += 1
-            else:
-                skipped += 1
-        return inserted, skipped
+        inserted = len(tweets) - existing
+        return inserted, existing
 
     def get_new_tweets(self, limit: int = 100) -> list[RawTweet]:
         """Tweets not yet handed to the extraction stage."""
