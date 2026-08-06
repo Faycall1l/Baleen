@@ -59,6 +59,11 @@ above — no provider SDK is hardcoded.
 
 `tools` and `json` force either mode. See `docs/ARCHITECTURE.md` for details.
 
+Transport failures (network blips, a vLLM restart, HTTP error statuses) are
+retried with exponential backoff up to `LLM_MAX_RETRIES` (default 2), so a
+single hiccup never fails a whole run; `LLM_TIMEOUT_SECONDS` bounds each
+attempt.
+
 ### Local mock server (no LLM needed)
 
 For development and tests without any model, run the bundled stub — it serves
@@ -129,6 +134,11 @@ Ticks that fail (rate limits, transient errors) back off exponentially up to
 10 minutes and recover automatically. If the LLM endpoint is down during a tick,
 the affected tweets are *not* marked unparsed — they stay pending and are
 re-processed automatically once the endpoint recovers.
+
+Each poll walks up to `X_MAX_PAGES` (default 3) result pages of 100 tweets via
+the `next_token` cursor, deduplicating across pages, so a very active handle
+cannot starve the others in the query. Raise it to backfill a longer window;
+the API caps it at 10.
 
 ### Re-running tweets that failed to parse
 
