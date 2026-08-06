@@ -126,7 +126,9 @@ python -m scripts.ingest_once --live
 `ingest_once --live` fails fast if the token is missing or still a placeholder,
 and the scheduler (if enabled) picks up the same X API source on its timer.
 Ticks that fail (rate limits, transient errors) back off exponentially up to
-10 minutes and recover automatically.
+10 minutes and recover automatically. If the LLM endpoint is down during a tick,
+the affected tweets are *not* marked unparsed — they stay pending and are
+re-processed automatically once the endpoint recovers.
 
 ### Re-running tweets that failed to parse
 
@@ -174,6 +176,12 @@ Set the agent's credentials via `NEO4J_READ_URI` / `NEO4J_READ_USER` /
 back to the writer driver (fine for local dev — the real guardrail is the Cypher
 allowlist); once the role above exists, pin `NEO4J_READ_URI`/`NEO4J_READ_USER`/
 `NEO4J_READ_PASSWORD` in `.env` to enforce defense-in-depth.
+
+### Query timeout guard
+
+Every Cypher statement runs inside a transaction with a server-enforced timeout
+(`NEO4J_QUERY_TIMEOUT_SECONDS`, default 30; set `0` to disable). This protects
+the API and the query agent from pathological queries hanging the stack.
 
 ## 7. Run tests
 
