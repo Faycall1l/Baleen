@@ -91,6 +91,27 @@ def test_exception_in_tick_also_triggers_backoff(settings):
     assert _interval_of(scheduler) == 120
 
 
+def test_llm_transport_error_in_tick_triggers_backoff(settings):
+    """A fully-down LLM raises LLMTransportError from process_new, which must
+    surface to the scheduler as a failure so it backs off instead of hammering
+    the dead endpoint every tick."""
+    from app.extraction.client import LLMTransportError
+
+    scheduler = _started_scheduler(settings, interval=60)
+    scheduler.ingestion.run_once = Mock(
+        return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []}
+    )
+    scheduler.processing.process_new = Mock(side_effect=LLMTransportError("connection refused"))
+
+    scheduler._tick()
+    assert scheduler._consecutive_failures == 1
+    assert _interval_of(scheduler) == 60
+
+    scheduler._tick()
+    assert scheduler._consecutive_failures == 2
+    assert _interval_of(scheduler) == 120
+
+
 def test_tick_uses_configured_process_batch_size(settings):
     scheduler = _started_scheduler(settings, interval=60)
     scheduler.ingestion.run_once = Mock(
