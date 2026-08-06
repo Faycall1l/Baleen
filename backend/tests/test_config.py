@@ -48,6 +48,14 @@ def test_llm_configured_treats_placeholders_as_unconfigured():
     assert Settings(_env_file=None, llm_model_name="Meta-Llama-3-8B-Instruct").llm_configured is True
 
 
+def test_process_batch_size_bounds_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, process_batch_size=0)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, process_batch_size=5000)
+    assert Settings(_env_file=None, process_batch_size=250).process_batch_size == 250
+
+
 def test_x_max_pages_bounds_rejected():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, x_max_pages=0)

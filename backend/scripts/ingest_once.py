@@ -121,7 +121,7 @@ def main() -> None:
     logger.info("ingested %s new tweets (%s duplicates skipped)", inserted, skipped)
 
     processing = build_pipeline(settings)
-    summary = processing.process_new()
+    summary = processing.process_new(limit=settings.process_batch_size)
     logger.info("processing summary: %s", summary)
     print(f"\nDone. Ingested {inserted}, processed {summary}.")
 

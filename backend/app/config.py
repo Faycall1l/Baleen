@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # --- Scheduler ---
     scheduler_enabled: bool = True
     seed_default_alerts: bool = True
+    # Tweets pulled per processing pass (extract -> graph -> alert). A live
+    # 3-page poll can return 300 tweets; batch them so one run drains the queue.
+    process_batch_size: int = Field(default=100, ge=1, le=1000)
 
     @field_validator("llm_base_url")
     @classmethod

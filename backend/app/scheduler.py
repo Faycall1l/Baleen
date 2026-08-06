@@ -53,7 +53,7 @@ class BaleenScheduler:
         ok = False
         try:
             ingest = self.ingestion.run_once()
-            summary = self.processing.process_new()
+            summary = self.processing.process_new(limit=self.settings.process_batch_size)
             ok = not ingest["errors"]
             logger.info(
                 "ingested %s tweets (%s skipped); processed %s",

@@ -91,6 +91,17 @@ def test_exception_in_tick_also_triggers_backoff(settings):
     assert _interval_of(scheduler) == 120
 
 
+def test_tick_uses_configured_process_batch_size(settings):
+    scheduler = _started_scheduler(settings, interval=60)
+    scheduler.ingestion.run_once = Mock(
+        return_value={"inserted": 0, "duplicates_skipped": 0, "errors": []}
+    )
+    scheduler.processing.process_new = Mock(return_value={"processed": 0})
+
+    scheduler._tick()
+    scheduler.processing.process_new.assert_called_once_with(limit=settings.process_batch_size)
+
+
 def test_build_scheduler_uses_poll_interval(monkeypatch):
     import app.main as main
 
