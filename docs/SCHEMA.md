@@ -25,7 +25,7 @@ ingestion idempotent (re-polls skip rows that already exist).
 | `url` | TEXT | canonical status URL |
 | `raw_json` | JSONB | full payload from the API |
 | `fetched_at` | TIMESTAMPTZ | when Baleen fetched it |
-| `status` | TEXT | `new` → `extracted` → `written` (pipeline progress) |
+| `status` | TEXT | `new` → `extracted` (pipeline progress) |
 
 ### `alert_rules`
 
@@ -122,7 +122,7 @@ RETURN s.name AS sector, collect(DISTINCT t.ticker) AS tickers
 **Q2 — politician's recent trades**
 ```cypher
 MATCH (p:Politician)-[r:INVOLVES_POLITICIAN]-(e:Event)
-WHERE p.name = $name
+WHERE p.name = "Elizabeth Warren"
 MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)
 RETURN e.transaction_date AS date, t.ticker AS ticker, e.transaction_type AS type
 ORDER BY e.transaction_date DESC LIMIT 20
