@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchAlerts, fetchGraph, fetchHealth } from './api';
 import AlertsPanel from './components/AlertsPanel';
@@ -79,7 +79,22 @@ export default function App() {
   const loadGraph = useCallback(() => {
     setGraphError(null);
     fetchGraph()
-      .then(setGraph)
+      .then((data) => {
+        // Only swap the graph when something actually changed; keeping the same
+        // data reference stops react-force-graph from re-laying-out the view on
+        // every poll.
+        const sig = JSON.stringify({
+          n: data.node_count,
+          l: data.link_count,
+          e: data.event_count,
+          nodes: data.nodes.map((n) => n.id).sort(),
+          links: data.links.map((x) => `${x.source}>${x.target}:${x.type}`).sort(),
+        });
+        if (sig !== graphSigRef.current) {
+          graphSigRef.current = sig;
+          setGraph(data);
+        }
+      })
       .catch((err) => setGraphError(err.message));
   }, []);
 
@@ -92,6 +107,7 @@ export default function App() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
+  const graphSigRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -101,7 +117,11 @@ export default function App() {
   useEffect(() => {
     loadGraph();
     loadAlerts();
-    const id = setInterval(loadAlerts, 30_000);
+    // Poll so newly-ingested events appear live without a manual Refresh.
+    const id = setInterval(() => {
+      loadGraph();
+      loadAlerts();
+    }, 30_000);
     return () => clearInterval(id);
   }, [loadGraph, loadAlerts]);
 
