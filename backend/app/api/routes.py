@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -79,9 +78,15 @@ def _node_key(label: str, props: dict) -> str:
 
 def _json_safe(value):
     """Node props are native temporal values after the writer stores them with
-    ``mode="python"``; serialize to ISO strings for the JSON response."""
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
+    ``mode="python"``; serialize to ISO strings for the JSON response.
+
+    Duck-types on ``isoformat`` because the Neo4j driver returns its own
+    temporal classes (``neo4j.time.DateTime``/``Date``) that are *not*
+    subclasses of the stdlib ``datetime``/``date`` types.
+    """
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        return iso()
     return value
 
 
