@@ -154,3 +154,30 @@ def test_alerts_limit_is_bounded():
         assert c.get("/api/alerts?limit=0").status_code == 422
         assert c.get("/api/alerts?limit=1000").status_code == 422
         assert c.get("/api/alerts?limit=50").status_code == 200
+
+
+def test_app_lifecycle_does_not_leak_extra_postgres_engine(monkeypatch):
+    """Startup must reuse the shared store (routes._get_store) so each app
+    lifecycle disposes exactly the engines it created."""
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+
+    import app.api.routes as routes
+    import app.db.postgres as postgres_module
+
+    created = {"n": 0}
+    original = postgres_module.PostgresStore
+
+    class CountingStore(original):
+        def __init__(self, dsn):
+            created["n"] += 1
+            super().__init__(dsn)
+
+    monkeypatch.setattr(postgres_module, "PostgresStore", CountingStore)
+    monkeypatch.setattr(routes, "PostgresStore", CountingStore)
+    monkeypatch.setattr(routes, "_store", None)  # force lazy creation this cycle
+
+    with _client() as c:
+        assert c.get("/health").status_code == 200
+
+    assert created["n"] == 1

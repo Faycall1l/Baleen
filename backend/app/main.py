@@ -22,7 +22,6 @@ from sqlalchemy import text
 from app.alerts.rules import AlertRules
 from app.api import routes
 from app.config import Settings, get_settings
-from app.db.postgres import PostgresStore
 from app.pipeline import ProcessingPipeline
 from app.scheduler import BaleenScheduler
 
@@ -33,8 +32,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings: Settings = get_settings()
-    store = PostgresStore(settings.postgres_dsn)
-    store.init_schema()
+    # Use the shared store so startup doesn't spin up a second engine pool that
+    # shutdown never disposes (routes.close_services() owns the shared one).
+    store = routes._get_store()
 
     if settings.seed_default_alerts:
         for name, definition in AlertRules.definitions().items():
