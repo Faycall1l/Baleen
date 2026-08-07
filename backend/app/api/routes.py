@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -74,6 +75,14 @@ def _node_key(label: str, props: dict) -> str:
     if value is None:
         value = props.get("id") or str(props)
     return str(value)
+
+
+def _json_safe(value):
+    """Node props are native temporal values after the writer stores them with
+    ``mode="python"``; serialize to ISO strings for the JSON response."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +152,7 @@ def graph(limit: int = Query(default=500, ge=0)) -> dict:
                 "label": label,
                 "key": key,
                 "title": props.get("name") or props.get("ticker") or props.get("id") or node_id,
-                "props": props,
+                "props": {k: _json_safe(v) for k, v in props.items()},
                 "tweet_url": props.get("tweet_url"),
             }
         )
