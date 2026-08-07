@@ -254,6 +254,31 @@ def test_agent_retries_with_feedback_after_cypher_execution_error():
     assert result.answer
 
 
+class _AlwaysErrorStore:
+    """Every execution raises a graph runtime error (e.g. bad function)."""
+
+    def run_read(self, cypher, **params):
+        raise RuntimeError("Unknown function 'foo'")
+
+
+def test_agent_reports_execution_error_instead_of_no_data():
+    """When the final attempt's Cypher passes the allowlist but fails to run,
+    the agent must say the query failed — not fall through to the empty-rows
+    'I don't have enough data' answer."""
+    agent = QueryAgent(
+        llm=_stub_llm(cypher="MATCH (e:Event) RETURN foo(e) AS x"),
+        store=_AlwaysErrorStore(),
+    )
+    result = agent.ask("List events.")
+
+    assert result.allowed is True
+    assert result.rows == []
+    assert result.answer.startswith("I couldn't answer this question confidently.")
+    assert "failed to run" in result.answer
+    assert "Unknown function 'foo'" in result.answer
+    assert result.answer != NO_DATA_ANSWER
+
+
 def test_agent_all_generation_attempts_rejected_returns_failure():
     agent = QueryAgent(llm=_stub_llm(cypher="MATCH (u:User) RETURN u"), store=EmptyStore())
     result = agent.ask("Who follows whom?")

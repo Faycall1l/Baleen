@@ -17,6 +17,25 @@ from app.db.postgres import PostgresStore
 from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
 
 
+def test_json_safe_serializes_native_temporal_props():
+    """The writer stores temporal props natively; /api/graph must hand the JSON
+    encoder plain ISO strings, including for the Neo4j driver's own temporal
+    classes (which do NOT subclass stdlib datetime/date)."""
+    from datetime import date, datetime, timezone
+
+    from neo4j.time import Date as Neo4jDate
+    from neo4j.time import DateTime as Neo4jDateTime
+
+    from app.api.routes import _json_safe
+
+    assert _json_safe(Neo4jDateTime(2026, 1, 16, 12, 30, 0)) == "2026-01-16T12:30:00.000000000"
+    assert _json_safe(Neo4jDate(2026, 1, 15)) == "2026-01-15"
+    assert _json_safe(datetime(2026, 1, 16, tzinfo=timezone.utc)) == "2026-01-16T00:00:00+00:00"
+    assert _json_safe(date(2026, 1, 15)) == "2026-01-15"
+    assert _json_safe("NVDA") == "NVDA"
+    assert _json_safe(42) == 42
+
+
 def _client():
     from app.main import app
 
