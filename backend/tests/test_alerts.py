@@ -154,3 +154,49 @@ def test_re_evaluating_the_same_event_creates_no_duplicate_alert(
     assert len(first) == 1
     assert second == []  # already-alerted event produces nothing new
     assert len(postgres_store.get_alerts(limit=10)) == 1
+
+
+class _DownLLM:
+    """LLM goes down after extraction succeeded (mid-batch failure): the alert
+    must still be drafted from a template and persisted, not dropped."""
+
+    def chat(self, messages, **kwargs):
+        from app.extraction.client import LLMTransportError
+
+        raise LLMTransportError("connection refused")
+
+
+def test_llm_down_during_summary_drafting_uses_template_fallback(
+    postgres_store, neo4j_store
+):
+    seed(neo4j_store)
+    engine = AlertEngine(
+        store=postgres_store,
+        neo4j=neo4j_store,
+        llm=_DownLLM(),
+        settings=Settings(_env_file=None),
+    )
+    engine.ensure_default_rules()
+
+    event = _congress_event(
+        tweet_id="alert-llmdown-1",
+        politician_id="W000817",
+        politician_name="Elizabeth Warren",
+        ticker="JPM",
+        committees=["SSBK"],
+    )
+    GraphWriter(neo4j_store).write_event(event)
+
+    alerts = engine.evaluate_event(event)
+
+    assert len(alerts) == 1
+    alert = alerts[0]
+    # Template summary mentions the key facts even though the LLM was down.
+    assert "Warren" in alert["summary"]
+    assert "JPM" in alert["summary"]
+    assert "Financial Services" in alert["summary"]
+    assert "https://x.com/congress_trades/status/alert-llmdown-1" in alert["summary"]
+
+    stored = postgres_store.get_alerts(limit=10)
+    assert len(stored) == 1
+    assert stored[0]["tweet_id"] == "alert-llmdown-1"

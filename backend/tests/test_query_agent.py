@@ -107,6 +107,144 @@ def test_agent_refuses_disallowed_generated_cypher():
     assert "disallowed" in result.answer
 
 
+class _SequencedStubLLM:
+    """Returns one canned cypher per generate_cypher call, in order; always
+    answers the final grounding question."""
+
+    def __init__(self, cyphers, answer="Based on the data, yes.", sources=None):
+        self.cyphers = list(cyphers)
+        self.answer = answer
+        self.sources = sources or ["https://x.com/unusual_whales/status/1"]
+
+    def chat_with_tools(self, messages, tools, tool_choice="auto"):
+        from app.extraction.client import LLMResponse
+
+        user = next((m["content"] for m in messages if m["role"] == "user"), "")
+        if "Query results (ground truth" in user:
+            return LLMResponse(
+                tool_calls=[
+                    ToolCall(
+                        "answer_question",
+                        {"answer": self.answer, "sources": self.sources},
+                    )
+                ]
+            )
+        cypher = self.cyphers.pop(0) if self.cyphers else "MATCH (t:Ticker) RETURN t"
+        return LLMResponse(tool_calls=[ToolCall("generate_cypher", {"cypher": cypher})])
+
+
+def test_agent_recovers_on_second_attempt_after_rejected_first():
+    """A valid follow-up attempt must win over an earlier rejection. Regresses
+    the bug where `allowed` stayed False after attempt 1, discarding a good
+    attempt 2."""
+    store = EmptyStore()
+
+    class OneRowStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            return [{"ticker": "NVDA"}]
+
+    agent = QueryAgent(
+        llm=_SequencedStubLLM(
+            ["MATCH (u:User) RETURN u", "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"]
+        ),
+        store=OneRowStore(),
+    )
+    result = agent.ask("What tickers exist?")
+
+    assert result.allowed is True
+    assert result.rows == [{"ticker": "NVDA"}]
+    assert result.answer == "Based on the data, yes."
+
+
+class _DownLLM:
+    """Simulates the LLM endpoint being unreachable (LLMTransportError)."""
+
+    def chat_with_tools(self, messages, tools, tool_choice="auto"):
+        from app.extraction.client import LLMTransportError
+
+        raise LLMTransportError("connection refused")
+
+
+def test_agent_llm_down_during_generation_returns_failure():
+    agent = QueryAgent(llm=_DownLLM(), store=EmptyStore())
+    result = agent.ask("Which tickers exist?")
+
+    assert result.answer.startswith("I couldn't answer this question confidently.")
+    assert "valid query" in result.answer
+
+
+class _AnswerDownLLM:
+    """Serves a valid generate_cypher call but the LLM dies on the grounding
+    question (transport error during answer generation)."""
+
+    def chat_with_tools(self, messages, tools, tool_choice="auto"):
+        from app.extraction.client import LLMResponse, LLMTransportError
+
+        user = next((m["content"] for m in messages if m["role"] == "user"), "")
+        if "Query results (ground truth" in user:
+            raise LLMTransportError("connection refused")
+        return LLMResponse(
+            tool_calls=[
+                ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.tweet_url AS tweet_url LIMIT 1"})
+            ]
+        )
+
+
+def test_agent_llm_down_during_answer_generation_uses_fallback():
+    """Rows are present but the answer-generation LLM call fails: fall back to
+    a plain message with source URLs pulled from the rows themselves."""
+
+    class OneRowStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            return [{"tweet_url": "https://x.com/unusual_whales/status/1"}]
+
+    agent = QueryAgent(llm=_AnswerDownLLM(), store=OneRowStore())
+    result = agent.ask("What tickers exist?")
+
+    assert result.has_data
+    assert "couldn't summarize" in result.answer
+    assert "https://x.com/unusual_whales/status/1" in result.sources
+
+
+class _ExecutionErrorStore:
+    """Fails the first execution with a graph runtime error, then succeeds."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def run_read(self, cypher, **params):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("Unknown function 'foo'")
+        return [{"ticker": "NVDA"}]
+
+
+def test_agent_retries_with_feedback_after_cypher_execution_error():
+    agent = QueryAgent(
+        llm=_SequencedStubLLM(
+            [
+                "MATCH (e:Event) RETURN foo(e) AS x",
+                "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1",
+            ]
+        ),
+        store=_ExecutionErrorStore(),
+    )
+    result = agent.ask("List tickers.")
+
+    assert result.allowed is True
+    assert result.rows == [{"ticker": "NVDA"}]
+    assert result.answer
+
+
+def test_agent_all_generation_attempts_rejected_returns_failure():
+    agent = QueryAgent(llm=_stub_llm(cypher="MATCH (u:User) RETURN u"), store=EmptyStore())
+    result = agent.ask("Who follows whom?")
+
+    assert result.allowed is False
+    assert "disallowed" in result.answer
+    assert result.violations
+
+
 def test_agent_prompt_instructs_inlining_literals():
     agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
     system = agent._system_prompt()

@@ -138,6 +138,11 @@ class QueryAgent:
         messages.append({"role": "user", "content": f"Question: {question}"})
 
         for attempt in range(self.max_attempts):
+            # Each attempt stands on its own: a rejection in an earlier attempt
+            # must not poison a later, valid one.
+            result.allowed = True
+            result.violations = []
+
             cypher = self._generate_cypher(messages)
             if not cypher:
                 result.answer = self._failure("I couldn't produce a valid query for this question.")

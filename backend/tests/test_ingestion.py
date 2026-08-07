@@ -163,6 +163,35 @@ def test_gives_up_after_max_retries(monkeypatch):
     assert "X API fetch failed" in result.errors[0]
 
 
+def _unauthorized() -> "tweepy.errors.Unauthorized":
+    import tweepy
+
+    fake_response = SimpleNamespace(status_code=401, reason="Unauthorized")
+    return tweepy.errors.Unauthorized(fake_response, response_json={"errors": []})
+
+
+def test_unauthorized_reports_token_problem(monkeypatch):
+    """A wrong/expired bearer token (the most common real-X failure) must be
+    reported clearly, not retried or swallowed."""
+    source = XApiSource(bearer_token="bad-token", max_retries=3, base_delay_seconds=0.01)
+
+    class AuthErrorClient:
+        def __init__(self, bearer_token=None):
+            self.calls = 0
+
+        def search_recent_tweets(self, **kwargs):
+            self.calls += 1
+            raise _unauthorized()
+
+    client = AuthErrorClient()
+    monkeypatch.setattr(source, "_client", client)
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert not result.ok
+    assert result.errors == ["X API unauthorized — check X_API_BEARER_TOKEN"]
+    assert client.calls == 1  # Unauthorized is never retried
+
+
 def test_x_api_source_rejects_non_string_token():
     with pytest.raises(TypeError):
         XApiSource(bearer_token=None)

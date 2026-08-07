@@ -258,6 +258,76 @@ def test_auto_mode_falls_back_to_json(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# LLMClient resilience to ragged vLLM responses
+# ---------------------------------------------------------------------------
+
+
+def test_parse_tolerates_malformed_tool_call_arguments():
+    """A tool call whose `arguments` is not valid JSON must not crash; the
+    caller validates the (empty) payload and routes to unparsed/retry."""
+    client = LLMClient("http://x", "k", "m")
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "1",
+                            "type": "function",
+                            "function": {
+                                "name": "extract_options_flow",
+                                "arguments": "not-json{{{",
+                            },
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+
+    response = client._parse(data, parse_tools=True)
+
+    assert response.has_tool_call
+    assert response.tool_calls[0].name == "extract_options_flow"
+    assert response.tool_calls[0].arguments == {}
+
+
+def test_parse_raises_when_no_choices():
+    from app.extraction.client import LLMError
+
+    client = LLMClient("http://x", "k", "m")
+    with pytest.raises(LLMError, match="no choices"):
+        client._parse({"choices": []}, parse_tools=False)
+
+
+def test_json_mode_gives_up_after_invalid_json_retries(monkeypatch):
+    """Constrained-JSON mode retries bounded times on bad model output, then
+    surfaces InvalidJSONError to the extractor (which routes to unparsed)."""
+    from app.extraction.client import InvalidJSONError
+
+    calls = {"n": 0}
+
+    def junk_post(*_args, **_kwargs):
+        calls["n"] += 1
+        return {"choices": [{"message": {"role": "assistant", "content": "no json here"}}]}
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr(
+        "app.extraction.client.LLMClient._post_once",
+        junk_post,
+    )
+
+    client = LLMClient("http://x", "k", "m", tool_mode="json", max_retries=2)
+    tools = build_tool_definitions()
+    with pytest.raises(InvalidJSONError):
+        client.chat_with_tools([{"role": "user", "content": "hi"}], tools)
+
+    assert calls["n"] == 3  # 1 attempt + 2 retries
+
+
+# ---------------------------------------------------------------------------
 # LLM endpoint health probe
 # ---------------------------------------------------------------------------
 
