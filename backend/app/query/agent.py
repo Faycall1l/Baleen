@@ -142,6 +142,7 @@ class QueryAgent:
             # must not poison a later, valid one.
             result.allowed = True
             result.violations = []
+            exec_error: str | None = None
 
             cypher = self._generate_cypher(messages)
             if not cypher:
@@ -163,6 +164,7 @@ class QueryAgent:
                 result.rows = self.store.run_read(bounded)
             except Exception as exc:  # syntax / runtime errors from the graph
                 logger.warning("Cypher execution failed: %s", exc)
+                exec_error = str(exc)
                 messages.append(self._feedback([f"execution error: {exc}"]))
                 continue
 
@@ -172,6 +174,10 @@ class QueryAgent:
             result.answer = self._failure(
                 "The generated query used disallowed labels or clauses, so it was not run."
             )
+            return result
+
+        if exec_error:
+            result.answer = self._failure(f"The generated query failed to run: {exec_error}")
             return result
 
         if not result.cypher:
