@@ -12,7 +12,7 @@ from typing import Callable
 
 from app.db.neo4j import Neo4jStore
 from app.graph.schema import LABEL_KEYS
-from app.graph.seed_data import TICKER_SECTORS
+from app.graph.seed_data import COMMITTEES, TICKER_SECTORS
 from app.models.events import CongressTradeEvent, Event, OptionsFlowEvent, UnparsedEvent
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,8 @@ class GraphWriter:
             f"""
             MERGE (n:{label} {{{key}: $key_value}})
             SET n += $props
-            SET n.tweet_id = COALESCE($tweet_id, n.tweet_id),
+            SET n.first_seen_at = COALESCE(n.first_seen_at, datetime()),
+                n.tweet_id = COALESCE($tweet_id, n.tweet_id),
                 n.tweet_url = COALESCE($tweet_url, n.tweet_url)
             """,
             key_value=props[key],
@@ -94,7 +95,10 @@ class GraphWriter:
     # ------------------------------------------------------------------
 
     def _merge_event(self, event: Event) -> None:
-        props = event.model_dump(mode="json", exclude={"tweet_id", "tweet_url"})
+        # mode="python" keeps datetimes/dates as native temporal values so
+        # event_time/transaction_date are queryable as temporal types (e.g. the
+        # documented `datetime() - duration()` window filters), not ISO strings.
+        props = event.model_dump(mode="python", exclude={"tweet_id", "tweet_url"})
         # The schema exposes the event kind as `type` on the Event node.
         props["type"] = props.pop("event_type")
         props["id"] = event.deterministic_id
@@ -148,7 +152,10 @@ class GraphWriter:
         for committee_id in event.committee_ids:
             self._merge_node(
                 "Committee",
-                {"id": committee_id},
+                {
+                    "id": committee_id,
+                    **({"name": COMMITTEES[committee_id]} if committee_id in COMMITTEES else {}),
+                },
                 provenance,
             )
             self._merge_relation(
