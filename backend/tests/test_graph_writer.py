@@ -72,6 +72,12 @@ def test_writing_event_twice_is_idempotent(neo4j_store):
         _count(neo4j_store, "MATCH (t:Ticker {ticker: 'NVDA'}) RETURN count(t) AS count")
         == 1
     )
+    # Event-written committees resolve their display name from the reference set.
+    rows = neo4j_store.run(
+        "MATCH (c:Committee {id: 'SSBK'}) RETURN c.name AS name, c.first_seen_at AS first_seen"
+    )
+    assert rows and rows[0]["name"] == "Senate Banking, Housing and Urban Affairs Committee"
+    assert rows[0]["first_seen"] is not None
     assert (
         _count(
             neo4j_store,
@@ -98,11 +104,37 @@ def test_event_is_traceable_to_source_tweet(neo4j_store):
     event_id = writer.write_event(event)
 
     rows = neo4j_store.run(
-        "MATCH (e:Event {id: $id}) RETURN e.tweet_id AS tid, e.tweet_url AS url",
+        "MATCH (e:Event {id: $id}) RETURN e.tweet_id AS tid, e.tweet_url AS url, e.first_seen_at AS first_seen",
         id=event_id,
     )
     assert rows[0]["tid"] == "traceable-1"
     assert "status/traceable-1" in rows[0]["url"]
+    assert rows[0]["first_seen"] is not None
+
+    _cleanup(neo4j_store, event_id)
+
+
+def test_event_time_is_stored_as_native_temporal(neo4j_store):
+    """event_time must be queryable as a temporal type (e.g. the documented
+    ``datetime() - duration()`` window filters), not an ISO string."""
+    writer = GraphWriter(neo4j_store)
+    event = OptionsFlowEvent(
+        tweet_id="time-1",
+        tweet_url="https://x.com/unusual_whales/status/time-1",
+        confidence=0.9,
+        ticker="NVDA",
+        contract_type="call",
+        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+    )
+    event_id = writer.write_event(event)
+
+    rows = neo4j_store.run(
+        "MATCH (e:Event {id: $id}) "
+        "WHERE e.event_time > datetime('2026-01-15T00:00:00Z') "
+        "RETURN e.event_time AS event_time",
+        id=event_id,
+    )
+    assert rows and rows[0]["event_time"] is not None
 
     _cleanup(neo4j_store, event_id)
 
