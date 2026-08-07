@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.models.events import CongressTradeEvent, OptionsFlowEvent
+from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
 
 
 def _client():
@@ -136,6 +136,40 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
         titles = {n["title"] for n in partial["nodes"]}
         assert "ZZZZ" in titles  # newest event + its neighborhood
         assert "Old Person" not in titles  # oldest event excluded
+
+
+def test_graph_limit_prefers_typed_events_over_unparsed_without_event_time(neo4j_store):
+    """UnparsedEvent has no ``event_time``; the limit query falls back to a
+    1900 sentinel so those events always sort as the oldest and never claim the
+    recent-view slots over genuinely recent typed events."""
+    from app.graph.writer import GraphWriter
+
+    writer = GraphWriter(neo4j_store)
+    unparsed_id = writer.write_event(
+        UnparsedEvent(
+            tweet_id="g-unparsed-1",
+            tweet_url="https://x.com/unusual_whales/status/g-unparsed-1",
+            confidence=0.3,
+            raw_text="some unparsable tweet",
+            reason="low confidence",
+        )
+    )
+    writer.write_event(
+        OptionsFlowEvent(
+            tweet_id="g-typed-recent",
+            tweet_url="https://x.com/unusual_whales/status/g-typed-recent",
+            confidence=0.9,
+            ticker="NVDA",
+            contract_type="call",
+            event_time=datetime(2031, 6, 1, tzinfo=timezone.utc),
+        )
+    )
+
+    with _client() as c:
+        body = c.get("/api/graph?limit=1").json()
+        titles = {n["title"] for n in body["nodes"]}
+        assert "NVDA" in titles  # newest typed event keeps its slot
+        assert unparsed_id not in titles  # sentinel fallback must sort as oldest
 
 
 def test_alerts_list():
