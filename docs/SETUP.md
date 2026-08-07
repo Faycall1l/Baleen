@@ -138,7 +138,9 @@ re-processed automatically once the endpoint recovers.
 Each poll walks up to `X_MAX_PAGES` (default 3) result pages of 100 tweets via
 the `next_token` cursor, deduplicating across pages, so a very active handle
 cannot starve the others in the query. Raise it to backfill a longer window;
-the API caps it at 10.
+the API caps it at 10. Every X API call is bounded by
+`X_API_TIMEOUT_SECONDS` (default 30) — tweepy never sets a timeout of its own,
+so without this a hung endpoint would stall the scheduler tick indefinitely.
 
 ### Re-running tweets that failed to parse
 
