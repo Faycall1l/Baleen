@@ -42,19 +42,24 @@ def seed(store: Neo4jStore) -> dict:
 
     for sector in SECTORS:
         store.run(
-            "MERGE (s:Sector {name: $name}) SET s.tweet_id = $tweet_id, s.tweet_url = $tweet_url",
+            "MERGE (s:Sector {name: $name}) "
+            "SET s.first_seen_at = COALESCE(s.first_seen_at, datetime()), "
+            "s.tweet_id = $tweet_id, s.tweet_url = $tweet_url",
             name=sector, **SYNTHETIC_SOURCE,
         )
     for committee_id, name in COMMITTEES.items():
         store.run(
-            "MERGE (c:Committee {id: $id}) SET c.name = $name, c.tweet_id = $tweet_id, c.tweet_url = $tweet_url",
+            "MERGE (c:Committee {id: $id}) "
+            "SET c.first_seen_at = COALESCE(c.first_seen_at, datetime()), "
+            "c.name = $name, c.tweet_id = $tweet_id, c.tweet_url = $tweet_url",
             id=committee_id, name=name, **SYNTHETIC_SOURCE,
         )
     for politician in POLITICIANS:
         store.run(
             """
             MERGE (p:Politician {id: $id})
-            SET p.name = $name, p.party = $party, p.chamber = $chamber,
+            SET p.first_seen_at = COALESCE(p.first_seen_at, datetime()),
+                p.name = $name, p.party = $party, p.chamber = $chamber,
                 p.tweet_id = $tweet_id, p.tweet_url = $tweet_url
             """,
             **politician, **SYNTHETIC_SOURCE,
@@ -84,7 +89,8 @@ def seed(store: Neo4jStore) -> dict:
         store.run(
             """
             MERGE (t:Ticker {ticker: $ticker})
-            SET t.tweet_id = $tweet_id, t.tweet_url = $tweet_url
+            SET t.first_seen_at = COALESCE(t.first_seen_at, datetime()),
+                t.tweet_id = $tweet_id, t.tweet_url = $tweet_url
             WITH t
             MATCH (s:Sector {name: $sector})
             MERGE (t)-[r:IN_SECTOR]->(s)
