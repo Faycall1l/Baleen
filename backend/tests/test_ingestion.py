@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+import requests
 from pydantic import ValidationError
 from sqlalchemy import text
 
@@ -197,6 +198,61 @@ def test_x_api_source_rejects_non_string_token():
         XApiSource(bearer_token=None)
     with pytest.raises(TypeError):
         XApiSource(bearer_token="")
+
+
+def test_x_api_source_applies_request_timeout():
+    """A hung X endpoint must not block the scheduler tick forever: every HTTP
+    call goes through a session carrying Baleen's timeout."""
+    from app.ingestion.x_api import _TimeoutSession
+
+    source = XApiSource(bearer_token="test", timeout_seconds=17)
+    assert isinstance(source._client.session, _TimeoutSession)
+    assert source._client.session._baleen_timeout == 17
+
+
+def test_timeout_session_injects_timeout_into_every_request():
+    from app.ingestion.x_api import _TimeoutSession
+
+    session = _TimeoutSession(5)
+    captured = {}
+
+    def spying_send(request, **kwargs):
+        captured["timeout"] = kwargs.get("timeout")
+        raise requests.exceptions.ConnectionError("boom")
+
+    session.send = spying_send  # type: ignore[method-assign]
+    with pytest.raises(requests.exceptions.ConnectionError):
+        session.request("GET", "https://api.twitter.com/2/tweets/search/recent")
+    assert captured["timeout"] == 5
+
+
+def test_timeout_error_is_retried_then_recorded(monkeypatch):
+    """A transport timeout is transient: retried with backoff, and when it
+    exhausts retries it is recorded as a poll error, never raised (fetch_recent
+    must never crash the scheduler tick)."""
+    import requests
+
+    source = XApiSource(
+        bearer_token="test",
+        max_retries=1,
+        base_delay_seconds=0.01,
+        timeout_seconds=2,
+    )
+
+    class TimingOutClient:
+        def __init__(self, bearer_token=None):
+            self.calls = 0
+
+        def search_recent_tweets(self, **kwargs):
+            self.calls += 1
+            raise requests.exceptions.ReadTimeout("timed out")
+
+    monkeypatch.setattr(source, "_client", TimingOutClient())
+    result = source.fetch_recent(["somehandle"], 60)
+
+    assert source._client.calls == 2  # 1 attempt + 1 retry
+    assert not result.ok
+    assert "X API fetch failed" in result.errors[0]
 
 
 def test_x_api_source_normalizes_naive_created_at(monkeypatch):

@@ -11,13 +11,39 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 
+import requests
 import tweepy
 
 from app.ingestion.source import FetchResult, RawTweet, TweetSource
 
 logger = logging.getLogger(__name__)
 
-RETRYABLE_ERRORS = (tweepy.errors.TooManyRequests, tweepy.errors.NotFound)
+RETRYABLE_ERRORS = (
+    tweepy.errors.TooManyRequests,
+    tweepy.errors.NotFound,
+    # Transport-level failures: a hung or reset connection is transient and
+    # worth a bounded retry before the poll gives up.
+    requests.exceptions.Timeout,
+    requests.exceptions.ConnectionError,
+)
+
+
+class _TimeoutSession(requests.Session):
+    """Requests session that applies Baleen's X API timeout to every call.
+
+    ``tweepy.Client`` never passes a ``timeout`` through to the underlying HTTP
+    request, so without this a hung X endpoint would block the scheduler tick
+    indefinitely. Connection errors also escape tweepy unwrapped (they are not
+    ``TweepyException``), so this module handles them explicitly.
+    """
+
+    def __init__(self, timeout: float | None) -> None:
+        super().__init__()
+        self._baleen_timeout = timeout
+
+    def request(self, method, url, **kwargs):  # type: ignore[no-untyped-def]
+        kwargs.setdefault("timeout", self._baleen_timeout)
+        return super().request(method, url, **kwargs)
 
 
 class XApiSource(TweetSource):
@@ -31,10 +57,12 @@ class XApiSource(TweetSource):
         backoff_factor: float = 2.0,
         max_results: int = 100,
         max_pages: int = 3,
+        timeout_seconds: float | None = 30.0,
     ) -> None:
         if not isinstance(bearer_token, str) or not bearer_token:
             raise TypeError("bearer_token must be a non-empty string")
         self._client = tweepy.Client(bearer_token=bearer_token)
+        self._client.session = _TimeoutSession(timeout_seconds)
         self._max_retries = max_retries
         self._base_delay = base_delay_seconds
         self._backoff_factor = backoff_factor
@@ -79,7 +107,7 @@ class XApiSource(TweetSource):
                 logger.error(message)
                 result.errors.append(message)
                 return result
-            except tweepy.errors.TweepyException as exc:
+            except (tweepy.errors.TweepyException, requests.exceptions.RequestException) as exc:
                 message = f"X API fetch failed: {exc}"
                 logger.error(message)
                 result.errors.append(message)

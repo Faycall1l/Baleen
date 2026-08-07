@@ -104,6 +104,7 @@ def main() -> None:
         source = XApiSource(
             settings.x_api_bearer_token,
             max_pages=settings.x_max_pages,
+            timeout_seconds=settings.x_api_timeout_seconds,
         )
         logger.info(
             "live source: handles=%s window=%ss llm=%s/%s",

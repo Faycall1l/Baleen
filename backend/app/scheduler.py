@@ -44,6 +44,7 @@ class BaleenScheduler:
         self.source = XApiSource(
             settings.x_api_bearer_token,
             max_pages=settings.x_max_pages,
+            timeout_seconds=settings.x_api_timeout_seconds,
         )
         self.ingestion = IngestionPipeline(self.source, processing.store, self.settings)
         self._consecutive_failures = 0

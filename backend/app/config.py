@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     x_user_handles: str = "unusual_whales,congress_trades"
     x_search_window_seconds: int = Field(default=3600, ge=1, le=7 * 24 * 3600)
     x_max_pages: int = Field(default=3, ge=1, le=10)
+    x_api_timeout_seconds: int = Field(default=30, ge=1, le=600)
     poll_interval_seconds: int = Field(default=300, ge=5)
 
     # --- LLM (vLLM, OpenAI-compatible) ---

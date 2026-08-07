@@ -64,6 +64,14 @@ def test_x_max_pages_bounds_rejected():
     assert Settings(_env_file=None, x_max_pages=5).x_max_pages == 5
 
 
+def test_x_api_timeout_bounds_rejected():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, x_api_timeout_seconds=0)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, x_api_timeout_seconds=10000)
+    assert Settings(_env_file=None, x_api_timeout_seconds=60).x_api_timeout_seconds == 60
+
+
 def test_missing_url_scheme_rejected():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, llm_base_url="localhost:8001/v1")
