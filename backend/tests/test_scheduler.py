@@ -14,6 +14,10 @@ class _FakeProcessing:
     store = object()
 
 
+def _live_settings():
+    return Settings(_env_file=None, x_api_bearer_token="real-bearer-token")
+
+
 def _started_scheduler(settings: Settings, interval: int = 60) -> BaleenScheduler:
     scheduler = BaleenScheduler(settings, _FakeProcessing(), interval_seconds=interval)
     scheduler.scheduler.add_job(
@@ -30,8 +34,8 @@ def _interval_of(scheduler: BaleenScheduler) -> float:
     return trigger.interval.total_seconds()
 
 
-def test_backs_off_then_recovers(settings):
-    scheduler = _started_scheduler(settings, interval=60)
+def test_backs_off_then_recovers():
+    scheduler = _started_scheduler(_live_settings(), interval=60)
     scheduler.ingestion.run_once = Mock(
         return_value={"inserted": 0, "duplicates_skipped": 0, "errors": ["X API fetch failed"]}
     )
@@ -59,8 +63,8 @@ def test_backs_off_then_recovers(settings):
     assert _interval_of(scheduler) == 60
 
 
-def test_backoff_is_capped(settings):
-    scheduler = _started_scheduler(settings, interval=60)
+def test_backoff_is_capped():
+    scheduler = _started_scheduler(_live_settings(), interval=60)
     scheduler.ingestion.run_once = Mock(
         return_value={"inserted": 0, "duplicates_skipped": 0, "errors": ["X API fetch failed"]}
     )
@@ -78,8 +82,8 @@ def test_backoff_is_capped(settings):
     assert _interval_of(scheduler) == 600  # max_backoff_seconds
 
 
-def test_exception_in_tick_also_triggers_backoff(settings):
-    scheduler = _started_scheduler(settings, interval=60)
+def test_exception_in_tick_also_triggers_backoff():
+    scheduler = _started_scheduler(_live_settings(), interval=60)
     scheduler.ingestion.run_once = Mock(side_effect=RuntimeError("boom"))
 
     scheduler._tick()
@@ -91,13 +95,13 @@ def test_exception_in_tick_also_triggers_backoff(settings):
     assert _interval_of(scheduler) == 120
 
 
-def test_llm_transport_error_in_tick_triggers_backoff(settings):
+def test_llm_transport_error_in_tick_triggers_backoff():
     """A fully-down LLM raises LLMTransportError from process_new, which must
     surface to the scheduler as a failure so it backs off instead of hammering
     the dead endpoint every tick."""
     from app.extraction.client import LLMTransportError
 
-    scheduler = _started_scheduler(settings, interval=60)
+    scheduler = _started_scheduler(_live_settings(), interval=60)
     scheduler.ingestion.run_once = Mock(
         return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []}
     )
@@ -112,7 +116,8 @@ def test_llm_transport_error_in_tick_triggers_backoff(settings):
     assert _interval_of(scheduler) == 120
 
 
-def test_tick_uses_configured_process_batch_size(settings):
+def test_tick_uses_configured_process_batch_size():
+    settings = _live_settings()
     scheduler = _started_scheduler(settings, interval=60)
     scheduler.ingestion.run_once = Mock(
         return_value={"inserted": 0, "duplicates_skipped": 0, "errors": []}
@@ -121,6 +126,21 @@ def test_tick_uses_configured_process_batch_size(settings):
 
     scheduler._tick()
     scheduler.processing.process_new.assert_called_once_with(limit=settings.process_batch_size)
+
+
+def test_placeholder_token_skips_ingestion_but_still_processes():
+    """With no real X token the tick must not call the X API (the docstring says
+    ingestion no-ops), but still drain pending tweets through processing."""
+    settings = Settings(_env_file=None)  # default token is a placeholder
+    scheduler = _started_scheduler(settings, interval=60)
+    scheduler.ingestion.run_once = Mock(side_effect=AssertionError("must not poll X"))
+    scheduler.processing.process_new = Mock(return_value={"processed": 2})
+
+    scheduler._tick()
+
+    scheduler.processing.process_new.assert_called_once_with(limit=settings.process_batch_size)
+    assert scheduler._consecutive_failures == 0  # not treated as a failure
+    assert _interval_of(scheduler) == 60
 
 
 def test_build_scheduler_uses_poll_interval(monkeypatch):

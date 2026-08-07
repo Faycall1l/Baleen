@@ -52,16 +52,22 @@ class BaleenScheduler:
     def _tick(self) -> None:
         ok = False
         try:
-            ingest = self.ingestion.run_once()
+            if self.settings.x_api_configured:
+                ingest = self.ingestion.run_once()
+                ok = not ingest["errors"]
+                logger.info(
+                    "ingested %s tweets (%s skipped); processing",
+                    ingest["inserted"],
+                    ingest["duplicates_skipped"],
+                )
+            else:
+                logger.debug("X API token not configured; skipping ingestion")
+                ok = True
+
             summary = self.processing.process_new(limit=self.settings.process_batch_size)
-            ok = not ingest["errors"]
-            logger.info(
-                "ingested %s tweets (%s skipped); processed %s",
-                ingest["inserted"],
-                ingest["duplicates_skipped"],
-                summary,
-            )
+            logger.info("processed %s", summary)
         except Exception:
+            ok = False
             logger.exception("scheduled tick failed")
 
         if ok:
