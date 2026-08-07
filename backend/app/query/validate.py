@@ -22,9 +22,11 @@ from app.graph.schema import ALLOWED_LABELS, ALLOWED_RELATIONSHIPS
 
 #: Words that open a statement we refuse to run. Word-boundary anchored so
 #: identifiers like ``CREATE_UNIQUE`` don't false-positive (they can't occur
-#: anyway, but the check is cheap).
+#: anyway, but the check is cheap). ``LOAD`` is blocked because ``LOAD CSV
+#: FROM 'file://...'`` reads the server's local filesystem — a read-only
+#: exfiltration vector a crafted prompt could trigger.
 FORBIDDEN_CLAUSES = re.compile(
-    r"\b(CREATE|MERGE|SET|DELETE|DETACH|REMOVE|DROP|ALTER|CALL)\b",
+    r"\b(CREATE|MERGE|SET|DELETE|DETACH|REMOVE|DROP|ALTER|CALL|LOAD)\b",
     re.IGNORECASE,
 )
 
@@ -49,9 +51,11 @@ def validate_cypher(query: str) -> list[str]:
     violations: list[str] = []
 
     if FORBIDDEN_CLAUSES.search(query):
-        violations.append("statement contains a forbidden write clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL)")
+        violations.append("statement contains a forbidden write clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL/LOAD)")
     if FORBIDDEN_PATTERNS.search(query):
         violations.append("statement contains an index/constraint definition")
+    if _has_embedded_statement_separator(query):
+        violations.append("statement contains more than one Cypher statement")
 
     for label in _extract(LABEL_RE, query):
         if label not in ALLOWED_LABELS:
@@ -61,6 +65,16 @@ def validate_cypher(query: str) -> list[str]:
             violations.append(f"relationship `{rel}` is not in the allowlist")
 
     return violations
+
+
+def _has_embedded_statement_separator(query: str) -> bool:
+    """Reject multi-statement queries (``a; b``). A single trailing ``;`` is
+    tolerated because models habitually terminate statements with it; the agent
+    strips it before execution."""
+    stripped = query.rstrip()
+    if stripped.endswith(";"):
+        stripped = stripped[:-1].rstrip()
+    return ";" in stripped
 
 
 def _extract(pattern: re.Pattern, query: str) -> list[str]:

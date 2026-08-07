@@ -50,6 +50,24 @@ def test_allowlist_rejects_procedure_calls():
     assert validate_cypher("CALL db.labels() YIELD label RETURN label")
 
 
+def test_allowlist_rejects_load_csv():
+    """LOAD CSV reads the server's local filesystem; a crafted question could
+    otherwise prompt the model to exfiltrate file contents."""
+    assert validate_cypher(
+        "LOAD CSV WITH HEADERS FROM 'file:///etc/passwd' AS row RETURN row"
+    )
+
+
+def test_allowlist_rejects_multi_statement():
+    """`;` separates statements in Neo4j; only a single trailing one is the
+    model's statement terminator, anything else is statement injection."""
+    assert validate_cypher("MATCH (t:Ticker) RETURN t; MATCH (e:Event) RETURN e")
+
+
+def test_allowlist_tolerates_single_trailing_semicolon():
+    assert validate_cypher("MATCH (t:Ticker) RETURN t;") == []
+
+
 # ---------------------------------------------------------------------------
 # No-data behavior (unit, fake store)
 # ---------------------------------------------------------------------------
