@@ -44,6 +44,9 @@ services:
       - .env
     environment:
       POSTGRES_HOST: postgres
+      # .env's DATABASE_URL points at localhost, which inside the container is
+      # the backend itself; override it so the DSN targets the postgres service.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-baleen}:${POSTGRES_PASSWORD:-baleen}@postgres:5432/${POSTGRES_DB:-baleen}
       NEO4J_URI: bolt://neo4j:7687
       LLM_BASE_URL: ${LLM_BASE_URL:-http://localhost:8001/v1}
     ports:
