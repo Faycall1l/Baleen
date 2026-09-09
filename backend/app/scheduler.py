@@ -2,14 +2,17 @@
 
 A thin wrapper around APScheduler. The loop is intentionally kept to two calls:
 
-1. ``IngestionPipeline.run_once()`` — pull new tweets from X, persist raw.
-2. ``ProcessingPipeline.process_new()`` — extract, graph, alert.
+1. ``IngestionPipeline.run_once()`` — pull new records from every live source
+   (congressional disclosures, options radar, and X when configured),
+   persist raw.
+2. ``ProcessingPipeline.process_new()`` — extract, ground, graph, alert.
 
-When X credentials are placeholders the ingestion stage no-ops (the mock /
-demo path uses ``scripts/ingest_once.py`` to load sample tweets instead).
+When X credentials are placeholders the X source is simply left out (the
+disclosure + options sources need no keys). The demo path
+(``scripts/ingest_once.py``) loads sample tweets instead.
 
 On repeated failures (rate limits, transient API errors) the tick backs off
-exponentially up to ``max_backoff_seconds`` instead of hammering the API, and
+exponentially up to ``max_backoff_seconds`` instead of hammering the APIs, and
 recovers to the base interval on the next successful run.
 """
 
@@ -21,11 +24,34 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import Settings
+from app.ingestion.disclosures import CongressDisclosureSource
+from app.ingestion.options import OptionsChainSource
 from app.ingestion.pipeline import IngestionPipeline
+from app.ingestion.source import MultiSource, TweetSource
 from app.ingestion.x_api import XApiSource
 from app.pipeline import ProcessingPipeline
 
 logger = logging.getLogger(__name__)
+
+
+def build_sources(settings: Settings) -> list[TweetSource]:
+    """Live sources for this run: disclosures + options always (keyless
+    public feeds); X only when a real bearer token is configured."""
+    sources: list[TweetSource] = [
+        CongressDisclosureSource(),
+        OptionsChainSource(),
+    ]
+    if settings.x_api_configured:
+        sources.append(
+            XApiSource(
+                settings.x_api_bearer_token,
+                max_pages=settings.x_max_pages,
+                timeout_seconds=settings.x_api_timeout_seconds,
+            )
+        )
+    else:
+        logger.info("X API token not configured; polling disclosures + options radar only")
+    return sources
 
 
 class BaleenScheduler:
@@ -41,28 +67,24 @@ class BaleenScheduler:
         self.interval_seconds = interval_seconds
         self.max_backoff_seconds = max_backoff_seconds
         self.scheduler = BackgroundScheduler(timezone="UTC")
-        self.source = XApiSource(
-            settings.x_api_bearer_token,
-            max_pages=settings.x_max_pages,
-            timeout_seconds=settings.x_api_timeout_seconds,
-        )
-        self.ingestion = IngestionPipeline(self.source, processing.store, self.settings)
+        self.sources = build_sources(settings)
+        self.ingestion = IngestionPipeline(MultiSource(self.sources), processing.store, self.settings)
         self._consecutive_failures = 0
         self._job_id = "baleen-tick"
 
     def _tick(self) -> None:
         ok = False
         try:
-            if self.settings.x_api_configured:
+            if self.sources:
                 ingest = self.ingestion.run_once()
                 ok = not ingest["errors"]
                 logger.info(
-                    "ingested %s tweets (%s skipped); processing",
+                    "ingested %s records (%s skipped); processing",
                     ingest["inserted"],
                     ingest["duplicates_skipped"],
                 )
             else:
-                logger.debug("X API token not configured; skipping ingestion")
+                logger.debug("no ingestion sources configured; skipping ingestion")
                 ok = True
 
             summary = self.processing.process_new(limit=self.settings.process_batch_size)
@@ -96,7 +118,9 @@ class BaleenScheduler:
 
     def start(self) -> None:
         if not self.settings.x_api_configured:
-            logger.warning("X API token is not configured; ingestion will no-op until it is")
+            logger.warning(
+                "X API token is not configured; polling disclosures + options radar only"
+            )
         self.scheduler.add_job(
             self._tick,
             id=self._job_id,

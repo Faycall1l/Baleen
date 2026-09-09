@@ -55,6 +55,33 @@ class TweetSource(ABC):
         ``since_seconds``. Never raises; returns errors in ``FetchResult``."""
 
 
+class MultiSource(TweetSource):
+    """Fan-out over several sources (X + disclosure feeds + options radar).
+
+    Lets the scheduler poll heterogeneous real-data sources through the one
+    ``TweetSource`` interface without changing the ingestion pipeline. One
+    failing child never aborts the others; every failure is namespaced into
+    ``FetchResult.errors``.
+    """
+
+    def __init__(self, sources: list[TweetSource]) -> None:
+        self.sources = list(sources)
+
+    def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
+        tweets: list[RawTweet] = []
+        errors: list[str] = []
+        for source in self.sources:
+            name = type(source).__name__
+            try:
+                result = source.fetch_recent(handles, since_seconds)
+            except Exception as exc:  # never let one source kill the poll
+                errors.append(f"{name} failed: {exc}")
+                continue
+            tweets.extend(result.tweets)
+            errors.extend(f"{name}: {e}" for e in result.errors)
+        return FetchResult(tweets=tweets, errors=errors)
+
+
 # ---------------------------------------------------------------------------
 # Sample source (local demos without X API credentials)
 # ---------------------------------------------------------------------------

@@ -389,6 +389,27 @@ def test_pipeline_records_source_errors(settings, postgres_store):
     assert metrics["errors"] == ["boom"]
 
 
+def test_multi_source_fans_out_and_namespaces_errors():
+    from app.ingestion.source import FetchResult, MultiSource
+
+    class ExplodingSource:
+        def fetch_recent(self, handles, since_seconds):
+            raise RuntimeError("down")
+
+    good = _FakeSource([_tweet("a-1")])
+    bad = _FakeSource([])
+    bad.fetch_recent = lambda handles, since_seconds: FetchResult(
+        tweets=[], errors=["throttled"]
+    )
+
+    result = MultiSource([good, bad, ExplodingSource()]).fetch_recent(["h"], 60)
+
+    assert [t.tweet_id for t in result.tweets] == ["a-1"]
+    assert len(result.errors) == 2
+    assert any("throttled" in e for e in result.errors)
+    assert any("ExplodingSource" in e for e in result.errors)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
