@@ -11,6 +11,7 @@ never force-fit).
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from pydantic import ValidationError
@@ -110,6 +111,10 @@ class EventExtractor:
         messages = self._messages(tweet, tools)
 
         for attempt in range(self.max_tries):
+            if attempt > 0:
+                # Space retries out: real endpoints flake under burst load and
+                # an immediate retry usually lands in the same bad window.
+                time.sleep(2.0 * attempt)
             try:
                 response = self.client.chat_with_tools(messages, tools)
             except LLMTransportError:
@@ -151,7 +156,11 @@ class EventExtractor:
             f"{schema_blocks}"
         )
         user = (
-            f"Tweet by @{tweet.author_handle} (id {tweet.tweet_id}):\n\n{tweet.text}"
+            # NOTE: the internal tweet_id is deliberately NOT included. It is
+            # provenance injected post-hoc (see PROVENANCE_FIELDS); pasting it
+            # into the prompt derails some models' structured output on
+            # identifier-shaped strings (long hyphenated ids + numeric runs).
+            f"Tweet by @{tweet.author_handle}:\n\n{tweet.text}"
         )
         return [
             {"role": "system", "content": system},

@@ -255,6 +255,18 @@ def test_constrained_json_unwraps_name_arguments_envelope():
     assert isinstance(event, CongressTradeEvent)
 
 
+def test_prompt_omits_internal_tweet_id():
+    """The internal tweet_id is provenance injected post-hoc; pasting it into
+    the prompt derails some models' structured output on identifier-shaped
+    strings. The model must see handle + text only."""
+    tweet = _tweet(tweet_id="opt-NVDA-2026-09-09-225-C-2026-09-09", text="hello")
+    messages = EXTRACTOR._messages(tweet, build_tool_definitions())
+    user = next(m["content"] for m in messages if m["role"] == "user")
+
+    assert "opt-NVDA-2026-09-09-225-C-2026-09-09" not in user
+    assert "@" in user and "hello" in user
+
+
 def test_auto_mode_falls_back_to_json(monkeypatch):
     from app.extraction.client import LLMError
 
