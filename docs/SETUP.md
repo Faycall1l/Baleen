@@ -142,6 +142,43 @@ the API caps it at 10. Every X API call is bounded by
 `X_API_TIMEOUT_SECONDS` (default 30) — tweepy never sets a timeout of its own,
 so without this a hung endpoint would stall the scheduler tick indefinitely.
 
+### Real public feeds (no X key needed)
+
+Without X access, poll the live keyless feeds instead — real data, real time:
+
+```bash
+python -m scripts.ingest_once --real
+```
+
+This runs the full stack over two sources (combined with `MultiSource`, one
+failing feed never aborts the other):
+
+- **Congressional disclosures** — normalized House/Senate PTR filings (public
+  STOCK Act data, refreshed daily). Each trade links to its official filing
+  PDF. The pipeline deterministically grounds ticker, dates, amounts,
+  party/chamber from the filing and resolves identity/committees from the
+  reference roster — the LLM contributes classification + confidence, never
+  hallucinated identifiers. Unknown filers get a stable slug id and *no*
+  committees, so alerts only fire on verified memberships.
+- **Options radar** — delayed CBOE chains (~15 min) for a liquid watchlist;
+  contracts with day volume ≥ 2× open interest (≥ 500 absolute, top-3 per
+  ticker) are emitted as flow reports labeled delayed.
+
+The scheduler polls the same feeds every `POLL_INTERVAL_SECONDS` (default
+300s) and drains new records through extract → graph → alerts, so the graph
+stays current without any manual runs. Re-polls re-emit recent rows and
+downstream dedup by id drops them — safe to run on a tight timer.
+
+Real-model notes (learned against a live vLLM serving Gemma):
+
+- Point `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_NAME` at the endpoint; the
+  `/models` health probe sends the key, so auth-gated servers report healthy.
+- If the endpoint has no tool-call parser, set `LLM_TOOL_MODE=json` to skip
+  the wasted native-tools round trip per extraction.
+- The constrained-JSON parser tolerates the envelope shapes real models emit
+  (`{"name", "arguments"}`, `{"tool", "parameters"}`, flat) — valid
+  extractions don't become unparsed on envelope variance.
+
 ### Re-running tweets that failed to parse
 
 If a tweet produced only an `UnparsedEvent`, re-queue it for extraction (e.g.
