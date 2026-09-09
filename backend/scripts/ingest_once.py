@@ -16,6 +16,9 @@ Usage:
     python -m scripts.ingest_once                 # demo corpus
     python -m scripts.ingest_once --seed-ref      # also seed reference graph first
     python -m scripts.ingest_once --live          # real X API + configured LLM
+    python -m scripts.ingest_once --real          # live public feeds:
+                                                  # congressional disclosures +
+                                                  # options radar (no keys needed)
 
 Needs the Postgres and Neo4j containers running (``docker compose up -d``).
 """
@@ -65,6 +68,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Baleen one-shot ingest")
     parser.add_argument("--seed-ref", action="store_true", help="seed the reference graph first")
     parser.add_argument("--live", action="store_true", help="use the real X API instead of the sample corpus")
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        help="use the live public feeds (congressional disclosures + options radar)",
+    )
     args = parser.parse_args()
 
     settings = get_settings()
@@ -113,6 +121,13 @@ def main() -> None:
             settings.llm_base_url,
             settings.llm_model_name,
         )
+    elif args.real:
+        from app.ingestion.disclosures import CongressDisclosureSource
+        from app.ingestion.options import OptionsChainSource
+        from app.ingestion.source import MultiSource
+
+        source = MultiSource([CongressDisclosureSource(), OptionsChainSource()])
+        logger.info("live public feeds: congressional disclosures + options radar")
     else:
         source = SampleSource()
 
