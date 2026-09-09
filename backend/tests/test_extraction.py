@@ -230,6 +230,31 @@ def test_constrained_json_rejects_unknown_tool():
         )
 
 
+def test_constrained_json_unwraps_name_arguments_envelope():
+    """Some models wrap fields OpenAI-style ({"name", "arguments"}) instead of
+    emitting them flat. The parser must validate the inner object, not the
+    envelope — otherwise every such reply becomes unparsed."""
+    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    tools = build_tool_definitions()
+
+    calls = client._parse_tool_calls_from_json(
+        '{"name": "extract_congress_trade", "arguments": {'
+        '"politician_name": "David J. Taylor", "politician_id": "x", '
+        '"chamber": "house", "party": "R", "ticker": "VRTX", '
+        '"transaction_type": "sell", "amount_range": "$1,001 - $15,000", '
+        '"transaction_date": "2026-08-26", "confidence": 1.0}}',
+        tools,
+    )
+
+    assert len(calls) == 1
+    assert calls[0].name == "extract_congress_trade"
+    assert calls[0].arguments["ticker"] == "VRTX"
+    assert calls[0].arguments["politician_name"] == "David J. Taylor"
+
+    event = EXTRACTOR._validate_call(_tweet(), calls[0].name, calls[0].arguments)
+    assert isinstance(event, CongressTradeEvent)
+
+
 def test_auto_mode_falls_back_to_json(monkeypatch):
     from app.extraction.client import LLMError
 

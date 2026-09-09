@@ -308,7 +308,18 @@ class LLMClient:
         elif isinstance(raw, dict):
             name = raw.get("name") or raw.get("event_type")
             if name in known:
-                tool_calls.append(ToolCall(name=name, arguments=raw))
+                # Some models wrap the fields OpenAI-style:
+                # {"name": "<tool>", "arguments": {...}}. Unwrap so the
+                # extractor validates the actual fields, not the envelope.
+                arguments = raw.get("arguments", raw)
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except json.JSONDecodeError:
+                        arguments = raw
+                if not isinstance(arguments, dict):
+                    arguments = raw
+                tool_calls.append(ToolCall(name=name, arguments=arguments))
             elif name:
                 raise InvalidJSONError(f"unknown tool target: {name}")
             else:
