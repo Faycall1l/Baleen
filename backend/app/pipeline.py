@@ -20,6 +20,7 @@ from app.db.postgres import PostgresStore
 from app.extraction.client import LLMTransportError
 from app.extraction.extractor import EventExtractor
 from app.graph.writer import GraphWriter
+from app.ingestion.disclosures import maybe_enrich_event
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ class ProcessingPipeline:
         for tweet in tweets:
             try:
                 event = self.extractor.extract(tweet)
+                # Records from the disclosure feed carry authoritative filing
+                # facts; ground the model output in them before writing.
+                event = maybe_enrich_event(tweet, event)
                 event_id = self.writer.write_event(event)
 
                 if event.event_type == "unparsed":
