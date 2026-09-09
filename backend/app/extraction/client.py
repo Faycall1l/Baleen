@@ -134,9 +134,14 @@ class LLMClient:
 
         Used as a preflight check before live runs so a misconfigured vLLM
         address fails fast with a clear message instead of mid-pipeline.
+        Sends the configured API key: auth-gated endpoints (401 without it)
+        must report healthy when the key is valid.
         """
         try:
-            response = httpx.get(f"{self.base_url}/models", timeout=min(self.timeout, 10))
+            headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+            response = httpx.get(
+                f"{self.base_url}/models", headers=headers, timeout=min(self.timeout, 10)
+            )
             return response.status_code < 400
         except httpx.HTTPError:
             return False
