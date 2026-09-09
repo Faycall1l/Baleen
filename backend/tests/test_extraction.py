@@ -255,6 +255,25 @@ def test_constrained_json_unwraps_name_arguments_envelope():
     assert isinstance(event, CongressTradeEvent)
 
 
+def test_constrained_json_unwraps_tool_parameters_envelope():
+    """Same unwrapping for the {"tool", "parameters"} envelope shape."""
+    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    tools = build_tool_definitions()
+
+    calls = client._parse_tool_calls_from_json(
+        '{"tool": "extract_options_flow", "parameters": {'
+        '"ticker": "AAPL", "contract_type": "call", "confidence": 0.9}}',
+        tools,
+    )
+
+    assert len(calls) == 1
+    assert calls[0].name == "extract_options_flow"
+    assert calls[0].arguments["ticker"] == "AAPL"
+
+    event = EXTRACTOR._validate_call(_tweet(), calls[0].name, calls[0].arguments)
+    assert isinstance(event, OptionsFlowEvent)
+
+
 def test_prompt_omits_internal_tweet_id():
     """The internal tweet_id is provenance injected post-hoc; pasting it into
     the prompt derails some models' structured output on identifier-shaped

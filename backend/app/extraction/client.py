@@ -39,6 +39,25 @@ class LLMError(Exception):
     """Base error for any LLM call failure."""
 
 
+def _unwrap_arguments(envelope: dict) -> dict:
+    """Extract the field object from a tool-call envelope.
+
+    Accepts ``arguments`` / ``parameters`` / ``params`` (object or
+    string-encoded JSON); falls back to the envelope itself when none is
+    present (flat field objects).
+    """
+    for key in ("arguments", "parameters", "params"):
+        value = envelope.get(key)
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(value, dict):
+            return value
+    return envelope
+
+
 class LLMTransportError(LLMError):
     """Transient infrastructure failure (network, timeout, HTTP error status).
 
@@ -302,24 +321,20 @@ class LLMClient:
         tool_calls: list[ToolCall] = []
         if isinstance(raw, dict) and "tool_calls" in raw:
             for tc in raw["tool_calls"]:
-                name = tc.get("name") or tc.get("function", {}).get("name", "")
-                arguments = tc.get("arguments", {})
+                name = (
+                    tc.get("name")
+                    or tc.get("tool")
+                    or tc.get("function", {}).get("name", "")
+                )
+                arguments = _unwrap_arguments(tc)
                 tool_calls.append(ToolCall(name=name, arguments=arguments))
         elif isinstance(raw, dict):
-            name = raw.get("name") or raw.get("event_type")
+            name = raw.get("name") or raw.get("tool") or raw.get("event_type")
             if name in known:
-                # Some models wrap the fields OpenAI-style:
-                # {"name": "<tool>", "arguments": {...}}. Unwrap so the
+                # Models wrap fields in varying envelopes ({"name",
+                # "arguments"}, {"tool", "parameters"}, ...). Unwrap so the
                 # extractor validates the actual fields, not the envelope.
-                arguments = raw.get("arguments", raw)
-                if isinstance(arguments, str):
-                    try:
-                        arguments = json.loads(arguments)
-                    except json.JSONDecodeError:
-                        arguments = raw
-                if not isinstance(arguments, dict):
-                    arguments = raw
-                tool_calls.append(ToolCall(name=name, arguments=arguments))
+                tool_calls.append(ToolCall(name=name, arguments=_unwrap_arguments(raw)))
             elif name:
                 raise InvalidJSONError(f"unknown tool target: {name}")
             else:
