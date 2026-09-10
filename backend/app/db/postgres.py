@@ -312,7 +312,7 @@ class PostgresStore:
                     """
                     SELECT id, kind, event_id, period, title, body, graph_refs, created_at
                     FROM reports
-                    WHERE (:kind IS NULL OR kind = :kind)
+                    WHERE (CAST(:kind AS TEXT) IS NULL OR kind = :kind)
                     ORDER BY created_at DESC
                     LIMIT :limit
                     """

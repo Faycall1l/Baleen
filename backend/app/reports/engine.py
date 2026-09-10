@@ -37,7 +37,9 @@ RETURN e AS event,
 
 DIGEST_QUERY = """
 MATCH (e:Event)
-WHERE e.event_time IS NOT NULL AND e.event_time >= datetime($since)
+// first_seen_at is when Baleen learned of the event (trade time can lag
+// weeks behind); the digest covers newly-arrived events, not newly-made ones.
+WHERE e.first_seen_at IS NOT NULL AND e.first_seen_at >= datetime($since)
 OPTIONAL MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)-[:IN_SECTOR]->(s:Sector)
 OPTIONAL MATCH (e)-[:INVOLVES_POLITICIAN]->(p:Politician)
 RETURN e.type AS type, t.ticker AS ticker, s.name AS sector, p.name AS politician
