@@ -224,6 +224,44 @@ def test_agent_llm_down_during_answer_generation_uses_fallback():
     assert "https://x.com/unusual_whales/status/1" in result.sources
 
 
+def test_agent_accepts_nameless_answer_arguments():
+    """Some models emit bare {"answer", "sources"} without the tool name;
+    the agent must still use them."""
+    from app.extraction.client import LLMResponse, ToolCall
+
+    class NamelessAnswerLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            user = next((m["content"] for m in messages if m["role"] == "user"), "")
+            if "Query results (ground truth" in user:
+                return LLMResponse(
+                    tool_calls=[ToolCall("", {"answer": "CHRW and MRNA.", "sources": []})]
+                )
+            return LLMResponse(
+                tool_calls=[ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})]
+            )
+
+    class OneRowStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            return [{"ticker": "CHRW", "u": "https://disclosures-clerk.house.gov/x.pdf"}]
+
+    agent = QueryAgent(llm=NamelessAnswerLLM(), store=OneRowStore())
+    result = agent.ask("Which tickers?")
+
+    assert result.answer == "CHRW and MRNA."
+    assert result.sources == ["https://disclosures-clerk.house.gov/x.pdf"]
+
+
+def test_sources_from_rows_accepts_any_source_url():
+    agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
+    rows = [
+        {"u": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/1.pdf"},
+        {"u": "https://finance.yahoo.com/quote/NVDA"},
+        {"u": "https://x.com/unusual_whales/status/1"},
+        {"n": 42},
+    ]
+    assert agent._sources_from_rows(rows) == [r["u"] for r in rows[:3]]
+
+
 class _ExecutionErrorStore:
     """Fails the first execution with a graph runtime error, then succeeds."""
 

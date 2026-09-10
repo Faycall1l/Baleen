@@ -216,7 +216,11 @@ class QueryAgent:
             logger.warning("Cypher generation LLM call failed: %s", exc)
             return ""
         for call in response.tool_calls:
-            if call.name == "generate_cypher":
+            # Accept an explicit generate_cypher call, or a nameless reply
+            # carrying the cypher field (some models emit bare arguments).
+            if call.name == "generate_cypher" or (
+                not call.name and "cypher" in call.arguments
+            ):
                 return str(call.arguments.get("cypher", "")).strip()
         logger.warning("LLM returned no generate_cypher tool call")
         return ""
@@ -244,7 +248,10 @@ class QueryAgent:
                 "content": (
                     f"Question: {question}\n\n"
                     "Query results (ground truth; answer ONLY from these):\n"
-                    f"{rows}"
+                    f"{rows}\n\n"
+                    "Reply by calling the `answer_question` tool with `answer` "
+                    "(plain English, grounded strictly in these rows) and "
+                    "`sources` (the source URLs appearing in these rows)."
                 ),
             },
         ]
@@ -255,7 +262,11 @@ class QueryAgent:
             return "I found data but couldn't summarize it.", self._sources_from_rows(rows)
 
         for call in response.tool_calls:
-            if call.name == "answer_question":
+            # Explicit answer_question call, or a nameless reply carrying the
+            # answer field (some models emit bare arguments).
+            if call.name == "answer_question" or (
+                not call.name and "answer" in call.arguments
+            ):
                 sources = call.arguments.get("sources") or []
                 return (
                     str(call.arguments.get("answer", "")).strip(),
@@ -267,7 +278,10 @@ class QueryAgent:
         sources: list[str] = []
         for row in rows:
             for value in row.values():
-                if isinstance(value, str) and value.startswith("https://x.com/"):
+                # Any source URL counts — filings (Clerk/Senate PDFs), quote
+                # pages, and tweets alike. The x.com-only check predates the
+                # keyless feeds and would drop every real source link.
+                if isinstance(value, str) and value.startswith(("https://", "http://")):
                     if value not in sources:
                         sources.append(value)
         return sources
