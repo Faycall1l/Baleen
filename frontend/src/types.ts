@@ -48,6 +48,17 @@ export interface Alert {
   created_at: string;
 }
 
+export interface Report {
+  id: number;
+  kind: 'brief' | 'digest';
+  event_id?: string | null;
+  period?: string | null;
+  title: string;
+  body: string;
+  graph_refs?: string[];
+  created_at?: string;
+}
+
 export interface HealthCheck {
   status: string;
   detail?: string;
