@@ -274,6 +274,23 @@ def test_constrained_json_unwraps_tool_parameters_envelope():
     assert isinstance(event, OptionsFlowEvent)
 
 
+def test_constrained_json_unwraps_action_envelope():
+    """ReAct-style {"action", "action_input"} envelope, where the input is a
+    bare string (the query agent's single-input generator tool)."""
+    from app.query.agent import GENERATE_TOOL
+
+    client = LLMClient("http://x", "k", "m", tool_mode="json")
+
+    calls = client._parse_tool_calls_from_json(
+        '{"action": "generate_cypher", "action_input": "MATCH (t:Ticker) RETURN t"}',
+        [GENERATE_TOOL],
+    )
+
+    assert len(calls) == 1
+    assert calls[0].name == "generate_cypher"
+    assert calls[0].arguments["cypher"] == "MATCH (t:Ticker) RETURN t"
+
+
 def test_prompt_omits_internal_tweet_id():
     """The internal tweet_id is provenance injected post-hoc; pasting it into
     the prompt derails some models' structured output on identifier-shaped

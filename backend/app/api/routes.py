@@ -77,16 +77,21 @@ def _node_key(label: str, props: dict) -> str:
 
 
 def _json_safe(value):
-    """Node props are native temporal values after the writer stores them with
-    ``mode="python"``; serialize to ISO strings for the JSON response.
+    """Node props and query rows carry native temporal values after the writer
+    stores them with ``mode="python"``; serialize to ISO strings for JSON.
 
     Duck-types on ``isoformat`` because the Neo4j driver returns its own
     temporal classes (``neo4j.time.DateTime``/``Date``) that are *not*
-    subclasses of the stdlib ``datetime``/``date`` types.
+    subclasses of the stdlib ``datetime``/``date`` types. Recurses into
+    lists/dicts (``collect(...)`` projections nest values).
     """
     iso = getattr(value, "isoformat", None)
     if callable(iso):
         return iso()
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
     return value
 
 
@@ -202,7 +207,9 @@ def ask_question(request: QueryRequest) -> dict:
     except Exception as exc:
         logger.exception("query agent failed for question %r", request.question)
         raise HTTPException(status_code=500, detail=f"query agent failed: {exc}")
-    return result.as_dict()
+    payload = result.as_dict()
+    payload["rows"] = _json_safe(payload["rows"])
+    return payload
 
 
 # ---------------------------------------------------------------------------

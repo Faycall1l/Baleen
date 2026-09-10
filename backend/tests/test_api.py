@@ -36,6 +36,29 @@ def test_json_safe_serializes_native_temporal_props():
     assert _json_safe(42) == 42
 
 
+def test_json_safe_recurses_into_rows():
+    """collect(...) projections nest values; whole row lists must come out
+    JSON-encodable (this is what /api/query returns)."""
+    from datetime import date, datetime, timezone
+
+    from neo4j.time import DateTime as Neo4jDateTime
+
+    from app.api.routes import _json_safe
+
+    rows = [
+        {"ticker": "NVDA", "at": Neo4jDateTime(2026, 9, 10, 12, 0, 0)},
+        {"sector": "Tech", "tickers": ["NVDA", "AMD"],
+         "d": datetime(2026, 1, 1, tzinfo=timezone.utc), "day": date(2026, 1, 2)},
+    ]
+    import json
+
+    safe = _json_safe(rows)
+    json.dumps(safe)  # must not raise
+    assert safe[0]["at"] == "2026-09-10T12:00:00.000000000"
+    assert safe[1]["tickers"] == ["NVDA", "AMD"]
+    assert safe[1]["day"] == "2026-01-02"
+
+
 def _client():
     from app.main import app
 

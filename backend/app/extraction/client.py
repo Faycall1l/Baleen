@@ -42,16 +42,21 @@ class LLMError(Exception):
 def _unwrap_arguments(envelope: dict) -> dict:
     """Extract the field object from a tool-call envelope.
 
-    Accepts ``arguments`` / ``parameters`` / ``params`` (object or
-    string-encoded JSON); falls back to the envelope itself when none is
-    present (flat field objects).
+    Accepts ``arguments`` / ``parameters`` / ``params`` / ``action_input``
+    (object or string-encoded JSON); falls back to the envelope itself when
+    none is present (flat field objects). A bare-string ``action_input``
+    (ReAct style) maps to ``{"cypher": ...}`` — the query agent's generator
+    is the only single-string-input tool, and the extractor never receives
+    bare strings.
     """
-    for key in ("arguments", "parameters", "params"):
+    for key in ("arguments", "parameters", "params", "action_input"):
         value = envelope.get(key)
         if isinstance(value, str):
             try:
                 value = json.loads(value)
             except json.JSONDecodeError:
+                if key == "action_input":
+                    return {"cypher": envelope[key]}
                 continue
         if isinstance(value, dict):
             return value
@@ -324,12 +329,13 @@ class LLMClient:
                 name = (
                     tc.get("name")
                     or tc.get("tool")
+                    or tc.get("action")
                     or tc.get("function", {}).get("name", "")
                 )
                 arguments = _unwrap_arguments(tc)
                 tool_calls.append(ToolCall(name=name, arguments=arguments))
         elif isinstance(raw, dict):
-            name = raw.get("name") or raw.get("tool") or raw.get("event_type")
+            name = raw.get("name") or raw.get("tool") or raw.get("action") or raw.get("event_type")
             if name in known:
                 # Models wrap fields in varying envelopes ({"name",
                 # "arguments"}, {"tool", "parameters"}, ...). Unwrap so the
