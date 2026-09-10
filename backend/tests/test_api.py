@@ -67,9 +67,12 @@ def test_health():
             return
         assert res.status_code == 200
         assert res.json()["status"] == "ok"
-        assert set(res.json()["checks"]) == {"postgres", "neo4j"}
-        assert res.json()["checks"]["postgres"]["status"] == "ok"
-        assert res.json()["checks"]["neo4j"]["status"] == "ok"
+        checks = res.json()["checks"]
+        assert {"postgres", "neo4j"} <= set(checks)
+        assert checks["postgres"]["status"] == "ok"
+        assert checks["neo4j"]["status"] == "ok"
+        if "llm" in checks:  # present iff a real model name is configured
+            assert checks["llm"]["status"] == "ok"
 
 
 def test_health_reports_llm_down_when_configured(monkeypatch):
@@ -156,6 +159,13 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
         assert "ZZZZ" in titles  # newest event + its neighborhood
         assert "Old Person" not in titles  # oldest event excluded
 
+    # Dated fixtures (2020/2030) would otherwise skew ordering assertions on
+    # subsequent runs — clean up after ourselves.
+    neo4j_store.run(
+        "MATCH (e:Event) WHERE e.tweet_id IN $ids DETACH DELETE e",
+        ids=["g-limit-old", "g-limit-new"],
+    )
+
 
 def test_graph_limit_prefers_typed_events_over_unparsed_without_event_time(neo4j_store):
     """UnparsedEvent has no ``event_time``; the limit query falls back to a
@@ -189,6 +199,13 @@ def test_graph_limit_prefers_typed_events_over_unparsed_without_event_time(neo4j
         titles = {n["title"] for n in body["nodes"]}
         assert "NVDA" in titles  # newest typed event keeps its slot
         assert unparsed_id not in titles  # sentinel fallback must sort as oldest
+
+    # This test's 2031-dated event would otherwise outrank every other test's
+    # "newest" fixture on subsequent runs — clean up after ourselves.
+    neo4j_store.run(
+        "MATCH (e:Event) WHERE e.tweet_id IN $ids DETACH DELETE e",
+        ids=["g-unparsed-1", "g-typed-recent"],
+    )
 
 
 def test_alerts_list():
