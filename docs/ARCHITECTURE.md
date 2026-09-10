@@ -70,41 +70,52 @@ Baleen/
 │   │   ├── config.py         # pydantic-settings, all env vars
 │   │   ├── models/           # Pydantic schemas (events)
 │   │   ├── db/               # Postgres + Neo4j clients
-│   │   ├── ingestion/        # TweetSource interface, X API impl, pipeline
+│   │   ├── ingestion/        # TweetSource interface, X + disclosure + Clerk +
+│   │                         #   options-radar impls, MultiSource fan-out
 │   │   ├── extraction/       # LLM client wrapper + extractor
 │   │   ├── graph/            # Neo4j schema constants + MERGE writer
 │   │   ├── query/            # Cypher allowlist validator + NL→Cypher agent
 │   │   ├── alerts/           # rule evaluation + alert persistence
-│   │   ├── api/              # REST routes (/graph, /query, /alerts)
-│   │   └── scheduler.py      # APScheduler wiring
-│   ├── scripts/              # seed_reference.py, ingest_once.py, llm_mock.py
+│   │   ├── reports/          # published briefs + digests
+│   │   ├── api/              # REST routes (/graph, /query, /alerts, /reports)
+│   │   └── scheduler.py      # APScheduler wiring (polls all live sources)
+│   ├── scripts/              # seed_reference.py, ingest_once.py (--real), llm_mock.py
 │   └── tests/                # per-phase unit + integration tests
 └── frontend/
     └── src/
-        ├── App.tsx           # three surfaces only: Graph, Query, Alerts
-        └── components/       # GraphView, QueryBar, AlertsPanel, NodeDetail
+        ├── App.tsx           # four surfaces: Graph, Query, Alerts, Reports
+        └── components/       # GraphView, QueryBar, AlertsPanel, ReportsPanel, NodeDetail
 ```
 
 ## Data flow phases
 
 ### 1. Ingestion
-`backend/app/ingestion/pipeline.py` runs on a timer (APScheduler). It polls the
-X API v2 `recent-search` endpoint for configured handles, normalizes tweets, and
-inserts them into the Postgres `raw_tweets` table. Dedup is guaranteed by a
-**unique constraint on `tweet_id`** — re-running any poll is a no-op for
-already-seen tweets. Retry/backoff wraps API calls; every fetch is logged with
-count, timestamp, and errors. `TweetSource` is an interface so the X
-implementation can be swapped or mocked in tests.
+`backend/app/ingestion/pipeline.py` runs on a timer (APScheduler). Each tick
+fans out through `MultiSource` across every live source — congressional PTR
+filings (community mirror + Clerk-direct PDF parsing), the delayed-chain
+options radar, and the X API v2 `recent-search` endpoint when a real bearer
+token is configured (keyless feeds need no credentials) — normalizes records,
+and inserts them into the Postgres `raw_tweets` table. Dedup is guaranteed by
+a **unique constraint on `tweet_id`** — re-running any poll is a no-op for
+already-seen records. Retry/backoff wraps API calls; one failing source never
+aborts the others and every fetch is logged with count, timestamp, and errors.
+`TweetSource` is the interface all sources (and test fakes) implement.
 
 ### 2. Extraction
-For each new `raw_tweet`, the extractor asks the locally-hosted LLM to classify
-the text into one of the supported event types **using tool/function calling**
-against Pydantic JSON schemas — never freeform JSON from prose. If the served
-model has no native tool support, a constrained-JSON fallback is used: the
-schema is embedded in the system prompt, output is strictly parsed, and invalid
-output triggers a bounded retry. Every extraction carries a `confidence`
-score; below `CONFIDENCE_THRESHOLD` (0.6) the tweet is stored as an
-`UnparsedEvent` — never force-fit into the wrong schema.
+For each new `raw_tweet`, the extractor asks the configured OpenAI-compatible
+LLM (remote vLLM, `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_NAME`) to
+classify the text into one of the supported event types **using tool/function
+calling** against Pydantic JSON schemas — never freeform JSON from prose. If
+the served model has no native tool support, a constrained-JSON fallback is
+used: the schema is embedded in the system prompt, output is strictly parsed
+(tolerating the envelope shapes real models emit), and invalid output triggers
+a bounded retry. Records from the disclosure feed are then deterministically
+grounded in filing facts (ticker, dates, amounts, party/chamber) with identity
+and committee memberships resolved from the reference roster — the LLM
+contributes classification + confidence, never hallucinated identifiers. Every
+extraction carries a `confidence` score; below `CONFIDENCE_THRESHOLD` (0.6)
+the tweet is stored as an `UnparsedEvent` — never force-fit into the wrong
+schema.
 
 ### 3. Graph writing
 The graph writer upserts nodes and edges with Cypher `MERGE`, keyed on natural
@@ -121,7 +132,8 @@ graph is fully traceable. The schema is fixed and documented in
 3. `validate.py` enforces an **allowlist** of node labels and relationship
    types, and rejects any write clause or procedure.
 4. The Cypher runs against Neo4j with a **read-only role**.
-5. The LLM writes a grounded answer, citing source tweet URLs from the graph.
+5. The LLM writes a grounded answer, citing source URLs from the graph rows
+   (filing PDFs, quote pages, and tweets alike).
 
 If a query returns zero rows, the agent answers "I don't have enough data"
 rather than fabricating. If Cypher fails validation or the LLM is unsure, it
@@ -134,6 +146,15 @@ evaluates active rules from the `alert_rules` table. The single MVP rule —
 ticker whose sector is overseen by one of their committees. On trigger the LLM
 drafts a short factual summary with source links, stored in the `alerts` table
 and served to the Alerts Panel.
+
+### 6. Published reports
+`backend/app/reports/engine.py` publishes a **brief** for every typed event
+(deterministic headline + LLM-drafted body grounded in the event's graph
+neighborhood, with source links) and a rolling **daily digest** of
+newly-arrived events, both stored idempotently in the `reports` table and
+served to the Reports panel via `/api/reports`. Deterministic template
+fallbacks keep publishing alive through LLM outages without ever blocking the
+pipeline.
 
 ## Frontend
 
