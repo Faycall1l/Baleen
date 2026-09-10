@@ -193,17 +193,6 @@ python -m scripts.retry_unparsed --process    # reset, then run the pipeline imm
 Tweets that *later* produced a typed event keep only that event — their stale
 `UnparsedEvent` nodes are purged automatically (obsolete records).
 
-### Cleaning up orphaned events
-
-Demo/test runs can leave `Event` nodes whose source tweet is no longer in
-`raw_tweets`. Prune them so the graph only holds verifiable provenance
-(reference nodes — politicians, committees, sectors, tickers — are untouched):
-
-```bash
-python -m scripts.prune_orphan_events --dry-run   # preview
-python -m scripts.prune_orphan_events             # delete orphans
-```
-
 ## 6. Neo4j read-only role (query agent)
 
 The query agent must run against a **read-only** Neo4j user so it can never
@@ -275,3 +264,33 @@ exercise the integration tests, or bring up the full stack.
   mock/model is actually listening on `LLM_BASE_URL`.
 - **Ports in use** — Baleen uses 5432, 7474, 7687, 8000, 8001 (mock LLM),
   5173. Stop other projects on these ports before `docker-compose up`.
+
+---
+
+## 9. Published reports
+
+Every typed event gets an auto-generated **brief** (deterministic headline +
+LLM-drafted factual body grounded in the event's graph neighborhood, with
+source links), written inline by the processing pipeline. A rolling **daily
+digest** summarizes newly-arrived events. Both live in the `reports` table
+(idempotent: one brief per event, one digest per day) and are served at:
+
+```bash
+curl localhost:8000/api/reports | jq .      # latest briefs + digests
+curl localhost:8000/api/reports/digest | jq .  # today's digest (generated on first request)
+```
+
+The Reports panel in the UI polls the same endpoints live. If the LLM is down,
+briefs/digests fall back to deterministic templates — publishing never blocks
+the pipeline.
+
+### Cleaning up orphaned events
+
+Demo/test runs can leave `Event` nodes whose source tweet is no longer in
+`raw_tweets`. Prune them so the graph only holds verifiable provenance
+(reference nodes — politicians, committees, sectors, tickers — are untouched):
+
+```bash
+python -m scripts.prune_orphan_events --dry-run   # preview
+python -m scripts.prune_orphan_events             # delete orphans
+```

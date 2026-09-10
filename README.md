@@ -45,7 +45,8 @@ politician trades in a sector their own committee oversees.
      └──────────────► alerts engine ──► Postgres alerts table
 ```
 
-Three UI surfaces only: **Graph**, **Query Bar**, **Alerts Panel**.
+Four UI surfaces, no dashboards: **Graph**, **Query Bar**, **Alerts Panel**, **Reports**
+(auto-published event briefs + daily digest, also at `/api/reports`).
 
 ## Repository layout
 

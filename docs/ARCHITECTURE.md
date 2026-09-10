@@ -137,7 +137,7 @@ and served to the Alerts Panel.
 
 ## Frontend
 
-Three surfaces only (no dashboards, no extra pages):
+Four surfaces, no dashboards, no extra pages:
 
 - **Graph view** — force-directed rendering of the Neo4j graph fetched from
   `/api/graph`, dark Obsidian theme, click-to-expand node detail panel showing
@@ -147,6 +147,8 @@ Three surfaces only (no dashboards, no extra pages):
   tweets.
 - **Alerts panel** — collapsible; lists recent alerts with links to relevant
   graph nodes.
+- **Reports panel** — auto-published event briefs (one per typed event) plus
+  the rolling daily digest, from `/api/reports`.
 
 ## Deployment
 
