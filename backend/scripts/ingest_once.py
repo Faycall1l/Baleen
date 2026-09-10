@@ -122,11 +122,14 @@ def main() -> None:
             settings.llm_model_name,
         )
     elif args.real:
+        from app.ingestion.clerk import ClerkHouseSource
         from app.ingestion.disclosures import CongressDisclosureSource
         from app.ingestion.options import OptionsChainSource
         from app.ingestion.source import MultiSource
 
-        source = MultiSource([CongressDisclosureSource(), OptionsChainSource()])
+        source = MultiSource(
+            [CongressDisclosureSource(), ClerkHouseSource(), OptionsChainSource()]
+        )
         logger.info("live public feeds: congressional disclosures + options radar")
     else:
         source = SampleSource()

@@ -1,0 +1,150 @@
+"""Clerk-direct feed tests: index parsing, PDF parsing, source behavior."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from app.ingestion.clerk import (
+    ClerkHouseSource,
+    parse_index,
+    parse_ptr_pdf,
+)
+
+INDEX = (
+    "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\r\n"
+    "\tAaron\tRichard\t\tW\tMI04\t2026\t4/15/2026\t8068\r\n"
+    "\tTaylor\tDavid\t\tP\tOH02\t2026\t9/5/2026\t20035392\r\n"
+    "\tSmith\tJane\t\tP\tCA12\t2026\t9/6/2026\t9116142\r\n"
+    "\tBrown\tBob\t\tC\tTX01\t2026\t9/6/2026\t20039999\r\n"
+)
+
+PTR_TEXT = (
+    "Name: Hon. David J. Taylor State/District:OH02 "
+    "American Electric Power Company, Inc. (AEP) [ST] "
+    "P 08/26/202609/03/2026$1,001 - $15,000 F S: New "
+    "Amgen Inc. - Common Stock (AMGN) [ST] "
+    "S 08/26/202609/03/2026$1,001 - $15,000 F S: New "
+    "Broadcom Inc. - Common Stock (AVGO) [ST] "
+    "P 08/26/202609/03/2026$1,001 - $15,000 F S: New "
+    "Microsoft Corporation - Common Stock (MSFT) [ST] "
+    "S 08/26/202609/03/2026$1,001 - $15,000 F S: New "
+    "Mystery Fund (XYZ) [ST] "
+    "E 08/26/202609/03/2026$1,001 - $15,000 F S: New "
+    "Dave's IRA @ Schwab (Home Grown) Filing ID #20035392 "
+    "I CERTIFY that the statements I have made on the attached Periodic "
+    "Transaction Report are true, complete, and correct to the best of my "
+    "knowledge and belief as required by the STOCK Act."
+)
+
+
+def _pdf_bytes(text: str) -> bytes:
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject()
+    font[NameObject("/Type")] = NameObject("/Font")
+    font[NameObject("/Subtype")] = NameObject("/Type1")
+    font[NameObject("/BaseFont")] = NameObject("/Helvetica")
+    resources = DictionaryObject()
+    fonts = DictionaryObject()
+    fonts[NameObject("/F1")] = writer._add_object(font)
+    resources[NameObject("/Font")] = fonts
+    page[NameObject("/Resources")] = resources
+    stream = DecodedStreamObject()
+    chunks = [text[i : i + 100] for i in range(0, len(text), 100)] or [""]
+    ops = ["BT /F1 12 Tf 72 720 Td"]
+    for i, chunk in enumerate(chunks):
+        escaped = chunk.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        ops.append(f"({escaped}) Tj")
+        if i < len(chunks) - 1:
+            ops.append("T*")
+    ops.append("ET")
+    stream.set_data(" ".join(ops).encode("latin-1", errors="replace"))
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    import io
+
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def test_parse_index_keeps_efiled_ptrs_only():
+    filings = parse_index(INDEX)
+
+    assert [f["doc_id"] for f in filings] == ["20035392"]
+    assert filings[0]["filer_name"] == "David Taylor"
+    assert filings[0]["state"] == "OH"
+    assert filings[0]["filing_date"] == "2026-09-05"
+
+
+def test_parse_ptr_pdf_extracts_trades_and_skips_exchanges():
+    trades = parse_ptr_pdf(_pdf_bytes(PTR_TEXT))
+
+    assert [(t["ticker"], t["transaction_type"]) for t in trades] == [
+        ("AEP", "Purchase"),
+        ("AMGN", "Sale"),
+        ("AVGO", "Purchase"),
+        ("MSFT", "Sale"),
+    ]
+    assert trades[0]["transaction_date"] == "2026-08-26"
+    assert trades[0]["amount_range_label"] == "$1,001 - $15,000"
+
+
+def test_parse_ptr_pdf_empty_means_scan():
+    assert parse_ptr_pdf(_pdf_bytes("Name: Hon. X")) == []
+
+
+def test_source_emits_traceable_records():
+    src = ClerkHouseSource(
+        year=2026,
+        fetch_index=lambda year: INDEX,
+        fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
+    )
+    result = src.fetch_recent([], 30 * 86400)
+
+    assert result.errors == []
+    assert len(result.tweets) == 4
+    first = result.tweets[0]
+    assert first.tweet_id == "ptr-house_20035392_0"
+    assert "Taylor" in first.text and "$AEP" in first.text
+    assert first.url == "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035392.pdf"
+    assert first.raw_json["source_kind"] == "congress_disclosure"
+    assert first.raw_json["chamber"] == "house"
+
+
+def test_source_skips_seen_filings_on_repill():
+    src = ClerkHouseSource(
+        year=2026,
+        fetch_index=lambda year: INDEX,
+        fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
+    )
+    assert len(src.fetch_recent([], 30 * 86400).tweets) == 4
+    assert src.fetch_recent([], 30 * 86400).tweets == []  # same process: no re-download
+
+
+def test_source_index_failure_returns_errors():
+    def boom(year: int):
+        raise RuntimeError("clerk down")
+
+    result = ClerkHouseSource(fetch_index=boom).fetch_recent([], 3600)
+    assert result.tweets == []
+    assert len(result.errors) == 1
+
+
+def test_today_is_used_for_window():
+    today = datetime.now(timezone.utc).date()
+    iso = today.isoformat()
+    index = (
+        "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\r\n"
+        f"\tTaylor\tDavid\t\tP\tOH02\t{today.year}\t{today.month}/{today.day}/{today.year}\t20035392\r\n"
+    )
+    src = ClerkHouseSource(
+        year=today.year,
+        fetch_index=lambda year: index,
+        fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
+    )
+    result = src.fetch_recent([], 3600)
+    assert len(result.tweets) == 4
+    assert result.tweets[0].created_at.date().isoformat() == iso

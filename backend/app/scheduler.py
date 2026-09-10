@@ -24,6 +24,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import Settings
+from app.ingestion.clerk import ClerkHouseSource
 from app.ingestion.disclosures import CongressDisclosureSource
 from app.ingestion.options import OptionsChainSource
 from app.ingestion.pipeline import IngestionPipeline
@@ -39,6 +40,7 @@ def build_sources(settings: Settings) -> list[TweetSource]:
     public feeds); X only when a real bearer token is configured."""
     sources: list[TweetSource] = [
         CongressDisclosureSource(),
+        ClerkHouseSource(),
         OptionsChainSource(),
     ]
     if settings.x_api_configured:
