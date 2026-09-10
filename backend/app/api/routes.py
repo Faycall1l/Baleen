@@ -220,6 +220,35 @@ def alerts(limit: int = Query(default=20, ge=1, le=100)) -> dict:
     return {"alerts": rows, "count": len(rows)}
 
 
+# ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+
+@router.get("/reports/digest")
+def reports_digest(period: str | None = Query(default=None)) -> dict:
+    """Serve the daily digest, generating it on first request for the period."""
+    try:
+        report = get_report_engine().ensure_digest(period)
+    except Exception as exc:
+        logger.exception("digest generation failed")
+        raise HTTPException(status_code=500, detail=f"digest failed: {exc}")
+    return {"report": report}
+
+
+@router.get("/reports")
+def reports(
+    limit: int = Query(default=20, ge=1, le=100),
+    kind: str | None = Query(default=None),
+) -> dict:
+    try:
+        rows = _get_store().get_reports(limit=limit, kind=kind)
+    except Exception as exc:
+        logger.exception("reports fetch failed")
+        raise HTTPException(status_code=500, detail=f"reports fetch failed: {exc}")
+    return {"reports": rows, "count": len(rows)}
+
+
 def get_alert_engine() -> AlertEngine:
     return AlertEngine(
         store=_get_store(),
@@ -229,10 +258,17 @@ def get_alert_engine() -> AlertEngine:
     )
 
 
+def get_report_engine() -> "ReportEngine":
+    from app.reports.engine import ReportEngine
+
+    return ReportEngine(store=_get_store(), neo4j=_get_neo4j(), llm=_get_llm())
+
+
 def _get_processing() -> "ProcessingPipeline":
     from app.extraction.extractor import EventExtractor
     from app.graph.writer import GraphWriter
     from app.pipeline import ProcessingPipeline
+    from app.reports.engine import ReportEngine
 
     s = _get_settings()
     return ProcessingPipeline(
@@ -240,6 +276,7 @@ def _get_processing() -> "ProcessingPipeline":
         writer=GraphWriter(store=_get_neo4j()),
         alert_engine=get_alert_engine(),
         store=_get_store(),
+        report_engine=ReportEngine(store=_get_store(), neo4j=_get_neo4j(), llm=_get_llm()),
     )
 
 

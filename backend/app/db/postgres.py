@@ -58,6 +58,21 @@ CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts (created_at DESC);
 -- never create a duplicate (CREATE UNIQUE INDEX IF NOT EXISTS is PostgreSQL's
 -- idempotent form of "add unique constraint").
 CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_rule_event ON alerts (rule_id, event_id);
+
+CREATE TABLE IF NOT EXISTS reports (
+    id         SERIAL PRIMARY KEY,
+    kind       TEXT NOT NULL,               -- 'brief' (one event) | 'digest' (one period)
+    event_id   TEXT,                        -- briefs only
+    period     TEXT,                        -- digests only (YYYY-MM-DD, UTC)
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    graph_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Idempotency: one brief per event, one digest per period. NULLs never
+-- collide in Postgres unique indexes, so the two lanes share the table.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_reports_brief ON reports (kind, event_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_reports_digest ON reports (kind, period);
 """
 
 
@@ -246,3 +261,78 @@ class PostgresStore:
                 {"limit": limit},
             ).mappings()
             return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------------
+    # reports
+    # ------------------------------------------------------------------
+
+    def insert_report(
+        self,
+        kind: str,
+        title: str,
+        body: str,
+        event_id: str | None = None,
+        period: str | None = None,
+        graph_refs: list[str] | None = None,
+    ) -> int | None:
+        """Insert a report. Returns its id, or ``None`` when the same
+        (kind, event) brief or (kind, period) digest already exists."""
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO reports (kind, event_id, period, title, body, graph_refs)
+                    VALUES (:kind, :event_id, :period, :title, :body, :graph_refs)
+                    ON CONFLICT (kind, event_id) DO NOTHING
+                    RETURNING id
+                    """
+                    if event_id is not None
+                    else """
+                    INSERT INTO reports (kind, period, title, body, graph_refs)
+                    VALUES (:kind, :period, :title, :body, :graph_refs)
+                    ON CONFLICT (kind, period) DO NOTHING
+                    RETURNING id
+                    """
+                ),
+                {
+                    "kind": kind,
+                    "event_id": event_id,
+                    "period": period,
+                    "title": title,
+                    "body": body,
+                    "graph_refs": json.dumps(graph_refs or []),
+                },
+            )
+            return result.scalar_one_or_none()
+
+    def get_reports(self, limit: int = 20, kind: str | None = None) -> list[dict]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, kind, event_id, period, title, body, graph_refs, created_at
+                    FROM reports
+                    WHERE (:kind IS NULL OR kind = :kind)
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"limit": limit, "kind": kind},
+            ).mappings()
+            return [dict(row) for row in rows]
+
+    def get_digest(self, period: str) -> dict | None:
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT id, kind, event_id, period, title, body, graph_refs, created_at
+                    FROM reports
+                    WHERE kind = 'digest' AND period = :period
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"period": period},
+            ).mappings().first()
+            return dict(row) if row is not None else None

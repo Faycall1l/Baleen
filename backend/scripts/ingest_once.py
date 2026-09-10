@@ -55,12 +55,14 @@ def build_pipeline(settings: Settings) -> ProcessingPipeline:
         timeout_seconds=settings.llm_timeout_seconds,
     )
     from app.alerts.engine import AlertEngine
+    from app.reports.engine import ReportEngine
 
     return ProcessingPipeline(
         extractor=EventExtractor(client=llm, confidence_threshold=settings.confidence_threshold),
         writer=GraphWriter(store=neo4j),
         alert_engine=AlertEngine(store=store, neo4j=neo4j, llm=llm, settings=settings),
         store=store,
+        report_engine=ReportEngine(store=store, neo4j=neo4j, llm=llm),
     )
 
 

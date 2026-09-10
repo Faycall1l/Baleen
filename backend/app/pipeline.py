@@ -21,6 +21,7 @@ from app.extraction.client import LLMTransportError
 from app.extraction.extractor import EventExtractor
 from app.graph.writer import GraphWriter
 from app.ingestion.disclosures import maybe_enrich_event
+from app.reports.engine import ReportEngine
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,13 @@ class ProcessingPipeline:
         writer: GraphWriter,
         alert_engine: AlertEngine,
         store: PostgresStore,
+        report_engine: ReportEngine | None = None,
     ) -> None:
         self.extractor = extractor
         self.writer = writer
         self.alert_engine = alert_engine
         self.store = store
+        self.report_engine = report_engine
 
     def process_new(self, limit: int = 50) -> dict:
         """Process tweets with status ``new``; returns per-type counts.
@@ -52,7 +55,7 @@ class ProcessingPipeline:
         failures never raise.
         """
         tweets = self.store.get_new_tweets(limit=limit)
-        summary = {"processed": 0, "unparsed": 0, "alerts": 0, "failed": 0}
+        summary = {"processed": 0, "unparsed": 0, "alerts": 0, "reports": 0, "failed": 0}
         done_ids: list[str] = []
         transport_failures = 0
 
@@ -69,6 +72,15 @@ class ProcessingPipeline:
                 else:
                     created = self.alert_engine.evaluate_event(event)
                     summary["alerts"] += len(created)
+                    if self.report_engine is not None:
+                        try:
+                            if self.report_engine.write_brief(event):
+                                summary["reports"] += 1
+                        except Exception:
+                            logger.exception(
+                                "report brief failed for event %s; continuing",
+                                event.deterministic_id,
+                            )
 
                 done_ids.append(tweet.tweet_id)
                 summary["processed"] += 1
