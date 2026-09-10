@@ -99,9 +99,9 @@ def _record(row: dict, now: datetime) -> RawTweet | None:
         return None
     chamber = str(row.get("chamber") or "").strip().lower()
     title = "Sen." if chamber == "senate" else "Rep."
-    party = str(row.get("party") or "").strip() or "?"
+    party = str(row.get("party") or "").strip()
     state = str(row.get("state") or "").strip()
-    where = f"{party}-{state}" if state else party
+    where = "-".join(p for p in [party, state] if p) or chamber or "unknown"
     txn_date = _parse_day(row.get("transaction_date"))
     filing_day = _parse_day(row.get("filing_date"))
     amount = str(row.get("amount_range_label") or "").strip() or "an undisclosed amount"
