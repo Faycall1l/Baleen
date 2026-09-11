@@ -74,9 +74,13 @@ class GraphWriter:
     ) -> None:
         a_key, b_key = LABEL_KEYS[a_label], LABEL_KEYS[b_label]
         self.store.run(
+            # Two MATCH clauses, not one comma-joined pattern: the comma form
+            # plans a cartesian product between the disconnected patterns
+            # (harmless here — single rows — but noisy in server notifications
+            # and slower at scale).
             f"""
-            MATCH (a:{a_label} {{{a_key}: $a_value}}),
-                  (b:{b_label} {{{b_key}: $b_value}})
+            MATCH (a:{a_label} {{{a_key}: $a_value}})
+            MATCH (b:{b_label} {{{b_key}: $b_value}})
             MERGE (a)-[r:{rel}]->(b)
             SET r.tweet_id = COALESCE($tweet_id, r.tweet_id),
                 r.tweet_url = COALESCE($tweet_url, r.tweet_url)
