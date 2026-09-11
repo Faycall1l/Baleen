@@ -589,3 +589,15 @@ def test_client_reuses_single_http_session():
 
     assert calls["n"] == 2
     client.close()
+
+
+def test_tool_definitions_are_built_once():
+    """Schemas are static; rebuilds on every extract() call are pure waste."""
+    first = build_tool_definitions()
+    second = build_tool_definitions()
+
+    assert first is second
+    assert {t["function"]["name"] for t in first} == {
+        "extract_options_flow",
+        "extract_congress_trade",
+    }
