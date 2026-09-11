@@ -17,7 +17,7 @@ backend keeps the loop going every 5 min by itself. ui on :5173, api on :8000.
 graph first. ~600 nodes. click anything, every node links back to its source
 filing or quote page.
 
-then ask it stuff:
+then ask it stuff (or just click one of the example questions under the bar):
 
 - which tickers did congressional traders buy most recently?
 - what sectors does the house financial services committee oversee, and which
@@ -30,6 +30,10 @@ doesnt make shit up.
 alerts fire when a politician trades in a sector their own committee
 oversees. reports get published for every event plus a daily digest, same
 thing at /api/reports.
+
+leaderboard ranks every disclosed trade by return since filing, with the
+official filing linked. ask "who in congress is actually beating the market"
+and point at it.
 
 ## prove its live
 
