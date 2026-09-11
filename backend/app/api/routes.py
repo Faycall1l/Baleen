@@ -256,6 +256,22 @@ def reports(
     return {"reports": rows, "count": len(rows)}
 
 
+# ---------------------------------------------------------------------------
+# Leaderboard
+# ---------------------------------------------------------------------------
+
+
+@router.get("/leaderboard")
+def leaderboard(limit: int = Query(default=20, ge=1, le=100)) -> dict:
+    """Best-performing congressional trades by return since transaction."""
+    try:
+        rows = _get_store().get_leaderboard(limit=limit)
+    except Exception as exc:
+        logger.exception("leaderboard fetch failed")
+        raise HTTPException(status_code=500, detail=f"leaderboard fetch failed: {exc}")
+    return {"leaders": rows, "count": len(rows)}
+
+
 def get_alert_engine() -> AlertEngine:
     return AlertEngine(
         store=_get_store(),
