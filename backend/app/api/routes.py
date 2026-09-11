@@ -302,5 +302,12 @@ def close_services() -> None:
         except Exception:
             logger.exception("postgres dispose failed")
         _store = None
-    _llm = None
+    if _llm is not None:
+        try:
+            close = getattr(_llm, "close", None)
+            if callable(close):
+                close()
+        except Exception:
+            logger.exception("llm close failed")
+        _llm = None
     logger.info("shared service clients closed")
