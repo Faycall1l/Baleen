@@ -88,14 +88,3 @@ Rules for writing Cypher:
 def schema_context() -> str:
     """Markdown/plain-text schema description for the LLM query agent."""
     return SCHEMA_CONTEXT
-
-
-def validate_query(query: str) -> list[str]:
-    """Allowlist check against labels/relationships.
-
-    Returns a list of violations (empty when the query is allowed). Centralized
-    here so both the CLI validator and the agent share one implementation.
-    """
-    from app.query.validate import validate_cypher
-
-    return validate_cypher(query)
