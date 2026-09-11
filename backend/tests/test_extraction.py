@@ -412,13 +412,13 @@ class _FakeResponse:
 
 def test_health_true_when_models_endpoint_reachable(monkeypatch):
     client = LLMClient("http://llm", "k", "m")
-    monkeypatch.setattr("app.extraction.client.httpx.get", lambda *a, **k: _FakeResponse(200))
+    monkeypatch.setattr(client._http, "get", lambda *a, **k: _FakeResponse(200))
     assert client.health() is True
 
 
 def test_health_false_when_endpoint_errors(monkeypatch):
     client = LLMClient("http://llm", "k", "m")
-    monkeypatch.setattr("app.extraction.client.httpx.get", lambda *a, **k: _FakeResponse(500))
+    monkeypatch.setattr(client._http, "get", lambda *a, **k: _FakeResponse(500))
     assert client.health() is False
 
 
@@ -430,7 +430,7 @@ def test_health_false_when_endpoint_unreachable(monkeypatch):
     def raise_timeout(*a, **k):
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("app.extraction.client.httpx.get", raise_timeout)
+    monkeypatch.setattr(client._http, "get", raise_timeout)
     assert client.health() is False
 
 
@@ -447,7 +447,7 @@ def test_post_http_error_status_raises_transport(monkeypatch):
         text = "service unavailable"
 
     client = LLMClient("http://llm", "k", "m")
-    monkeypatch.setattr("app.extraction.client.httpx.post", lambda *a, **k: _FakeResponse())
+    monkeypatch.setattr(client._http, "post", lambda *a, **k: _FakeResponse())
 
     with pytest.raises(LLMTransportError, match="503"):
         client._post({"messages": []})
@@ -463,7 +463,7 @@ def test_post_network_failure_raises_transport(monkeypatch):
     def raise_connect_error(*a, **k):
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("app.extraction.client.httpx.post", raise_connect_error)
+    monkeypatch.setattr(client._http, "post", raise_connect_error)
 
     with pytest.raises(LLMTransportError):
         client._post({"messages": []})
@@ -493,9 +493,10 @@ def test_post_retries_transport_then_recovers(monkeypatch):
         return _OkResponse()
 
     monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
-    monkeypatch.setattr("app.extraction.client.httpx.post", flaky)
 
     client = LLMClient("http://llm", "k", "m", max_retries=2)
+    monkeypatch.setattr(client._http, "post", flaky)
+
     data = client._post({"messages": []})
 
     assert calls["n"] == 3
@@ -512,11 +513,12 @@ def test_post_gives_up_after_max_retries(monkeypatch):
         raise httpx.ConnectError("down")
 
     monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
-    monkeypatch.setattr("app.extraction.client.httpx.post", always_down)
 
     from app.extraction.client import LLMTransportError
 
     client = LLMClient("http://llm", "k", "m", max_retries=2)
+    monkeypatch.setattr(client._http, "post", always_down)
+
     with pytest.raises(LLMTransportError):
         client._post({"messages": []})
     assert calls["n"] == 3  # 1 attempt + 2 retries
@@ -533,13 +535,40 @@ def test_json_mode_transport_not_double_retried(monkeypatch):
         raise httpx.ConnectError("down")
 
     monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
-    monkeypatch.setattr("app.extraction.client.httpx.post", always_down)
 
     from app.extraction.client import LLMTransportError
 
     tools = build_tool_definitions()
     client = LLMClient("http://llm", "k", "m", tool_mode="json", max_retries=1)
+    monkeypatch.setattr(client._http, "post", always_down)
+
     with pytest.raises(LLMTransportError):
         client.chat_with_tools([{"role": "user", "content": "hi"}], tools)
 
     assert calls["n"] == 2  # 1 attempt + 1 retry, not 4
+
+
+def test_client_reuses_single_http_session():
+    """Sequential calls share one pooled session (no per-call handshake)."""
+    calls = {"n": 0}
+
+    class _Ok:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+
+    client = LLMClient("http://llm", "k", "m")
+    session = client._http
+
+    def counting_post(*a, **k):
+        calls["n"] += 1
+        assert client._http is session
+        return _Ok()
+
+    client._http.post = counting_post
+    client._post({"messages": []})
+    client._post({"messages": []})
+
+    assert calls["n"] == 2
+    client.close()

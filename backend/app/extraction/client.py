@@ -109,6 +109,14 @@ class LLMClient:
         self.tool_mode = tool_mode
         self.max_retries = max_retries
         self.timeout = timeout_seconds
+        # One shared session: connection reuse (keep-alive) across the
+        # hundreds of sequential calls a processing batch makes. Module-level
+        # httpx one-shots would pay a fresh TCP+TLS handshake per call.
+        self._http = httpx.Client(timeout=self.timeout)
+
+    def close(self) -> None:
+        """Release the pooled connections (app shutdown)."""
+        self._http.close()
 
     # ------------------------------------------------------------------
     # Public API
@@ -163,7 +171,7 @@ class LLMClient:
         """
         try:
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-            response = httpx.get(
+            response = self._http.get(
                 f"{self.base_url}/models", headers=headers, timeout=min(self.timeout, 10)
             )
             return response.status_code < 400
@@ -207,7 +215,7 @@ class LLMClient:
             "Content-Type": "application/json",
         }
         try:
-            response = httpx.post(url, json=payload, headers=headers, timeout=self.timeout)
+            response = self._http.post(url, json=payload, headers=headers, timeout=self.timeout)
         except httpx.HTTPError as exc:
             raise LLMTransportError(f"LLM transport error: {exc}") from exc
 
