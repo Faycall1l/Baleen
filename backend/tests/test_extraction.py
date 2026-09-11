@@ -548,6 +548,23 @@ def test_json_mode_transport_not_double_retried(monkeypatch):
     assert calls["n"] == 2  # 1 attempt + 1 retry, not 4
 
 
+def test_payload_carries_determinism_guards():
+    client = LLMClient("http://x", "k", "m", seed=7, max_tokens=512)
+    payload = client._payload([{"role": "user", "content": "hi"}])
+
+    assert payload["temperature"] == 0.0
+    assert payload["seed"] == 7
+    assert payload["max_tokens"] == 512
+    client.close()
+
+
+def test_payload_determinism_guards_on_by_default():
+    payload = LLMClient("http://x", "k", "m")._payload([{"role": "user", "content": "hi"}])
+
+    assert payload["seed"] == 42
+    assert payload["max_tokens"] == 1024
+
+
 def test_client_reuses_single_http_session():
     """Sequential calls share one pooled session (no per-call handshake)."""
     calls = {"n": 0}

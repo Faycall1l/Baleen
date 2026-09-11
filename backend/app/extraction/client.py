@@ -102,6 +102,8 @@ class LLMClient:
         tool_mode: str = "auto",
         max_retries: int = 2,
         timeout_seconds: float = 90.0,
+        seed: int | None = 42,
+        max_tokens: int | None = 1024,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -109,6 +111,14 @@ class LLMClient:
         self.tool_mode = tool_mode
         self.max_retries = max_retries
         self.timeout = timeout_seconds
+        # Determinism guards (vLLM honors both on OpenAI-compatible routes):
+        # a fixed seed makes sampling repeatable across identical requests
+        # (temperature 0 alone does not guarantee that under batched serving),
+        # and an explicit cap guards against server-side truncation defaults
+        # silently cutting structured output. 1024 tokens comfortably covers
+        # our longest outputs (digests, extraction JSON).
+        self.seed = seed
+        self.max_tokens = max_tokens
         # One shared session: connection reuse (keep-alive) across the
         # hundreds of sequential calls a processing batch makes. Module-level
         # httpx one-shots would pay a fresh TCP+TLS handshake per call.
@@ -288,6 +298,10 @@ class LLMClient:
             "messages": messages,
             "temperature": 0.0,
         }
+        if self.seed is not None:
+            payload["seed"] = self.seed
+        if self.max_tokens is not None:
+            payload["max_tokens"] = self.max_tokens
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice or "auto"
