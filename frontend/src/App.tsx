@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchReports } from './api';
+import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports } from './api';
 import AlertsPanel from './components/AlertsPanel';
 import GraphView from './components/GraphView';
+import LeaderboardPanel from './components/LeaderboardPanel';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
 import ReportsPanel from './components/ReportsPanel';
 import { theme } from './theme';
-import type { Alert, GraphData, GraphNode, Health, QueryResponse, Report } from './types';
+import type { Alert, GraphData, GraphNode, Health, LeaderboardEntry, QueryResponse, Report } from './types';
 
 function QueryResultView({ result }: { result: QueryResponse }) {
   return (
@@ -79,6 +80,8 @@ export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [digest, setDigest] = useState<Report | null>(null);
   const [reportsError, setReportsError] = useState<string | null>(null);
+  const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
+  const [leadersError, setLeadersError] = useState<string | null>(null);
 
   const loadGraph = useCallback(() => {
     setGraphError(null);
@@ -120,27 +123,36 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  const loadLeaders = useCallback(() => {
+    setLeadersError(null);
+    fetchLeaderboard()
+      .then((res) => setLeaders(res.leaders))
+      .catch((err) => setLeadersError(err.message));
+  }, []);
+
   const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const graphSigRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
-    Promise.all([loadGraph(), loadAlerts(), loadReports()]).finally(() => setRefreshing(false));
-  }, [loadGraph, loadAlerts, loadReports]);
+    Promise.all([loadGraph(), loadAlerts(), loadReports(), loadLeaders()]).finally(() => setRefreshing(false));
+  }, [loadGraph, loadAlerts, loadReports, loadLeaders]);
 
   useEffect(() => {
     loadGraph();
     loadAlerts();
     loadReports();
+    loadLeaders();
     // Poll so newly-ingested events appear live without a manual Refresh.
     const id = setInterval(() => {
       loadGraph();
       loadAlerts();
       loadReports();
+      loadLeaders();
     }, 30_000);
     return () => clearInterval(id);
-  }, [loadGraph, loadAlerts, loadReports]);
+  }, [loadGraph, loadAlerts, loadReports, loadLeaders]);
 
   useEffect(() => {
     const checkHealth = () =>
@@ -185,6 +197,7 @@ export default function App() {
           )}
           <AlertsPanel alerts={alerts} error={alertsError} />
           <ReportsPanel digest={digest} reports={reports} error={reportsError} />
+          <LeaderboardPanel leaders={leaders} error={leadersError} />
         </aside>
 
         <main className="graph-area">

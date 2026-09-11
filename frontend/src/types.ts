@@ -59,6 +59,17 @@ export interface Report {
   created_at?: string;
 }
 
+export interface LeaderboardEntry {
+  politician: string;
+  ticker: string;
+  side: string;
+  date: string;
+  amount: string;
+  ret_pct: number;
+  excess_pct: number | null;
+  source_url: string;
+}
+
 export interface HealthCheck {
   status: string;
   detail?: string;
