@@ -19,7 +19,7 @@ import logging
 from app.alerts.rules import AlertRules
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.extraction.client import LLMClient, LLMError
+from app.extraction.client import LLMClient
 from app.models.events import Event
 
 logger = logging.getLogger(__name__)
@@ -143,25 +143,20 @@ class AlertEngine:
         return alert
 
     def _draft_summary(self, event: Event, facts: list[dict]) -> str:
+        from app.extraction.client import draft_text
+
         prompt = (
             "You are Baleen's alert writer. Write a 2-3 sentence factual alert "
             "summary strictly from the facts provided. Include the source tweet "
             "URL. Do not invent figures or names.\n\n"
             f"Facts: {facts}"
         )
-        try:
-            response = self.llm.chat(
-                [
-                    {"role": "system", "content": "You write short, factual, non-alarmist alerts."},
-                    {"role": "user", "content": prompt},
-                ]
-            )
-            summary = response.content.strip()
-            if summary:
-                return summary
-        except LLMError as exc:
-            logger.warning("alert summary LLM call failed: %s", exc)
-        return self._template_summary(facts)
+        return draft_text(
+            self.llm,
+            system="You write short, factual, non-alarmist alerts.",
+            prompt=prompt,
+            fallback=self._template_summary(facts),
+        )
 
     def _template_summary(self, facts: list[dict]) -> str:
         first = facts[0]

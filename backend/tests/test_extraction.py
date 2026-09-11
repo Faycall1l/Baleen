@@ -601,3 +601,28 @@ def test_tool_definitions_are_built_once():
         "extract_options_flow",
         "extract_congress_trade",
     }
+
+
+def test_draft_text_uses_model_output():
+    from app.extraction.client import LLMResponse, draft_text
+
+    class Chatty:
+        def chat(self, messages, **kwargs):
+            return LLMResponse(content="  drafted copy  ")
+
+    assert draft_text(Chatty(), system="s", prompt="p", fallback="fb") == "drafted copy"
+
+
+def test_draft_text_falls_back_on_empty_or_error():
+    from app.extraction.client import LLMResponse, LLMTransportError, draft_text
+
+    class Empty:
+        def chat(self, messages, **kwargs):
+            return LLMResponse(content="   ")
+
+    class Down:
+        def chat(self, messages, **kwargs):
+            raise LLMTransportError("down")
+
+    assert draft_text(Empty(), system="s", prompt="p", fallback="fb") == "fb"
+    assert draft_text(Down(), system="s", prompt="p", fallback="fb") == "fb"

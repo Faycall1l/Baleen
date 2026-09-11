@@ -72,6 +72,28 @@ class LLMTransportError(LLMError):
     """
 
 
+def draft_text(llm: "LLMClient", *, system: str, prompt: str, fallback: str) -> str:
+    """Draft short grounded copy, falling back to a template on LLM failure.
+
+    Shared by alert summaries, report briefs, and digests: try the model
+    once, use non-empty output, otherwise return the deterministic fallback.
+    Never raises.
+    """
+    try:
+        response = llm.chat(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        text = response.content.strip()
+        if text:
+            return text
+    except LLMError as exc:
+        logger.warning("LLM draft failed: %s", exc)
+    return fallback
+
+
 class InvalidJSONError(LLMError):
     """The model returned content that could not be parsed as JSON."""
 

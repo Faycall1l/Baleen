@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.extraction.client import LLMClient, LLMError
+from app.extraction.client import LLMClient
 from app.models.events import CongressTradeEvent, Event, OptionsFlowEvent
 
 logger = logging.getLogger(__name__)
@@ -173,6 +173,8 @@ class ReportEngine:
         return rows[0] if rows else {}
 
     def _draft_brief(self, event: Event, facts: dict) -> str:
+        from app.extraction.client import draft_text
+
         prompt = (
             "You are Baleen's markets reporter. Write a 2-4 sentence factual "
             "brief strictly from the facts provided. Name the key figures "
@@ -180,19 +182,12 @@ class ReportEngine:
             "invent figures or names, do not editorialize.\n\n"
             f"Facts: {facts}"
         )
-        try:
-            response = self.llm.chat(
-                [
-                    {"role": "system", "content": "You write short, factual, non-alarmist market briefs."},
-                    {"role": "user", "content": prompt},
-                ]
-            )
-            body = response.content.strip()
-            if body:
-                return body
-        except LLMError as exc:
-            logger.warning("brief LLM call failed: %s", exc)
-        return template_brief(event, facts)
+        return draft_text(
+            self.llm,
+            system="You write short, factual, non-alarmist market briefs.",
+            prompt=prompt,
+            fallback=template_brief(event, facts),
+        )
 
     # ------------------------------------------------------------------
     # Digests (one per UTC day)
@@ -256,6 +251,8 @@ class ReportEngine:
         }
 
     def _draft_digest(self, day: str, facts: dict) -> str:
+        from app.extraction.client import draft_text
+
         if not facts.get("events"):
             return f"No events recorded on {day}."
         prompt = (
@@ -265,19 +262,12 @@ class ReportEngine:
             "and any alerts. Do not invent figures or names.\n\n"
             f"Aggregates: {facts}"
         )
-        try:
-            response = self.llm.chat(
-                [
-                    {"role": "system", "content": "You write short, factual, non-alarmist market digests."},
-                    {"role": "user", "content": prompt},
-                ]
-            )
-            body = response.content.strip()
-            if body:
-                return body
-        except LLMError as exc:
-            logger.warning("digest LLM call failed: %s", exc)
-        return template_digest(day, facts)
+        return draft_text(
+            self.llm,
+            system="You write short, factual, non-alarmist market digests.",
+            prompt=prompt,
+            fallback=template_digest(day, facts),
+        )
 
 
 def template_digest(day: str, facts: dict) -> str:
