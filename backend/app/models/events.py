@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
@@ -111,12 +110,6 @@ Event = Annotated[
     OptionsFlowEvent | CongressTradeEvent | UnparsedEvent,
     Field(discriminator="event_type"),
 ]
-
-#: All event types the MVP understands (DarkPoolEvent intentionally omitted).
-EVENT_TYPES = ["options_flow", "congress_trade", "unparsed"]
-
-#: Regex used by the constrained-JSON fallback to carve JSON out of prose.
-JSON_BLOCK_RE = re.compile(r"\{[\s\S]*\}")
 
 
 def as_json_schema(model: type[BaseModel]) -> dict[str, Any]:
