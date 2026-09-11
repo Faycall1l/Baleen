@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 
 from app.alerts.rules import AlertRules
-from app.config import Settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient, LLMError
@@ -34,12 +33,10 @@ class AlertEngine:
         store: PostgresStore,
         neo4j: Neo4jStore,
         llm: LLMClient,
-        settings: Settings,
     ) -> None:
         self.store = store
         self.neo4j = neo4j
         self.llm = llm
-        self.settings = settings
         self.rules = AlertRules(neo4j)
 
     # ------------------------------------------------------------------

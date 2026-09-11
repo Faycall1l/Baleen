@@ -261,7 +261,6 @@ def get_alert_engine() -> AlertEngine:
         store=_get_store(),
         neo4j=_get_neo4j(),
         llm=_get_llm(),
-        settings=_get_settings(),
     )
 
 

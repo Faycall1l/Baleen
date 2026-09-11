@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from app.alerts.engine import AlertEngine
-from app.config import Settings
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
 from scripts.seed_reference import seed
@@ -42,7 +41,6 @@ def _engine(postgres_store, neo4j_store) -> AlertEngine:
         store=postgres_store,
         neo4j=neo4j_store,
         llm=StubLLM(summary="Warren bought JPM; the Senate Banking committee oversees Financial Services."),
-        settings=Settings(_env_file=None),
     )
     engine.ensure_default_rules()
     return engine
@@ -174,7 +172,6 @@ def test_llm_down_during_summary_drafting_uses_template_fallback(
         store=postgres_store,
         neo4j=neo4j_store,
         llm=_DownLLM(),
-        settings=Settings(_env_file=None),
     )
     engine.ensure_default_rules()
 

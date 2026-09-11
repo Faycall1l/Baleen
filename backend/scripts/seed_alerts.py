@@ -32,7 +32,6 @@ def seed_rules(store: PostgresStore) -> None:
             max_retries=get_settings().llm_max_retries,
             timeout_seconds=get_settings().llm_timeout_seconds,
         ),
-        settings=get_settings(),
     )
     engine.ensure_default_rules()
     logging.getLogger(__name__).info("alert rules seeded (default: %s)", DEFAULT_RULE)
