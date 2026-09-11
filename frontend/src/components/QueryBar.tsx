@@ -7,18 +7,25 @@ interface Props {
   onResult: (result: QueryResponse | null) => void;
 }
 
+const EXAMPLES = [
+  'Which tickers did congressional traders buy most recently?',
+  'Which sectors does the House Financial Services Committee oversee?',
+  'Show unusual options flow by sector.',
+];
+
 export default function QueryBar({ onResult }: Props) {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    const q = question.trim();
-    if (!q || busy) return;
+  async function submit(q?: string) {
+    const text = (q ?? question).trim();
+    if (!text || busy) return;
+    setQuestion(text);
     setBusy(true);
     setError(null);
     try {
-      onResult(await askQuestion(q));
+      onResult(await askQuestion(text));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       onResult(null);
@@ -36,9 +43,16 @@ export default function QueryBar({ onResult }: Props) {
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Ask the graph… e.g. which sectors has Cassidy traded?"
         />
-        <button onClick={submit} disabled={busy || !question.trim()}>
+        <button onClick={() => submit()} disabled={busy || !question.trim()}>
           {busy ? '…' : 'Ask'}
         </button>
+      </div>
+      <div className="query-examples">
+        {EXAMPLES.map((ex) => (
+          <button key={ex} className="query-example" onClick={() => submit(ex)} disabled={busy}>
+            {ex}
+          </button>
+        ))}
       </div>
       {error && (
         <div className="query-result">
