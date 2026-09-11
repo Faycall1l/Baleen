@@ -3,17 +3,39 @@
 Provides a single place that builds and closes the ``neo4j`` driver, plus
 separate read-only credentials for the query agent (see docs/SETUP.md for the
 role creation SQL). All graph access goes through :meth:`Neo4jStore.run`.
+
+Statements run as *managed* transactions (``execute_read``/``execute_write``),
+so the driver automatically retries transient failures (leader switches,
+brief unavailability). Every Baleen write is ``MERGE``-based and therefore
+idempotent, which is exactly what makes those retries safe.
 """
 
 from __future__ import annotations
 
 import logging
 
-from neo4j import GraphDatabase, Driver
+from neo4j import GraphDatabase, Driver, unit_of_work
 
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _work_fn(timeout: float | None):
+    """Transaction function with a server-enforced timeout.
+
+    ``timeout=None`` leaves the server default in place. Defined per call
+    because ``unit_of_work`` takes a static timeout while ours varies.
+    """
+
+    @unit_of_work(timeout=timeout)
+    def _run(tx, query: str, params: dict) -> list[dict]:
+        # Results must be materialized (never return the lazy ``Result``)
+        # because the driver may re-invoke this function on retry.
+        result = tx.run(query, **params)
+        return [record.data() for record in result]
+
+    return _run
 
 
 class Neo4jStore:
@@ -47,9 +69,12 @@ class Neo4jStore:
         single statement; ``0`` disables it for this statement. Without an
         override, the configured ``NEO4J_QUERY_TIMEOUT_SECONDS`` cap applies.
         """
-        effective = self._resolve_timeout(timeout)
         with self._driver.session() as session:
-            return self._execute(session, query, effective, params)
+            return session.execute_write(
+                _work_fn(self._resolve_timeout(timeout)),
+                query,
+                params,
+            )
 
     def run_read(self, query: str, timeout: float | None = None, **params) -> list[dict]:
         """Execute a read-only statement via the read-only user (query agent).
@@ -57,27 +82,16 @@ class Neo4jStore:
         Uses the dedicated read-only driver when configured, otherwise the
         writer driver (fine for local dev; production should pin the role).
         """
-        effective = self._resolve_timeout(timeout)
         driver = self._read_driver or self._driver
         with driver.session() as session:
-            return self._execute(session, query, effective, params)
+            return session.execute_read(
+                _work_fn(self._resolve_timeout(timeout)),
+                query,
+                params,
+            )
 
     def _resolve_timeout(self, timeout: float | None) -> float | None:
         """Per-call override: ``None`` -> configured cap, ``0`` -> no cap."""
         if timeout is None:
             return self._timeout
         return None if timeout == 0 else timeout
-
-    @staticmethod
-    def _execute(session, query: str, timeout: float | None, params: dict) -> list[dict]:
-        """Run a statement inside an explicit transaction with a server-enforced
-        timeout. `timeout=None` leaves the server default in place."""
-        tx = session.begin_transaction(timeout=timeout)
-        try:
-            result = tx.run(query, **params)
-            rows = [record.data() for record in result]
-            tx.commit()
-            return rows
-        except Exception:
-            tx.rollback()
-            raise
