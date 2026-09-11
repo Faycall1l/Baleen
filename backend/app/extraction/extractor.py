@@ -10,6 +10,7 @@ never force-fit).
 
 from __future__ import annotations
 
+import functools
 import logging
 import time
 from typing import Any
@@ -51,8 +52,13 @@ TOOLS: dict[str, tuple[str, type]] = {
 }
 
 
+@functools.cache
 def build_tool_definitions() -> list[dict[str, Any]]:
-    """JSON tool definitions derived from the Pydantic event schemas."""
+    """JSON tool definitions derived from the Pydantic event schemas.
+
+    Cached: the schemas are static, and this runs once per extracted tweet.
+    Treat the result as read-only.
+    """
     tools = []
     for name, (description, model) in TOOLS.items():
         schema = as_json_schema(model)
