@@ -79,28 +79,6 @@ def neo4j_store():
     store.close()
 
 
-class FakeTweetSource:
-    """In-memory TweetSource used to drive the pipeline deterministically."""
-
-    def __init__(self, tweets=None, errors=None):
-        self.tweets = list(tweets or [])
-        self.errors = list(errors or [])
-        self.calls = 0
-
-    def fetch_recent(self, handles, since_seconds):
-        self.calls += 1
-        return _fetch_result(self.tweets, self.errors)
-
-
-def _fetch_result(tweets, errors):
-    from app.ingestion.source import FetchResult
-
-    result = FetchResult()
-    result.tweets = list(tweets)
-    result.errors = list(errors)
-    return result
-
-
 class StubLLM:
     """Deterministic LLM stub for extraction tests.
 
