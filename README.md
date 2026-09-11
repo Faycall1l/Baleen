@@ -1,4 +1,4 @@
-# 🐋 Baleen
+# <img src="frontend/public/baleen.svg" alt="Baleen logo" width="36"> Baleen
 
 **Agentic Graph-RAG for the financial side of X/Twitter.**
 
@@ -150,7 +150,7 @@ decisions made where the original spec file was unavailable are recorded in
 ## Development
 
 ```bash
-# backend tests
+# backend tests (Python 3.11+)
 cd backend && pip install -r requirements-dev.txt && pytest -q
 
 # frontend dev (needs backend running)
