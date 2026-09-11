@@ -5,9 +5,12 @@ from __future__ import annotations
 from app.ingestion.options import (
     SOURCE_KIND,
     OptionsChainSource,
-    _payload,
     parse_occ,
 )
+
+
+def _payload(contracts: list[dict]) -> dict:
+    return {"data": {"options": contracts}}
 
 
 def _contract(symbol: str, volume: float, oi: float, last: float = 10.0) -> dict:

@@ -195,7 +195,3 @@ class OptionsChainSource(TweetSource):
         )
         response.raise_for_status()
         return response.json()
-
-
-def _payload(contracts: list[dict]) -> dict:
-    return {"data": {"options": contracts}}
