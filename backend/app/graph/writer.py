@@ -42,13 +42,6 @@ class GraphWriter:
         logger.info("event %s written to graph (type=%s)", event.deterministic_id, event.event_type)
         return event.deterministic_id
 
-    def write_ticker(self, ticker: str, tweet_id: str, tweet_url: str) -> None:
-        """Merge a ticker (and its sector) with provenance — used by seeds."""
-        self._merge_ticker(ticker, tweet_id, tweet_url)
-
-    def write_sector(self, name: str, tweet_id: str, tweet_url: str) -> None:
-        self._merge_sector(name, tweet_id, tweet_url)
-
     # ------------------------------------------------------------------
     # Node / edge merge helpers
     # ------------------------------------------------------------------
