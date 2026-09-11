@@ -1,4 +1,4 @@
-# <img src="frontend/public/baleen.svg" alt="Baleen logo" width="36"> Baleen
+# <img src="frontend/public/baleen.svg" alt="Baleen logo" width="64"> Baleen
 
 **Agentic Graph-RAG for the financial side of X/Twitter.**
 

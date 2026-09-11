@@ -156,7 +156,7 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="brand">
-          <img src="/baleen.svg" alt="Baleen logo" width={20} height={20} />
+          <img src="/baleen.svg" alt="Baleen logo" width={28} height={28} />
           <h1 style={{ color: theme.accent }}>Baleen</h1>
           <span className="tagline">agentic graph over financial tweets</span>
         </div>
