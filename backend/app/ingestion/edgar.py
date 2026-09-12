@@ -32,9 +32,10 @@ ATOM_URL = (
     "?action=getcurrent&type=4&count=100&output=atom"
 )
 
-#: SEC fair-access policy asks clients to identify themselves. Override with
-#: your contact address in production.
-USER_AGENT = "Baleen/1.0 (SEC EDGAR Form 4 research client)"
+#: SEC fair-access policy admits only clients that identify with contact
+#: info (undeclared traffic from datacenter IPs gets 403). Override with
+#: your own contact address in production.
+USER_AGENT = "Baleen/1.0 (SEC EDGAR Form 4 research; contact: admin@example.com)"
 
 SOURCE_KIND = "insider_filing"
 
@@ -86,19 +87,23 @@ def _text(parent: ET.Element | None, tag: str) -> str | None:
     return value or None
 
 
+def _flag(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "y")
+
+
 def _owner_role(owner: ET.Element) -> str | None:
     rel = owner.find("reportingOwnerRelationship")
     if rel is None:
         return None
     title = _text(rel, "officerTitle")
-    if _text(rel, "isOfficer") == "1" and title:
+    if _flag(_text(rel, "isOfficer")) and title:
         return title
     roles = []
-    if _text(rel, "isDirector") == "1":
+    if _flag(_text(rel, "isDirector")):
         roles.append("Director")
-    if _text(rel, "isTenPercentOwner") == "1":
+    if _flag(_text(rel, "isTenPercentOwner")):
         roles.append("10% Owner")
-    if _text(rel, "isOfficer") == "1":
+    if _flag(_text(rel, "isOfficer")):
         roles.append("Officer")
     return ", ".join(roles) or None
 
@@ -191,7 +196,7 @@ def _fmt_amount(shares: float | None, price: float | None) -> str | None:
     return f"${shares * price:,.2f}"
 
 
-def _record(accession: str, index_url: str, filed_at: datetime,
+def _record(rec_id: str, index_url: str, filed_at: datetime,
             owner: dict, txn: dict, ticker: str, now: datetime) -> RawTweet | None:
     if not ticker or not owner.get("name"):
         return None
@@ -210,7 +215,6 @@ def _record(accession: str, index_url: str, filed_at: datetime,
     )
     meta = {
         "source_kind": SOURCE_KIND,
-        "accession": accession,
         "filer_name": owner["name"],
         "insider_cik": owner.get("cik"),
         "role": owner.get("role"),
@@ -222,9 +226,8 @@ def _record(accession: str, index_url: str, filed_at: datetime,
         "transaction_date": when.isoformat() if when else None,
         "doc_url": index_url,
     }
-    slug = re.sub(r"[^a-z0-9]+", "-", f"{accession}-{owner['name']}-{ticker}")[:48].strip("-")
     return RawTweet(
-        tweet_id=f"edgar-{slug}",
+        tweet_id=f"edgar-{rec_id}",
         author_handle="edgar_form4",
         author_id="edgar_form4",
         text=text,
@@ -293,10 +296,13 @@ class EdgarForm4Source(TweetSource):
         filed_at = _parse_ts(entry.get("updated")) or now.timestamp()
         filed_dt = datetime.fromtimestamp(filed_at, tz=timezone.utc)
         records = []
-        for owner in filing["owners"]:
-            for txn in filing["transactions"]:
+        for owner_idx, owner in enumerate(filing["owners"]):
+            for txn_idx, txn in enumerate(filing["transactions"]):
+                # Stable per (filing, owner, row): re-polls dedupe downstream,
+                # distinct trades never collide.
+                rec_id = f"{entry['accession']}-{owner_idx}-{txn_idx}"
                 record = _record(
-                    entry["accession"], entry["index_url"], filed_dt,
+                    rec_id, entry["index_url"], filed_dt,
                     owner, txn, filing["ticker"], now,
                 )
                 if record is not None:

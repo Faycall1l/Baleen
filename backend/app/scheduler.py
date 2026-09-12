@@ -26,6 +26,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import Settings
 from app.ingestion.clerk import ClerkHouseSource
 from app.ingestion.disclosures import CongressDisclosureSource
+from app.ingestion.edgar import EdgarForm4Source
 from app.ingestion.options import OptionsChainSource
 from app.ingestion.pipeline import IngestionPipeline
 from app.ingestion.source import MultiSource, TweetSource
@@ -41,6 +42,7 @@ def build_sources(settings: Settings) -> list[TweetSource]:
     sources: list[TweetSource] = [
         CongressDisclosureSource(),
         ClerkHouseSource(),
+        EdgarForm4Source(),
         OptionsChainSource(),
     ]
     if settings.x_api_configured:
@@ -79,7 +81,9 @@ class BaleenScheduler:
         try:
             if self.sources:
                 ingest = self.ingestion.run_once()
-                ok = not ingest["errors"]
+                # A tick that stored records made progress even if one feed
+                # errored — back off only on total failure (see issue #1).
+                ok = not ingest["errors"] or ingest["inserted"] > 0
                 logger.info(
                     "ingested %s records (%s skipped); processing",
                     ingest["inserted"],

@@ -137,7 +137,7 @@ def test_placeholder_token_excludes_x_but_still_ingests_and_processes():
     settings = Settings(_env_file=None)  # default token is a placeholder
     scheduler = _started_scheduler(settings, interval=60)
     assert not any(isinstance(s, XApiSource) for s in scheduler.sources)
-    assert len(scheduler.sources) == 3  # disclosures + clerk-direct + options radar
+    assert len(scheduler.sources) == 4  # disclosures + clerk-direct + EDGAR + options radar
 
     scheduler.ingestion.run_once = Mock(
         return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []}
@@ -156,7 +156,7 @@ def test_real_token_includes_x_source():
 
     scheduler = _started_scheduler(_live_settings(), interval=60)
     assert any(isinstance(s, XApiSource) for s in scheduler.sources)
-    assert len(scheduler.sources) == 4  # disclosures + clerk-direct + options radar + X
+    assert len(scheduler.sources) == 5  # disclosures + clerk-direct + EDGAR + options radar + X
 
 
 def test_build_scheduler_uses_poll_interval(monkeypatch):
@@ -175,3 +175,19 @@ def test_build_scheduler_uses_poll_interval(monkeypatch):
     main._build_scheduler(settings)
 
     assert captured["interval_seconds"] == 321
+
+
+def test_partial_source_failure_does_not_back_off():
+    """Issue #1: one erroring feed must not back off the healthy ones — a
+    tick that ingested records made progress."""
+    scheduler = _started_scheduler(_live_settings(), interval=60)
+    scheduler.ingestion.run_once = Mock(
+        return_value={"inserted": 5, "duplicates_skipped": 0,
+                      "errors": ["OptionsChainSource: 429 throttled"]}
+    )
+    scheduler.processing.process_new = Mock(return_value={"processed": 0})
+
+    scheduler._tick()
+
+    assert scheduler._consecutive_failures == 0
+    assert _interval_of(scheduler) == 60

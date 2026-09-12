@@ -126,13 +126,19 @@ def main() -> None:
     elif args.real:
         from app.ingestion.clerk import ClerkHouseSource
         from app.ingestion.disclosures import CongressDisclosureSource
+        from app.ingestion.edgar import EdgarForm4Source
         from app.ingestion.options import OptionsChainSource
         from app.ingestion.source import MultiSource
 
         source = MultiSource(
-            [CongressDisclosureSource(), ClerkHouseSource(), OptionsChainSource()]
+            [
+                CongressDisclosureSource(),
+                ClerkHouseSource(),
+                EdgarForm4Source(),
+                OptionsChainSource(),
+            ]
         )
-        logger.info("live public feeds: congressional disclosures + options radar")
+        logger.info("live public feeds: disclosures + insider filings + options radar")
     else:
         source = SampleSource()
 

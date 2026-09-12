@@ -44,8 +44,8 @@ OWNERSHIP_XML = """<?xml version="1.0"?>
 <issuerTradingSymbol>GPUS</issuerTradingSymbol></issuer>
 <reportingOwner><reportingOwnerId><rptOwnerCik>0001212502</rptOwnerCik>
 <rptOwnerName>AULT MILTON C III</rptOwnerName></reportingOwnerId>
-<reportingOwnerRelationship><isDirector>0</isDirector><isOfficer>1</isOfficer>
-<officerTitle>Executive Chairman</officerTitle><isTenPercentOwner>1</isTenPercentOwner>
+<reportingOwnerRelationship><isDirector>false</isDirector><isOfficer>true</isOfficer>
+<officerTitle>Executive Chairman</officerTitle><isTenPercentOwner>true</isTenPercentOwner>
 </reportingOwnerRelationship></reportingOwner>
 <nonDerivativeTable>
 <nonDerivativeTransaction>
