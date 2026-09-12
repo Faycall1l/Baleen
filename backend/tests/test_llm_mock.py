@@ -56,3 +56,28 @@ def test_chat_completions_plain_completion_when_no_tool_matches():
     assert response.status_code == 200
     message = response.json()["choices"][0]["message"]
     assert message["content"]
+
+
+def test_chat_completions_returns_insider_tool_call():
+    payload = {
+        "model": "mock",
+        "messages": [
+            {
+                "role": "user",
+                "content": "INSIDER FILING: Milton C Ault III, $GPUS — bought 1,000 shares.",
+            },
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "extract_insider_trade",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+    }
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
+    message = response.json()["choices"][0]["message"]
+    assert message["tool_calls"][0]["function"]["name"] == "extract_insider_trade"

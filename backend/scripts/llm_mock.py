@@ -122,6 +122,21 @@ def _pick_tool(user_text: str, tools: list[dict]) -> tuple[str, dict] | None:
             }
             return "extract_congress_trade", args
 
+    if ("insider filing" in lowered or "form 4" in lowered) and "extract_insider_trade" in available:
+        return "extract_insider_trade", {
+            "insider_name": "Milton C Ault III",
+            "insider_cik": "0001212502",
+            "insider_id": "0001212502",
+            "role": "Executive Chairman",
+            "ticker": _find_ticker(user_text),
+            "transaction_type": "buy",
+            "shares": 1000.0,
+            "price": 2.5,
+            "amount_range": "$2,500.00",
+            "transaction_date": "2026-09-09",
+            "confidence": 0.95,
+        }
+
     if "extract_options_flow" in available:
         args = {
             "ticker": _find_ticker(user_text),
