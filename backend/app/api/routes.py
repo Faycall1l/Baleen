@@ -7,9 +7,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.alerts.engine import AlertEngine
@@ -270,6 +274,64 @@ def leaderboard(limit: int = Query(default=20, ge=1, le=100)) -> dict:
         logger.exception("leaderboard fetch failed")
         raise HTTPException(status_code=500, detail=f"leaderboard fetch failed: {exc}")
     return {"leaders": rows, "count": len(rows)}
+
+
+# ---------------------------------------------------------------------------
+# Live stream (Server-Sent Events)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/stream")
+async def stream(
+    request: Request,
+    after_report: int = Query(default=0, ge=0),
+    after_alert: int = Query(default=0, ge=0),
+    poll_seconds: float = Query(default=3.0, ge=1.0, le=30.0),
+) -> StreamingResponse:
+    """Push newly published reports/alerts as they land.
+
+    Cursors are row ids: the client passes the highest id it has seen and
+    receives everything newer, oldest first, then stays connected for live
+    rows. A ``: keepalive`` comment goes out on quiet polls. Reconnects
+    resume from the last cursor — no replay storms, no missed rows.
+    """
+
+    async def events():
+        async for chunk in stream_events(
+            _get_store(), request.is_disconnected,
+            after_report, after_alert, poll_seconds,
+        ):
+            yield chunk
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+async def stream_events(store, is_disconnected, after_report: int = 0,
+                        after_alert: int = 0, poll_seconds: float = 3.0):
+    """Yield SSE-formatted chunks for rows newer than the cursors.
+
+    Split out for testability: tests drive this directly with a fake
+    ``is_disconnected`` instead of fighting HTTP streaming semantics.
+    """
+    last_report, last_alert = after_report, after_alert
+    while True:
+        if await is_disconnected():
+            break
+        try:
+            reports = store.get_reports_since(last_report)
+            alerts = store.get_alerts_since(last_alert)
+        except Exception:
+            logger.exception("stream poll failed")
+            break
+        for row in reports:
+            last_report = row["id"]
+            yield f"id: r{row['id']}\nevent: report\ndata: {json.dumps(jsonable_encoder(row))}\n\n"
+        for row in alerts:
+            last_alert = row["id"]
+            yield f"id: a{row['id']}\nevent: alert\ndata: {json.dumps(jsonable_encoder(row))}\n\n"
+        if not reports and not alerts:
+            yield ": keepalive\n\n"
+        await asyncio.sleep(poll_seconds)
 
 
 def get_alert_engine() -> AlertEngine:

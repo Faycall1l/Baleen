@@ -337,6 +337,42 @@ class PostgresStore:
             ).mappings().first()
             return dict(row) if row is not None else None
 
+    def get_reports_since(self, last_id: int, limit: int = 50) -> list[dict]:
+        """Reports with ``id`` above the cursor, oldest first (stream catch-up)."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, kind, event_id, period, title, body, graph_refs, created_at
+                    FROM reports
+                    WHERE id > :last_id
+                    ORDER BY id ASC
+                    LIMIT :limit
+                    """
+                ),
+                {"last_id": last_id, "limit": limit},
+            ).mappings()
+            return [dict(row) for row in rows]
+
+    def get_alerts_since(self, last_id: int, limit: int = 50) -> list[dict]:
+        """Alerts with ``id`` above the cursor, oldest first (stream catch-up)."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT a.id, a.event_id, a.tweet_id, a.tweet_url, a.title, a.summary,
+                           a.graph_refs, a.created_at, r.name AS rule_name
+                    FROM alerts a
+                    JOIN alert_rules r ON r.id = a.rule_id
+                    WHERE a.id > :last_id
+                    ORDER BY a.id ASC
+                    LIMIT :limit
+                    """
+                ),
+                {"last_id": last_id, "limit": limit},
+            ).mappings()
+            return [dict(row) for row in rows]
+
     # ------------------------------------------------------------------
     # leaderboard
     # ------------------------------------------------------------------

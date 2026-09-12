@@ -274,3 +274,44 @@ def test_app_lifecycle_does_not_leak_extra_postgres_engine(monkeypatch):
         assert c.get("/health").status_code == 200
 
     assert created["n"] == 1
+
+
+def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
+    """Live SSE feed: catch-up rows first (oldest first), resumable cursors,
+    keepalive when quiet. Drives the generator directly (HTTP streaming
+    semantics belong to Starlette, not us)."""
+    import asyncio
+    import uuid
+
+    from app.api.routes import stream_events
+
+    marker = uuid.uuid4().hex[:8]
+    postgres_store.insert_report(
+        kind="brief", event_id=f"e-stream-{marker}", title="t", body="b"
+    )
+
+    async def collect(after_report=0, after_alert=0, max_polls=3):
+        polls = {"n": 0}
+
+        async def fake_disconnected():
+            polls["n"] += 1
+            return polls["n"] > max_polls
+
+        return [
+            chunk
+            async for chunk in stream_events(
+                postgres_store, fake_disconnected, after_report, after_alert,
+                poll_seconds=0.01,
+            )
+        ]
+
+    chunks = asyncio.run(collect())
+    data = [c for c in chunks if "\ndata: " in c]
+    assert len(data) == 1 and f"e-stream-{marker}" in data[0]
+    assert data[0].startswith("id: r") and "\nevent: report\n" in data[0]
+    assert any(c == ": keepalive\n\n" for c in chunks)
+
+    # Resume past the row: only keepalives from here on.
+    last_id = postgres_store.get_reports_since(0)[-1]["id"]
+    resumed = asyncio.run(collect(after_report=last_id))
+    assert resumed and all(c == ": keepalive\n\n" for c in resumed)

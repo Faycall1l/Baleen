@@ -45,7 +45,7 @@ def postgres_store():
     with store.engine.begin() as conn:
         from sqlalchemy import text
 
-        conn.execute(text("TRUNCATE raw_tweets, alerts, alert_rules"))
+        conn.execute(text("TRUNCATE raw_tweets, alerts, alert_rules, reports"))
     yield store
     store.engine.dispose()
 
