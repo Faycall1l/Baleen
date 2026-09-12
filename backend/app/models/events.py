@@ -106,8 +106,32 @@ class UnparsedEvent(EventBase):
     reason: str
 
 
+class InsiderTradeEvent(EventBase):
+    """A Form 4 filing reporting a company insider's open-market trade.
+
+    Sourced from SEC EDGAR (keyless); identifiers are CIKs, never invented.
+    """
+
+    event_type: Literal["insider_trade"] = "insider_trade"
+    insider_name: str = Field(min_length=1)
+    insider_cik: str | None = None
+    insider_id: str = Field(min_length=1)
+    role: str | None = None
+    ticker: str = Field(min_length=1, max_length=10)
+    transaction_type: Literal["buy", "sell"]
+    shares: float | None = Field(default=None, ge=0)
+    price: float | None = Field(default=None, ge=0)
+    amount_range: str | None = None
+    transaction_date: date | None = None
+
+    @field_validator("ticker")
+    @classmethod
+    def _upper_ticker(cls, value: str) -> str:
+        return value.strip().upper()
+
+
 Event = Annotated[
-    OptionsFlowEvent | CongressTradeEvent | UnparsedEvent,
+    OptionsFlowEvent | CongressTradeEvent | InsiderTradeEvent | UnparsedEvent,
     Field(discriminator="event_type"),
 ]
 

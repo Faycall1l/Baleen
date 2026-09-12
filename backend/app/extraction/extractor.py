@@ -27,6 +27,7 @@ from app.ingestion.source import RawTweet
 from app.models.events import (
     CongressTradeEvent,
     Event,
+    InsiderTradeEvent,
     OptionsFlowEvent,
     UnparsedEvent,
     as_json_schema,
@@ -48,6 +49,11 @@ TOOLS: dict[str, tuple[str, type]] = {
         "Extract a congressional trading disclosure from a financial tweet. "
         "Set confidence based on how clearly the tweet reports a real disclosure.",
         CongressTradeEvent,
+    ),
+    "extract_insider_trade": (
+        "Extract a corporate insider trade (SEC Form 4 filing) from a financial text. "
+        "Set confidence based on how clearly the text reports a real insider transaction.",
+        InsiderTradeEvent,
     ),
 }
 
@@ -156,8 +162,8 @@ class EventExtractor:
             "the tweet; leave fields blank (null) when absent. Always include a "
             "numeric `confidence` from 0.0 to 1.0 reflecting how confidently the "
             "tweet matches the requested event type. Never invent tickers, "
-            "politicians, amounts, or dates. If the tweet is not an options-flow "
-            "or congress-trade report, call no tool.\n\n"
+            "politicians, amounts, or dates. If the text is not an options-flow, "
+            "congress-trade, or insider-trade report, call no tool.\n\n"
             "Possible output schemas:\n"
             f"{schema_blocks}"
         )

@@ -40,7 +40,7 @@ def _tweet(tweet_id: str = "1", text: str = "hello") -> RawTweet:
 def test_tool_definitions_are_derived_from_schemas():
     tools = build_tool_definitions()
     names = {t["function"]["name"] for t in tools}
-    assert names == {"extract_options_flow", "extract_congress_trade"}
+    assert names == {"extract_options_flow", "extract_congress_trade", "extract_insider_trade"}
 
     options = next(
         t for t in tools if t["function"]["name"] == "extract_options_flow"
@@ -600,6 +600,7 @@ def test_tool_definitions_are_built_once():
     assert {t["function"]["name"] for t in first} == {
         "extract_options_flow",
         "extract_congress_trade",
+        "extract_insider_trade",
     }
 
 
@@ -626,3 +627,27 @@ def test_draft_text_falls_back_on_empty_or_error():
 
     assert draft_text(Empty(), system="s", prompt="p", fallback="fb") == "fb"
     assert draft_text(Down(), system="s", prompt="p", fallback="fb") == "fb"
+
+
+def test_insider_trade_tool_validates():
+    from app.models.events import InsiderTradeEvent
+
+    event = EXTRACTOR._validate_call(
+        _tweet(),
+        "extract_insider_trade",
+        {
+            "insider_name": "Milton C Ault III",
+            "insider_cik": "0001212502",
+            "insider_id": "0001212502",
+            "role": "Chairman",
+            "ticker": "GPUS",
+            "transaction_type": "buy",
+            "shares": 1000.0,
+            "price": 2.5,
+            "amount_range": "$2,500.00",
+            "transaction_date": "2026-09-09",
+            "confidence": 0.95,
+        },
+    )
+    assert isinstance(event, InsiderTradeEvent)
+    assert event.ticker == "GPUS"
