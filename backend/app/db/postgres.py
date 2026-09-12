@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS reports (
 -- collide in Postgres unique indexes, so the two lanes share the table.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_reports_brief ON reports (kind, event_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_reports_digest ON reports (kind, period);
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports (created_at DESC);
 """
 
 
