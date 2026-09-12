@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports } from './api';
+import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
 import AlertsPanel from './components/AlertsPanel';
 import GraphView from './components/GraphView';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
 import ReportsPanel from './components/ReportsPanel';
+import SignalsPanel from './components/SignalsPanel';
 import { theme } from './theme';
-import type { Alert, GraphData, GraphNode, Health, LeaderboardEntry, QueryResponse, Report } from './types';
+import type { Alert, GraphData, GraphNode, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 
 function QueryResultView({ result }: { result: QueryResponse }) {
   return (
@@ -82,6 +83,8 @@ export default function App() {
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [leadersError, setLeadersError] = useState<string | null>(null);
+  const [signals, setSignals] = useState<SignalsBundle | null>(null);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
 
   // Refs mirror state so the stream can send fresh cursors on reconnect.
   const reportsRef = useRef(reports);
@@ -136,29 +139,38 @@ export default function App() {
       .catch((err) => setLeadersError(err.message));
   }, []);
 
+  const loadSignals = useCallback(() => {
+    setSignalsError(null);
+    fetchSignals()
+      .then(setSignals)
+      .catch((err) => setSignalsError(err.message));
+  }, []);
+
   const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const graphSigRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
-    Promise.all([loadGraph(), loadAlerts(), loadReports(), loadLeaders()]).finally(() => setRefreshing(false));
-  }, [loadGraph, loadAlerts, loadReports, loadLeaders]);
+    Promise.all([loadGraph(), loadAlerts(), loadReports(), loadLeaders(), loadSignals()]).finally(() => setRefreshing(false));
+  }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals]);
 
   useEffect(() => {
     loadGraph();
     loadAlerts();
     loadReports();
     loadLeaders();
+    loadSignals();
     // Poll so newly-ingested events appear live without a manual Refresh.
     const id = setInterval(() => {
       loadGraph();
       loadAlerts();
       loadReports();
       loadLeaders();
+      loadSignals();
     }, 30_000);
     return () => clearInterval(id);
-  }, [loadGraph, loadAlerts, loadReports, loadLeaders]);
+  }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals]);
 
   useEffect(() => {
     const checkHealth = () =>
@@ -254,6 +266,7 @@ export default function App() {
           <AlertsPanel alerts={alerts} error={alertsError} />
           <ReportsPanel digest={digest} reports={reports} error={reportsError} />
           <LeaderboardPanel leaders={leaders} error={leadersError} />
+          <SignalsPanel signals={signals} error={signalsError} />
         </aside>
 
         <main className="graph-area">

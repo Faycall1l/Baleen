@@ -70,6 +70,49 @@ export interface LeaderboardEntry {
   source_url: string;
 }
 
+export interface MomentumRow {
+  ticker: string;
+  buys: number;
+  sells: number;
+  actors: number;
+  names?: string[] | null;
+}
+
+export interface ClusterRow {
+  ticker: string;
+  insiders: string[];
+  buys: number;
+}
+
+export interface OptionsMeterRow {
+  ticker: string;
+  call_vol?: number | null;
+  put_vol?: number | null;
+  prints: number;
+}
+
+export interface SuspiciousRow {
+  who: string;
+  ticker: string;
+  excess_pct: number;
+  source_url: string;
+}
+
+export interface UncoveredRow {
+  politician: string;
+  sector: string;
+  symbols?: string[] | null;
+}
+
+export interface SignalsBundle {
+  window_days: number;
+  momentum: MomentumRow[];
+  clusters: ClusterRow[];
+  options_meter: OptionsMeterRow[];
+  uncovered: UncoveredRow[];
+  suspicious: SuspiciousRow[];
+}
+
 export interface HealthCheck {
   status: string;
   detail?: string;
