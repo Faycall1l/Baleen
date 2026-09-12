@@ -35,6 +35,11 @@ leaderboard ranks every disclosed trade by return since filing, with the
 official filing linked. ask "who in congress is actually beating the market"
 and point at it.
 
+signals panel reads the graph for pressure: congress buying momentum per
+ticker, insider cluster buys, bullish vs bearish options volume, trades
+already beating the market, and politicians trading sectors nobody on their
+committees oversees. all computed live at /api/signals, no model involved.
+
 ## prove its live
 
 run `ingest_once --real` again and watch fresh filings come in. or tail the

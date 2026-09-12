@@ -156,6 +156,13 @@ served to the Reports panel via `/api/reports`. Deterministic template
 fallbacks keep publishing alive through LLM outages without ever blocking the
 pipeline.
 
+### 7. Computed signals
+`backend/app/signals/engine.py` derives pressure signals from stored facts
+only — no LLM, no future-return claims: congress buying momentum per ticker,
+insider cluster buys, bullish/bearish options volume, trades already beating
+the market, uncovered sector bets, and shared-ticker politician similarity.
+Served live at `/api/signals` to the Signals panel.
+
 ## Frontend
 
 Four surfaces, no dashboards, no extra pages:
