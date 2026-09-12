@@ -11,19 +11,20 @@ be mirrored in `backend/app/graph/schema.py`.
 
 ### `raw_tweets`
 
-One row per ingested tweet. **`tweet_id` is unique** — this is what makes
+One row per ingested record (tweets, disclosure filings, flow anomalies —
+anything the sources emit). **`tweet_id` is unique** — this is what makes
 ingestion idempotent (re-polls skip rows that already exist).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | BIGSERIAL | PK |
-| `tweet_id` | TEXT | **UNIQUE**, X tweet ID |
-| `author_handle` | TEXT | e.g. `unusual_whales` |
-| `author_id` | TEXT | X user ID |
-| `text` | TEXT | full tweet text |
-| `created_at` | TIMESTAMPTZ | tweet creation time |
-| `url` | TEXT | canonical status URL |
-| `raw_json` | JSONB | full payload from the API |
+| `tweet_id` | TEXT | **UNIQUE**, source record ID |
+| `author_handle` | TEXT | e.g. `unusual_whales`, `congress_house`, `edgar_form4` |
+| `author_id` | TEXT | source account ID |
+| `text` | TEXT | record text for extraction |
+| `created_at` | TIMESTAMPTZ | source creation time |
+| `url` | TEXT | canonical source URL (status, filing PDF, quote page) |
+| `raw_json` | JSONB | full source payload + `source_kind` marker |
 | `fetched_at` | TIMESTAMPTZ | when Baleen fetched it |
 | `status` | TEXT | `new` → `extracted` (pipeline progress) |
 
@@ -53,6 +54,22 @@ Triggered alerts, surfaced to the Alerts Panel.
 | `tweet_url` | TEXT | source tweet URL |
 | `title` | TEXT | short headline |
 | `summary` | TEXT | 2–3 sentence LLM-drafted summary |
+| `graph_refs` | JSONB | node ids highlighted in the graph |
+| `created_at` | TIMESTAMPTZ | |
+
+### `reports`
+
+Published briefs (one per typed event) and daily digests, surfaced to the
+Reports panel and `/api/reports`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | SERIAL | PK |
+| `kind` | TEXT | `brief` or `digest` |
+| `event_id` | TEXT | briefs only; unique per kind |
+| `period` | TEXT | digests only (`YYYY-MM-DD`); unique per kind |
+| `title` | TEXT | deterministic headline |
+| `body` | TEXT | LLM-drafted, facts-grounded (template fallback) |
 | `graph_refs` | JSONB | node ids highlighted in the graph |
 | `created_at` | TIMESTAMPTZ | |
 
