@@ -103,22 +103,16 @@ class PostgresStore:
     def insert_raw_tweets(self, tweets: list[RawTweet]) -> tuple[int, int]:
         """Bulk insert; returns ``(inserted, skipped)``.
 
-        A full X API page is persisted with one batched ``INSERT ... ON
-        CONFLICT DO NOTHING`` (plus one COUNT) instead of N per-row statements,
-        so backfills and multi-handle polls round-trip in a handful of calls.
+        One batched ``INSERT ... ON CONFLICT DO NOTHING`` instead of N
+        per-row statements. Counts come from the statement's own rowcount
+        (Postgres reports only actually-inserted rows), so they stay exact
+        under concurrent writers — no separate COUNT round trip.
         """
         if not tweets:
             return 0, 0
 
-        tweet_ids = [t.tweet_id for t in tweets]
         with self.engine.begin() as conn:
-            existing = conn.execute(
-                text(
-                    "SELECT count(*) FROM raw_tweets WHERE tweet_id = ANY(:ids)"
-                ),
-                {"ids": tweet_ids},
-            ).scalar()
-            conn.execute(
+            result = conn.execute(
                 text(
                     """
                     INSERT INTO raw_tweets
@@ -140,8 +134,8 @@ class PostgresStore:
                     for t in tweets
                 ],
             )
-        inserted = len(tweets) - existing
-        return inserted, existing
+            inserted = result.rowcount
+        return inserted, len(tweets) - inserted
 
     def get_new_tweets(self, limit: int = 100) -> list[RawTweet]:
         """Tweets not yet handed to the extraction stage."""
