@@ -167,7 +167,7 @@ class ReportEngine:
 
     def write_brief(self, event: Event) -> dict | None:
         """Draft + store the brief for ``event``. Idempotent; never raises."""
-        if event.event_type not in ("options_flow", "congress_trade"):
+        if event.event_type not in ("options_flow", "congress_trade", "insider_trade"):
             return None
         try:
             neighborhood = self._neighborhood(event.deterministic_id)
