@@ -16,7 +16,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 
 ALLOWED_LABELS = frozenset(
-    ["Ticker", "Sector", "Politician", "Committee", "Event"]
+    ["Ticker", "Sector", "Politician", "Committee", "Event", "Insider"]
 )
 
 # ---------------------------------------------------------------------------
@@ -30,6 +30,7 @@ ALLOWED_RELATIONSHIPS = frozenset(
         "OVERSEES",             # (Committee)-[:OVERSEES]->(Sector)
         "INVOLVES_TICKER",      # (Event)-[:INVOLVES_TICKER]->(Ticker)
         "INVOLVES_POLITICIAN",  # (Event)-[:INVOLVES_POLITICIAN]->(Politician)
+        "INVOLVES_INSIDER",     # (Event)-[:INVOLVES_INSIDER]->(Insider)
         "IN_COMMITTEE",         # (Event)-[:IN_COMMITTEE]->(Committee)
     ]
 )
@@ -44,6 +45,7 @@ LABEL_KEYS = {
     "Politician": "id",
     "Committee": "id",
     "Event": "id",
+    "Insider": "id",
 }
 
 # ---------------------------------------------------------------------------
@@ -55,14 +57,18 @@ The graph stores financial events extracted from X (Twitter). Node labels:
 - Ticker {ticker}          a stock symbol (e.g. NVDA), uppercase
 - Sector {name}            canonical sector name (e.g. Semiconductors)
 - Politician {id, name, chamber, party}  a US politician
+- Insider {id, name, role}      a corporate insider (SEC Form 4 filer)
 - Committee {id, name}     a congressional committee
 - Event {id, type, tweet_id, tweet_url, event_time}  an extracted event
 
-Event.type is one of: options_flow, congress_trade.
+Event.type is one of: options_flow, congress_trade, insider_trade.
 Options-flow events have extra properties: ticker, contract_type (call|put),
 strike, expiration, premium, volume, open_interest, sentiment, event_time.
 Congress-trade events have extra properties: politician_name, chamber, party,
 committee_ids, ticker, transaction_type (buy|sell), amount_range,
+transaction_date, event_time.
+Insider-trade events have extra properties: insider_name, insider_cik, role,
+ticker, transaction_type (buy|sell), shares, price, amount_range,
 transaction_date, event_time.
 
 Relationship types:
@@ -71,12 +77,13 @@ Relationship types:
 - (Committee)-[:OVERSEES]->(Sector)
 - (Event)-[:INVOLVES_TICKER]->(Ticker)
 - (Event)-[:INVOLVES_POLITICIAN]->(Politician)
+- (Event)-[:INVOLVES_INSIDER]->(Insider)
 - (Event)-[:IN_COMMITTEE]->(Committee)
 
 Rules for writing Cypher:
-- Only these labels may appear: Ticker, Sector, Politician, Committee, Event.
+- Only these labels may appear: Ticker, Sector, Politician, Committee, Event, Insider.
 - Only these relationship types may appear: IN_SECTOR, MEMBER_OF, OVERSEES,
-  INVOLVES_TICKER, INVOLVES_POLITICIAN, IN_COMMITTEE.
+  INVOLVES_TICKER, INVOLVES_POLITICIAN, INVOLVES_INSIDER, IN_COMMITTEE.
 - Queries are READ-ONLY: only MATCH, OPTIONAL MATCH, WHERE, RETURN, ORDER BY,
   LIMIT, WITH, collect, count, DISTINCT. Never use CREATE, MERGE, SET, DELETE.
 - Inline literal user-provided values directly in the query (quote strings).

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
-from app.models.events import CongressTradeEvent, Event, OptionsFlowEvent
+from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,10 @@ def brief_title(event: Event) -> str:
         side = "calls" if event.contract_type == "call" else "puts"
         strike = f" ${event.strike:g}" if event.strike is not None else ""
         return f"Unusual {side} flow: {event.ticker}{strike}"
+    if isinstance(event, InsiderTradeEvent):
+        verb = "bought" if event.transaction_type == "buy" else "sold"
+        amount = f" ({event.amount_range})" if event.amount_range else ""
+        return f"{event.insider_name} {verb} {event.ticker}{amount}"
     return f"Event {event.deterministic_id}"
 
 
@@ -91,6 +95,19 @@ def brief_facts(event: Event, neighborhood: dict) -> dict:
                 "sentiment": event.sentiment,
             }
         )
+    elif isinstance(event, InsiderTradeEvent):
+        facts.update(
+            {
+                "insider_name": event.insider_name,
+                "role": event.role,
+                "ticker": event.ticker,
+                "side": event.transaction_type,
+                "shares": event.shares,
+                "price": event.price,
+                "amount": event.amount_range,
+                "transaction_date": str(event.transaction_date) if event.transaction_date else None,
+            }
+        )
     for key in ("ticker", "sector", "politician", "committees", "memberships"):
         value = neighborhood.get(key)
         if value:
@@ -113,6 +130,14 @@ def template_brief(event: Event, facts: dict) -> str:
         return (
             f"Unusual {facts.get('contract')} flow in {facts.get('ticker')}: "
             f"volume {facts.get('volume')} vs open interest {facts.get('open_interest')}. "
+            f"Source: {event.tweet_url}"
+        )
+    if isinstance(event, InsiderTradeEvent):
+        role = f" ({facts.get('role')})" if facts.get("role") else ""
+        return (
+            f"{facts.get('insider_name')}{role} "
+            f"{'bought' if facts.get('side') == 'buy' else 'sold'} {facts.get('ticker')} "
+            f"worth {facts.get('amount')} on {facts.get('transaction_date')}. "
             f"Source: {event.tweet_url}"
         )
     return f"Event recorded. Source: {event.tweet_url}"

@@ -170,3 +170,19 @@ def test_ensure_digest_empty_day_reports_no_events():
     engine = _engine()
     report = engine.ensure_digest("2026-01-01")
     assert "No events recorded" in report["body"]
+
+
+def test_insider_brief_title_and_template():
+    from app.models.events import InsiderTradeEvent
+
+    event = InsiderTradeEvent(
+        tweet_id="ed-1", tweet_url="https://www.sec.gov/x", confidence=0.9,
+        insider_name="Milton C Ault III", insider_cik="0001212502",
+        insider_id="0001212502", role="Chairman",
+        ticker="GPUS", transaction_type="buy",
+        shares=1000.0, price=2.5, amount_range="$2,500.00",
+        transaction_date=date(2026, 9, 9),
+    )
+    assert brief_title(event) == "Milton C Ault III bought GPUS ($2,500.00)"
+    body = template_brief(event, brief_facts(event, {}))
+    assert "Milton C Ault III" in body and "GPUS" in body

@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 import pytest
 
 from app.graph.writer import GraphWriter
-from app.models.events import CongressTradeEvent, OptionsFlowEvent
+from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -161,5 +161,49 @@ def test_options_flow_writes_ticker_and_sector(neo4j_store):
         )
         == 1
     )
+
+    _cleanup(neo4j_store, event_id)
+
+
+def test_insider_trade_writes_insider_and_ticker(neo4j_store):
+    writer = GraphWriter(neo4j_store)
+    event = InsiderTradeEvent(
+        tweet_id="insider-1",
+        tweet_url="https://www.sec.gov/Archives/edgar/data/1/2-index.htm",
+        confidence=0.95,
+        insider_name="Milton C Ault III",
+        insider_cik="0001212502",
+        insider_id="0001212502",
+        role="Chairman",
+        ticker="GPUS",
+        transaction_type="buy",
+        shares=1000.0,
+        price=2.5,
+        amount_range="$2,500.00",
+        transaction_date=date(2026, 9, 9),
+    )
+    event_id = writer.write_event(event)
+
+    assert (
+        _count(
+            neo4j_store,
+            "MATCH (:Event {id: $id})-[:INVOLVES_INSIDER]->(i:Insider {id: '0001212502'}) RETURN count(*) AS count",
+            id=event_id,
+        )
+        == 1
+    )
+    assert (
+        _count(
+            neo4j_store,
+            "MATCH (:Event {id: $id})-[:INVOLVES_TICKER]->(:Ticker {ticker: 'GPUS'}) RETURN count(*) AS count",
+            id=event_id,
+        )
+        == 1
+    )
+    rows = neo4j_store.run(
+        "MATCH (i:Insider {id: '0001212502'}) RETURN i.name AS name, i.role AS role"
+    )
+    assert rows and rows[0]["name"] == "Milton C Ault III"
+    assert rows[0]["role"] == "Chairman"
 
     _cleanup(neo4j_store, event_id)

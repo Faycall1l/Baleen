@@ -13,7 +13,7 @@ from typing import Callable
 from app.db.neo4j import Neo4jStore
 from app.graph.schema import LABEL_KEYS
 from app.graph.seed_data import COMMITTEES, TICKER_SECTORS
-from app.models.events import CongressTradeEvent, Event, OptionsFlowEvent, UnparsedEvent
+from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent, UnparsedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,12 @@ class GraphWriter:
     def write_event(self, event: Event) -> str:
         """Upsert one event into the graph. Returns its deterministic id."""
         self._merge_event(event)
-        if isinstance(event, (OptionsFlowEvent, CongressTradeEvent)):
+        if isinstance(event, (OptionsFlowEvent, CongressTradeEvent, InsiderTradeEvent)):
             self._write_ticker_flow(event)
         if isinstance(event, CongressTradeEvent):
             self._write_politician_flow(event)
+        if isinstance(event, InsiderTradeEvent):
+            self._write_insider_flow(event)
         logger.info("event %s written to graph (type=%s)", event.deterministic_id, event.event_type)
         return event.deterministic_id
 
@@ -123,7 +125,7 @@ class GraphWriter:
             {"tweet_id": tweet_id, "tweet_url": tweet_url},
         )
 
-    def _write_ticker_flow(self, event: OptionsFlowEvent | CongressTradeEvent) -> None:
+    def _write_ticker_flow(self, event: OptionsFlowEvent | CongressTradeEvent | InsiderTradeEvent) -> None:
         self._merge_ticker(event.ticker, event.tweet_id, event.tweet_url)
         self._merge_relation(
             "Event", event.deterministic_id, "INVOLVES_TICKER", "Ticker", event.ticker,
@@ -163,3 +165,20 @@ class GraphWriter:
                 "Politician", event.politician_id, "MEMBER_OF", "Committee", committee_id,
                 provenance,
             )
+
+    def _write_insider_flow(self, event: InsiderTradeEvent) -> None:
+        provenance = self._provenance(event)
+        self._merge_node(
+            "Insider",
+            {
+                "id": event.insider_id,
+                "name": event.insider_name,
+                **({"cik": event.insider_cik} if event.insider_cik else {}),
+                **({"role": event.role} if event.role else {}),
+            },
+            provenance,
+        )
+        self._merge_relation(
+            "Event", event.deterministic_id, "INVOLVES_INSIDER", "Insider",
+            event.insider_id, provenance,
+        )
