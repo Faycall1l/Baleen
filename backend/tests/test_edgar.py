@@ -183,3 +183,35 @@ def test_maybe_enrich_is_noop_without_marker_or_other_types():
         ticker="GPUS", contract_type="call",
     )
     assert maybe_enrich_insider(_tweet(), options) is options
+
+
+def test_custom_user_agent_sent_to_sec(monkeypatch):
+    import httpx
+
+    from app.ingestion.edgar import EdgarForm4Source
+
+    seen = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        @property
+        def text(self):
+            return ""
+
+    def fake_get(url, **kwargs):
+        seen.update(kwargs.get("headers") or {})
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    src = EdgarForm4Source(user_agent="Mine/1.0 (contact: me@x.com)")
+    src._download("https://www.sec.gov/x")
+
+    assert seen.get("User-Agent") == "Mine/1.0 (contact: me@x.com)"
+
+
+def test_edgar_user_agent_setting_exists():
+    from app.config import Settings
+
+    assert "contact:" in Settings(_env_file=None).edgar_user_agent

@@ -42,7 +42,7 @@ def build_sources(settings: Settings) -> list[TweetSource]:
     sources: list[TweetSource] = [
         CongressDisclosureSource(),
         ClerkHouseSource(),
-        EdgarForm4Source(),
+        EdgarForm4Source(user_agent=settings.edgar_user_agent),
         OptionsChainSource(),
     ]
     if settings.x_api_configured:

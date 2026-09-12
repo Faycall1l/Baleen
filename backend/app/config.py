@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     x_api_timeout_seconds: int = Field(default=30, ge=1, le=600)
     poll_interval_seconds: int = Field(default=300, ge=5)
 
+    # --- SEC EDGAR (Form 4 insider filings, keyless) ---
+    edgar_user_agent: str = (
+        "Baleen/1.0 (SEC EDGAR Form 4 research; contact: admin@example.com)"
+    )
+
     # --- LLM (vLLM, OpenAI-compatible) ---
     llm_base_url: str = "http://localhost:8001/v1"
     llm_api_key: str = "placeholder-key"

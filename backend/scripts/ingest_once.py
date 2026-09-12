@@ -134,7 +134,7 @@ def main() -> None:
             [
                 CongressDisclosureSource(),
                 ClerkHouseSource(),
-                EdgarForm4Source(),
+                EdgarForm4Source(user_agent=settings.edgar_user_agent),
                 OptionsChainSource(),
             ]
         )
