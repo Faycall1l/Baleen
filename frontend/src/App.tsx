@@ -83,6 +83,12 @@ export default function App() {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [leadersError, setLeadersError] = useState<string | null>(null);
 
+  // Refs mirror state so the stream can send fresh cursors on reconnect.
+  const reportsRef = useRef(reports);
+  reportsRef.current = reports;
+  const alertsRef = useRef(alerts);
+  alertsRef.current = alerts;
+
   const loadGraph = useCallback(() => {
     setGraphError(null);
     fetchGraph()
@@ -162,6 +168,56 @@ export default function App() {
     checkHealth();
     const id = setInterval(checkHealth, 15_000);
     return () => clearInterval(id);
+  }, []);
+
+  // Live stream: append newly published reports/alerts as they land. The
+  // 30s poll above stays as the history loader and fallback; appends dedupe
+  // by id so races between the two are harmless. Manual reconnect (with
+  // fresh cursors) instead of EventSource's built-in retry, which would
+  // replay from stale cursors.
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const appendUnique = <T extends { id: number }>(
+      setList: React.Dispatch<React.SetStateAction<T[]>>,
+      row: T,
+    ) => {
+      setList((prev) => (prev.some((r) => r.id === row.id) ? prev : [...prev, row]));
+    };
+
+    const connect = () => {
+      if (closed) return;
+      const mr = reportsRef.current.reduce((m, r) => Math.max(m, r.id), 0);
+      const ma = alertsRef.current.reduce((m, a) => Math.max(m, a.id), 0);
+      es = new EventSource(`/api/stream?after_report=${mr}&after_alert=${ma}`);
+      es.addEventListener('report', (ev) => {
+        try {
+          appendUnique(setReports, JSON.parse((ev as MessageEvent).data) as Report);
+        } catch {
+          /* ignore malformed chunk */
+        }
+      });
+      es.addEventListener('alert', (ev) => {
+        try {
+          appendUnique(setAlerts, JSON.parse((ev as MessageEvent).data) as Alert);
+        } catch {
+          /* ignore malformed chunk */
+        }
+      });
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        if (!closed) timer = setTimeout(connect, 5000);
+      };
+    };
+    connect();
+    return () => {
+      closed = true;
+      es?.close();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   return (
