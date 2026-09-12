@@ -315,3 +315,21 @@ def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
     last_id = postgres_store.get_reports_since(0)[-1]["id"]
     resumed = asyncio.run(collect(after_report=last_id))
     assert resumed and all(c == ": keepalive\n\n" for c in resumed)
+
+
+def test_signals_bundle_shape():
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+    with _client() as c:
+        body = c.get("/api/signals?window_days=365").json()
+        for key in ("momentum", "clusters", "options_meter", "uncovered", "suspicious"):
+            assert isinstance(body[key], list)
+        assert body["window_days"] == 365
+
+
+def test_signals_similar_returns_traders():
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+    with _client() as c:
+        body = c.get("/api/signals/similar?politician_id=W000187").json()
+        assert isinstance(body["similar"], list)

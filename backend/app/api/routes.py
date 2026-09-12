@@ -277,6 +277,40 @@ def leaderboard(limit: int = Query(default=20, ge=1, le=100)) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Signals
+# ---------------------------------------------------------------------------
+
+
+def get_signals_engine() -> "SignalsEngine":
+    from app.signals.engine import SignalsEngine
+
+    return SignalsEngine(neo4j=_get_neo4j(), store=_get_store())
+
+
+@router.get("/signals")
+def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
+    """Computed pressure signals: momentum, insider clusters, options meter,
+    uncovered sector bets, suspicious timing."""
+    try:
+        bundle = get_signals_engine().bundle(window_days=window_days)
+    except Exception as exc:
+        logger.exception("signals failed")
+        raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
+    return _json_safe(bundle)
+
+
+@router.get("/signals/similar")
+def signals_similar(politician_id: str = Query(min_length=1)) -> dict:
+    """Politicians trading the same tickers (shared-ticker similarity)."""
+    try:
+        rows = get_signals_engine().similar(politician_id)
+    except Exception as exc:
+        logger.exception("similar failed")
+        raise HTTPException(status_code=500, detail=f"similar failed: {exc}")
+    return {"similar": _json_safe(rows)}
+
+
+# ---------------------------------------------------------------------------
 # Live stream (Server-Sent Events)
 # ---------------------------------------------------------------------------
 
