@@ -69,6 +69,7 @@ Triggered alerts, surfaced to the Alerts Panel.
 | `Ticker` | `ticker` | uppercase symbol, e.g. `NVDA` |
 | `Sector` | `name` | canonical sector name (see seed data) |
 | `Politician` | `id` | government identifier, e.g. `P000197` (or slug) |
+| `Insider` | `id` | SEC CIK, e.g. `0001212502` (or slug) |
 | `Committee` | `id` | committee acronym/slug, e.g. `HSBA` |
 | `Event` | `id` | deterministic: `sha1(type \| tweet_id \| canonical_payload)` |
 
@@ -85,6 +86,7 @@ All nodes additionally carry:
 | `OVERSEES` | `Committee` | `Sector` | committee has oversight of a sector |
 | `INVOLVES_TICKER` | `Event` | `Ticker` | event references a ticker |
 | `INVOLVES_POLITICIAN` | `Event` | `Politician` | congress-trade event references a politician |
+| `INVOLVES_INSIDER` | `Event` | `Insider` | insider-trade event references the filer |
 | `IN_COMMITTEE` | `Event` | `Committee` | congress-trade event references the committee |
 
 ### Full picture for a congress trade

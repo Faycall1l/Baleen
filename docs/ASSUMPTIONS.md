@@ -23,6 +23,7 @@ concrete event:
 | --- | --- | --- |
 | `OptionsFlowEvent` | `options_flow` | `ticker`, `contract_type` (call/put), `strike`, `expiration`, `premium`, `volume`, `open_interest`, `sentiment` (bullish/bearish/neutral), `event_time` |
 | `CongressTradeEvent` | `congress_trade` | `politician_name`, `chamber` (house/senate), `party`, `ticker`, `transaction_type` (buy/sell), `amount_range`, `transaction_date` |
+| `InsiderTradeEvent` | `insider_trade` | `insider_name`, `insider_cik`, `role`, `ticker`, `transaction_type` (buy/sell), `shares`, `price`, `amount_range`, `transaction_date` (SEC Form 4, open-market P/S only) |
 | `UnparsedEvent` | `unparsed` | `raw_text`, `reason` (why extraction failed / low confidence) |
 
 `DarkPoolEvent` is explicitly out of MVP scope and omitted.

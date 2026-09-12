@@ -63,3 +63,6 @@ The engine logs every evaluation (rule, event, triggered yes/no).
 The alert is only ever produced when the graph path above actually exists for a
 newly written event. The LLM summarizes existing facts — it never invents a
 trade, a ticker, or a committee. If the path doesn't exist, no alert fires.
+
+Insider-trade events can never trigger this rule: `Insider` nodes carry no
+`MEMBER_OF` edges, so the committee-oversight path cannot exist for them.
