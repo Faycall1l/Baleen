@@ -77,14 +77,15 @@ Baleen/
 │   │   ├── query/            # Cypher allowlist validator + NL→Cypher agent
 │   │   ├── alerts/           # rule evaluation + alert persistence
 │   │   ├── reports/          # published briefs + digests
-│   │   ├── api/              # REST routes (/graph, /query, /alerts, /reports)
+│   │   ├── signals/          # computed pressure signals (no LLM)
+│   │   ├── api/              # REST routes (/graph, /query, /alerts, /reports, /leaderboard, /signals, /stream)
 │   │   └── scheduler.py      # APScheduler wiring (polls all live sources)
 │   ├── scripts/              # seed_reference.py, ingest_once.py (--real), llm_mock.py
 │   └── tests/                # per-phase unit + integration tests
 └── frontend/
     └── src/
-        ├── App.tsx           # four surfaces: Graph, Query, Alerts, Reports
-        └── components/       # GraphView, QueryBar, AlertsPanel, ReportsPanel, NodeDetail
+        ├── App.tsx           # six surfaces: Graph, Query, Alerts, Reports, Leaderboard, Signals
+        └── components/       # GraphView, QueryBar, AlertsPanel, ReportsPanel, LeaderboardPanel, SignalsPanel, NodeDetail
 ```
 
 ## Data flow phases
@@ -165,7 +166,7 @@ Served live at `/api/signals` to the Signals panel.
 
 ## Frontend
 
-Four surfaces, no dashboards, no extra pages:
+Six surfaces, no dashboards, no extra pages:
 
 - **Graph view** — force-directed rendering of the Neo4j graph fetched from
   `/api/graph`, dark Obsidian theme, click-to-expand node detail panel showing
@@ -177,6 +178,10 @@ Four surfaces, no dashboards, no extra pages:
   graph nodes.
 - **Reports panel** — auto-published event briefs (one per typed event) plus
   the rolling daily digest, from `/api/reports`.
+- **Leaderboard panel** — best congressional trades by return since filing,
+  from `/api/leaderboard`.
+- **Signals panel** — computed pressure signals (momentum, clusters, options
+  meter, timing, uncovered bets), from `/api/signals`.
 
 ## Deployment
 
