@@ -78,9 +78,13 @@ stored in the `alerts` table. Full documentation in [ALERTS.md](./ALERTS.md).
 
 ## §8 — MVP scope
 
-In scope: ingestion (X API v2 recent-search), structured extraction of the three
-event types, graph writing, query agent, one alert rule, three UI surfaces
-(Graph, Query Bar, Alerts Panel), docker-compose deployment. Out of scope:
+In scope: keyless live ingestion (congressional disclosures, Clerk-direct
+PTRs, SEC Form 4 insider filings, delayed options chains; X API v2
+recent-search when keyed), structured extraction of the four event types
+(`options_flow`, `congress_trade`, `insider_trade`, `unparsed`), graph
+writing, query agent, one alert rule, published reports + digest, leaderboard,
+computed signals, six UI surfaces (Graph, Query Bar, Alerts, Reports,
+Leaderboard, Signals), docker-compose deployment. Out of scope:
 `DarkPoolEvent`, extra alert rules, dashboards, extra UI pages, Kafka, scraping
 that bypasses the X API.
 
