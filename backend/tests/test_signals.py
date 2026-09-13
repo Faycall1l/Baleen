@@ -95,3 +95,23 @@ def test_suspicious_timing_ranks_by_excess_return(postgres_store):
 
     ranked = SignalsEngine(None, postgres_store).suspicious_timing(min_excess_pct=1.0)
     assert [r["who"] for r in ranked[:2]] == ["High Gal", "Low Guy"]
+
+
+def test_suspicious_timing_survives_junk_excess_values_issues_10(postgres_store):
+    """#10: malformed excess_since strings must not silently kill the signal."""
+    junk = RawTweet(
+        tweet_id="ptr-sig-junk", author_handle="congress_house", author_id="congress_house",
+        text="x", created_at=datetime.now(timezone.utc),
+        url="https://x.com/y",
+        raw_json={
+            "source_kind": "congress_disclosure", "filer_name": "Junk Gal",
+            "ticker": "NVDA", "transaction_type": "Purchase",
+            "transaction_date": "2026-08-01", "amount_range_label": "$1 - $2",
+            "excess_since": ".",
+        },
+    )
+    postgres_store.insert_raw_tweets([junk])
+
+    ranked = SignalsEngine(None, postgres_store).suspicious_timing(min_excess_pct=1.0)
+
+    assert all(r["who"] != "Junk Gal" for r in ranked)

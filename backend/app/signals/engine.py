@@ -9,7 +9,7 @@ graph properties or filing metadata; no LLM, deterministic, recomputed live.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
@@ -124,7 +124,9 @@ class SignalsEngine:
 
     def options_meter(self) -> list[dict]:
         try:
-            since_ts = (date.today() - timedelta(days=30)).isoformat() + "T00:00:00Z"
+            since_ts = (
+                datetime.now(timezone.utc).date() - timedelta(days=30)
+            ).isoformat() + "T00:00:00Z"
             return self.neo4j.run_read(OPTIONS_QUERY, since_ts=since_ts)
         except Exception:
             logger.exception("options meter query failed")
@@ -161,7 +163,7 @@ class SignalsEngine:
                                url AS source_url
                         FROM raw_tweets
                         WHERE (tweet_id LIKE 'ptr-%%' OR tweet_id LIKE 'edgar-%%')
-                          AND raw_json->>'excess_since' ~ '^-?[0-9.]+$'
+                          AND raw_json->>'excess_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
                           AND (raw_json->>'excess_since')::float >= :min_excess
                         ORDER BY (raw_json->>'excess_since')::float DESC
                         LIMIT 10
