@@ -101,7 +101,7 @@ def _fetcher():
 
 def test_source_emits_one_record_per_trade():
     src = EdgarForm4Source(fetch_text=_fetcher())
-    result = src.fetch_recent([], 86400)
+    result = src.fetch_recent([], 86400 * 7)
 
     assert result.errors == []
     assert len(result.tweets) == 1
@@ -114,8 +114,8 @@ def test_source_emits_one_record_per_trade():
 
 def test_source_skips_seen_filings_on_repill():
     src = EdgarForm4Source(fetch_text=_fetcher())
-    assert len(src.fetch_recent([], 86400).tweets) == 1
-    assert src.fetch_recent([], 86400).tweets == []
+    assert len(src.fetch_recent([], 86400 * 7).tweets) == 1
+    assert src.fetch_recent([], 86400 * 7).tweets == []
 
 
 def test_source_fetch_failure_returns_errors():
