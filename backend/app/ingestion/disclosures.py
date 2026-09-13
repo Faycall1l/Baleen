@@ -165,7 +165,8 @@ class CongressDisclosureSource(TweetSource):
     # ------------------------------------------------------------------
 
     def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
-        """``handles`` is ignored (the feed covers both chambers)."""
+        """``handles`` is ignored. The mirror feeds the Senate branch only —
+        the Clerk PDF lane owns House filings, so each trade appears once."""
         try:
             rows = self._cached_rows()
         except Exception as exc:
@@ -177,6 +178,7 @@ class CongressDisclosureSource(TweetSource):
             r
             for r in rows
             if (r.get("branch") or "") == "congress" and r.get("ticker")
+            and (r.get("chamber") or "").strip().lower() == "senate"
             and (day := _parse_day(r.get("filing_date"))) is not None
             and day.toordinal() >= cutoff
         ]

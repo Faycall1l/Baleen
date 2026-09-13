@@ -16,7 +16,7 @@ from app.models.events import CongressTradeEvent, OptionsFlowEvent
 
 def _row(**overrides) -> dict:
     base = {
-        "id": "house_20035392_g5",
+        "id": "senate_20035392_g5",
         "source_id": "house_clerk",
         "transaction_date": "2026-08-26",
         "filing_date": "2026-09-05",
@@ -26,11 +26,11 @@ def _row(**overrides) -> dict:
         "amount_range_label": "$1,001 - $15,000",
         "filer_name": "Maxine Waters",
         "branch": "congress",
-        "chamber": "house",
+        "chamber": "senate",
         "party": "D",
         "state": "CA",
-        "office": "U.S. Representative · CA-43",
-        "doc_url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035392.pdf",
+        "office": "U.S. Senator · CA",
+        "doc_url": "https://efdsearch.senate.gov/2026/09/05/1.pdf",
         "filing_type": "PTR",
     }
     base.update(overrides)
@@ -57,10 +57,10 @@ def test_maps_row_to_traceable_record():
     assert result.errors == []
     assert len(result.tweets) == 1
     tweet = result.tweets[0]
-    assert tweet.tweet_id == "ptr-house_20035392_g5"
+    assert tweet.tweet_id == "ptr-senate_20035392_g5"
     assert "Maxine Waters" in tweet.text
     assert "$VRTX" in tweet.text
-    assert tweet.url == "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035392.pdf"
+    assert tweet.url == "https://efdsearch.senate.gov/2026/09/05/1.pdf"
     assert tweet.raw_json["source_kind"] == SOURCE_KIND
 
 
@@ -75,6 +75,22 @@ def test_filters_out_executive_branch_and_stale_filings():
     result = src.fetch_recent([], 3600)
 
     assert [t.tweet_id for t in result.tweets] == ["ptr-new-1"]
+
+
+def test_mirror_emits_senate_only_issues_9():
+    """#9: the mirror covers Senate; Clerk owns House, so House rows are
+    dropped here to avoid double events from the two lanes."""
+    src = _source(
+        [
+            _row(id="sen-1", chamber="senate", filing_date=_today()),
+            _row(id="rep-1", chamber="house", filing_date=_today()),
+            _row(id="mixed", chamber=" House ", filing_date=_today()),
+            _row(id="blank", chamber="", filing_date=_today()),
+        ]
+    )
+    result = src.fetch_recent([], 3600)
+
+    assert [t.tweet_id for t in result.tweets] == ["ptr-sen-1"]
 
 
 def test_skips_rows_missing_ticker_or_filer():
