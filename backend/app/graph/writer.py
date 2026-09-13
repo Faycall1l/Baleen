@@ -33,7 +33,14 @@ class GraphWriter:
     # ------------------------------------------------------------------
 
     def write_event(self, event: Event) -> str:
-        """Upsert one event into the graph. Returns its deterministic id."""
+        """Upsert one event into the graph. Returns its deterministic id.
+
+        All merges for the event run inside a single server transaction
+        (#19): the fan-out (nodes, sector resolution, N committees) is one
+        round-trip instead of ~8 + 3N sequential ones, and the event becomes
+        visible atomically.
+        """
+        self._stmts: list[tuple[str, dict]] = []
         self._merge_event(event)
         if isinstance(event, (OptionsFlowEvent, CongressTradeEvent, InsiderTradeEvent)):
             self._write_ticker_flow(event)
@@ -41,6 +48,9 @@ class GraphWriter:
             self._write_politician_flow(event)
         if isinstance(event, InsiderTradeEvent):
             self._write_insider_flow(event)
+        with self.store.transaction() as run:
+            for query, params in self._stmts:
+                run(query, **params)
         logger.info("event %s written to graph (type=%s)", event.deterministic_id, event.event_type)
         return event.deterministic_id
 
@@ -48,9 +58,12 @@ class GraphWriter:
     # Node / edge merge helpers
     # ------------------------------------------------------------------
 
+    def _record(self, query: str, params: dict) -> None:
+        self._stmts.append((query, params))
+
     def _merge_node(self, label: str, props: dict, provenance: dict) -> None:
         key = LABEL_KEYS[label]
-        self.store.run(
+        self._record(
             f"""
             MERGE (n:{label} {{{key}: $key_value}})
             SET n += $props
@@ -58,17 +71,19 @@ class GraphWriter:
                 n.tweet_id = COALESCE($tweet_id, n.tweet_id),
                 n.tweet_url = COALESCE($tweet_url, n.tweet_url)
             """,
-            key_value=props[key],
-            props={k: v for k, v in props.items() if k != key},
-            tweet_id=provenance.get("tweet_id"),
-            tweet_url=provenance.get("tweet_url"),
+            {
+                "key_value": props[key],
+                "props": {k: v for k, v in props.items() if k != key},
+                "tweet_id": provenance.get("tweet_id"),
+                "tweet_url": provenance.get("tweet_url"),
+            },
         )
 
     def _merge_relation(
         self, a_label: str, a_key_value, rel: str, b_label: str, b_key_value, provenance: dict
     ) -> None:
         a_key, b_key = LABEL_KEYS[a_label], LABEL_KEYS[b_label]
-        self.store.run(
+        self._record(
             # Two MATCH clauses, not one comma-joined pattern: the comma form
             # plans a cartesian product between the disconnected patterns
             # (harmless here — single rows — but noisy in server notifications
@@ -80,10 +95,12 @@ class GraphWriter:
             SET r.tweet_id = COALESCE($tweet_id, r.tweet_id),
                 r.tweet_url = COALESCE($tweet_url, r.tweet_url)
             """,
-            a_value=a_key_value,
-            b_value=b_key_value,
-            tweet_id=provenance.get("tweet_id"),
-            tweet_url=provenance.get("tweet_url"),
+            {
+                "a_value": a_key_value,
+                "b_value": b_key_value,
+                "tweet_id": provenance.get("tweet_id"),
+                "tweet_url": provenance.get("tweet_url"),
+            },
         )
 
     def _provenance(self, event: Event) -> dict:

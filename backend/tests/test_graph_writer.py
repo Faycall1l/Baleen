@@ -2,12 +2,64 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 
 import pytest
 
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent
+
+# ---------------------------------------------------------------------------
+# Batching (#19)
+# ---------------------------------------------------------------------------
+
+
+class _FakeTxStore:
+    """Stores statements recorded inside a transaction; tracks how many
+    transactions were opened and rejects calls outside one."""
+
+    def __init__(self) -> None:
+        self.transactions = 0
+        self.stmts: list[tuple[str, dict]] = []
+        self.counts: dict[str, int] = {}
+
+    @contextmanager
+    def transaction(self, timeout=None):
+        self.transactions += 1
+        yield self.run
+
+    def run(self, query: str, **params) -> list[dict]:
+        kind = query.strip().split()[0]
+        self.counts[kind] = self.counts.get(kind, 0) + 1
+        self.stmts.append((query, params))
+        if kind == "MATCH":  # relationship merges need nodes to match; fake no-op
+            return []
+        return [{"count": 1}]
+
+    def run_read(self, query: str, timeout=None, **params):
+        return self.run(query, **params)
+
+
+def test_write_event_fans_out_inside_one_transaction():
+    """#19: the whole event write (nodes + sectors + N committees) is one
+    server transaction, not ~8 + 3N sequential round-trips."""
+    store = _FakeTxStore()
+    writer = GraphWriter(store)  # type: ignore[arg-type]
+    writer.write_event(_event("batch-1"))
+
+    assert store.transactions == 1
+    # 6 node MERGEs + 7 relation MATCH-MERGEs (incl. 2 committees * 3) — all
+    # batched into that single transaction instead of 13 sequential calls.
+    assert len(store.stmts) == 13
+    assert store.counts["MERGE"] == 6
+    assert store.counts["MATCH"] == 7
+    # Every recorded statement carries provenance so none leaks into the graph
+    # without its source tweet.
+    for query, params in store.stmts:
+        if "tweet_id" in query:
+            assert params["tweet_id"] == "batch-1"
+
 
 # ---------------------------------------------------------------------------
 # Helpers

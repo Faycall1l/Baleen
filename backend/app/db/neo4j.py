@@ -12,6 +12,7 @@ idempotent, which is exactly what makes those retries safe.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from neo4j import GraphDatabase, Driver, unit_of_work
@@ -106,3 +107,22 @@ class Neo4jStore:
         if timeout is None:
             return self._timeout
         return None if timeout == 0 else timeout
+
+    @contextlib.contextmanager
+    def transaction(self, timeout: float | None = None):
+        """Run a group of statements in one server transaction (#19).
+
+        The graph writer fans out one event into several node/edge MERGEs
+        (up to ~8 + 3x per committee); batching them cuts that from N
+        round-trips to 1 and makes the whole event atomically visible.
+
+        Yields a ``run(query, **params)`` callable (fire-and-forget within
+        the transaction); any exception rolls the group back.
+        """
+        with self._driver.session() as session:
+            with session.begin_transaction(timeout=self._resolve_timeout(timeout)) as tx:
+
+                def run(query: str, **params) -> None:
+                    tx.run(query, **params)
+
+                yield run
