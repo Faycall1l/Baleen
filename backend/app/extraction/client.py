@@ -170,6 +170,10 @@ class LLMClient:
             if self.tool_mode in ("auto", "tools"):
                 try:
                     return self._chat_tools(messages, tools, tool_choice)
+                except LLMTransportError:
+                    # issue #14: a dead endpoint already spent its backoff
+                    # budget in _post; the JSON fallback must not double-pay.
+                    raise
                 except LLMError as exc:
                     if self.tool_mode == "tools":
                         raise
@@ -364,7 +368,13 @@ class LLMClient:
             match = JSON_BLOCK_RE.search(content)
             if not match:
                 raise InvalidJSONError("no JSON block found in model output")
-            raw = json.loads(match.group(0))
+            # issue #14: a matched-but-malformed block must not leak the raw
+            # JSONDecodeError (which no caller catches); normalize to
+            # InvalidJSONError so bounding/retry logic keeps working.
+            try:
+                raw = json.loads(match.group(0))
+            except json.JSONDecodeError as exc:
+                raise InvalidJSONError("malformed JSON block in model output") from exc
 
         known = {t["function"]["name"] for t in tools}
         tool_calls: list[ToolCall] = []

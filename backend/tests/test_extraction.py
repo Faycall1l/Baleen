@@ -400,6 +400,51 @@ def test_json_mode_gives_up_after_invalid_json_retries(monkeypatch):
     assert calls["n"] == 3  # 1 attempt + 2 retries
 
 
+def test_auto_mode_does_not_double_pay_for_transport_failures(monkeypatch):
+    """#14: transport errors re-raise after their own backoff; the JSON
+    fallback must not run a second full retry budget on top."""
+    from app.extraction.client import LLMClient, LLMResponse, LLMTransportError
+
+    client = LLMClient("http://x", "k", "m", tool_mode="auto", max_retries=2)
+    calls = {"chat": 0, "json": 0}
+
+    def dead_tools(messages, tools, tool_choice):
+        calls["chat"] += 1
+        raise LLMTransportError("connection refused")
+
+    def json_chat(messages, tools):
+        calls["json"] += 1
+        return LLMResponse(content="{}", tool_calls=[])
+
+    monkeypatch.setattr(client, "_chat_tools", dead_tools)
+    monkeypatch.setattr(client, "_chat_json", json_chat)
+
+    tools = build_tool_definitions()
+    with pytest.raises(LLMTransportError):
+        client.chat_with_tools([{"role": "user", "content": "hi"}], tools)
+
+    assert calls["json"] == 0  # no JSON fallback after a transport error
+
+
+def test_malformed_json_block_is_invalid_json_error(monkeypatch):
+    """#14: a matched-but-truncated JSON block surfaces InvalidJSONError,
+    not a bare json.JSONDecodeError that no caller catches."""
+    from app.extraction.client import InvalidJSONError, LLMClient
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr(
+        "app.extraction.client.LLMClient._post_once",
+        lambda *a, **k: {"choices": [{"message": {
+            "role": "assistant",
+            "content": "prefix {\"ticker\": \"NVDA\", \"conf",
+        }}]},
+    )
+
+    client = LLMClient("http://x", "k", "m", tool_mode="json", max_retries=0)
+    with pytest.raises(InvalidJSONError):
+        client.chat_with_tools([{"role": "user", "content": "hi"}], build_tool_definitions())
+
+
 # ---------------------------------------------------------------------------
 # LLM endpoint health probe
 # ---------------------------------------------------------------------------
