@@ -47,6 +47,31 @@ def test_leaderboard_orders_by_return_since(postgres_store):
     assert leaders[0]["source_url"].endswith("x.pdf")
 
 
+def test_leaderboard_ignores_non_numeric_excess_since_issues_10(postgres_store):
+    """#10: a junk excess_since must not abort the whole leaderboard query."""
+    meta = {
+        "source_kind": "congress_disclosure",
+        "filer_name": "Bad Row",
+        "ticker": "CCC",
+        "transaction_type": "Purchase",
+        "transaction_date": "2026-08-01",
+        "amount_range_label": "$1,001 - $15,000",
+        "ret_since": "9.9",
+        "excess_since": "N/A",
+    }
+    row = RawTweet(
+        tweet_id="ptr-lb-junk", author_handle="congress_house",
+        author_id="congress_house", text="x",
+        created_at=datetime.now(timezone.utc),
+        url="https://example.com/x.pdf", raw_json=meta,
+    )
+    postgres_store.insert_raw_tweets([row])
+
+    leaders = postgres_store.get_leaderboard(limit=10)
+
+    assert all(r["politician"] != "Bad Row" for r in leaders)
+
+
 def test_since_cursors_return_only_newer_rows(postgres_store):
     first = postgres_store.insert_report(
         kind="brief", event_id="e-1", title="t1", body="b1"

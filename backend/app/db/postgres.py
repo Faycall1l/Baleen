@@ -390,10 +390,11 @@ class PostgresStore:
                            (raw_json->>'ret_since')::float AS ret_pct,
                            (raw_json->>'excess_since')::float AS excess_pct,
                            url AS source_url
-                    FROM raw_tweets
-                    WHERE tweet_id LIKE 'ptr-%'
-                      AND raw_json->>'ret_since' ~ '^-?[0-9.]+$'
-                    ORDER BY (raw_json->>'ret_since')::float DESC
+FROM raw_tweets
+                   WHERE tweet_id LIKE 'ptr-%'
+                     AND raw_json->>'ret_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
+                     AND raw_json->>'excess_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
+                   ORDER BY (raw_json->>'ret_since')::float DESC
                     LIMIT :limit
                     """
                 ),
