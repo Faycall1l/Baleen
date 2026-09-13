@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     # 3-page poll can return 300 tweets; batch them so one run drains the queue.
     process_batch_size: int = Field(default=100, ge=1, le=1000)
 
+    # --- API auth / rate-limiting (issue #18) ---
+    # When non-empty, /api/query, /api/graph and /api/stream require
+    # ``Authorization: Bearer <api_key>``. Empty = local dev (no guard).
+    api_key: str = ""
+    # Sliding-window rate limit per IP (seconds, 0 = unlimited).
+    api_rate_window_seconds: int = Field(default=0, ge=0, le=300)
+    api_rate_max_requests: int = Field(default=30, ge=1)
+
     @field_validator("llm_base_url")
     @classmethod
     def _trim_llm_url(cls, value: str) -> str:

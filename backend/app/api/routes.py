@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
+import time
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -27,9 +29,76 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 # Lazily-built shared clients (service objects are cheap to keep around).
+# A lock guards the first build so concurrent startup requests cannot create
+# duplicate drivers/engines (#18).
+_init_lock = threading.Lock()
 _store: PostgresStore | None = None
 _neo4j: Neo4jStore | None = None
 _llm: LLMClient | None = None
+
+
+# ---------------------------------------------------------------------------
+# Auth + rate limiting (#18)
+# ---------------------------------------------------------------------------
+
+
+class _RateLimiter:
+    """Sliding-window limiter keyed by IP, with periodic eviction.
+
+    Config: ``api_rate_window_seconds`` (0 = unlimited) and
+    ``api_rate_max_requests`` per window. In-memory only: fine for guarding a
+    single-process uvicorn deployment before any public exposure.
+    """
+
+    def __init__(self, window_seconds: int, max_requests: int) -> None:
+        self.window_seconds = window_seconds
+        self.max_requests = max_requests
+        self._hits: dict[str, list[float]] = {}
+
+    def allow(self, key: str) -> bool:
+        if self.window_seconds <= 0:
+            return True
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        hits = [t for t in self._hits.get(key, []) if t > cutoff]
+        if len(hits) >= self.max_requests:
+            self._hits[key] = hits
+            return False
+        hits.append(now)
+        self._hits[key] = hits
+        if len(self._hits) > 4096:  # occasional sweep for long-running servers
+            self._hits = {k: v for k, v in self._hits.items() if v[-1] > cutoff}
+        return True
+
+
+_rate_limiter: _RateLimiter | None = None
+
+
+def _get_rate_limiter() -> _RateLimiter:
+    global _rate_limiter
+    if _rate_limiter is None:
+        s = _get_settings()
+        _rate_limiter = _RateLimiter(s.api_rate_window_seconds, s.api_rate_max_requests)
+    return _rate_limiter
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def require_api_key(request: Request) -> None:
+    """No-op when ``api_key`` is empty (local dev); otherwise verify the
+    ``Authorization: Bearer`` header and apply the per-IP rate limit."""
+    settings = _get_settings()
+    if settings.api_key:
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or token.strip() != settings.api_key:
+            raise HTTPException(status_code=401, detail="missing or invalid API key")
+    if not _get_rate_limiter().allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
 
 
 def _get_settings() -> Settings:
@@ -39,25 +108,31 @@ def _get_settings() -> Settings:
 def _get_store() -> PostgresStore:
     global _store
     if _store is None:
-        _store = PostgresStore(_get_settings().postgres_dsn)
-        _store.init_schema()
+        with _init_lock:
+            if _store is None:
+                _store = PostgresStore(_get_settings().postgres_dsn)
+                _store.init_schema()
     return _store
 
 
 def _get_neo4j() -> Neo4jStore:
     global _neo4j
     if _neo4j is None:
-        _neo4j = Neo4jStore(_get_settings())
+        with _init_lock:
+            if _neo4j is None:
+                _neo4j = Neo4jStore(_get_settings())
     return _neo4j
 
 
 def _get_llm() -> LLMClient:
     global _llm
     if _llm is None:
-        s = _get_settings()
-        _llm = LLMClient(
-            base_url=s.llm_base_url,
-            api_key=s.llm_api_key,
+        with _init_lock:
+            if _llm is None:
+                s = _get_settings()
+                _llm = LLMClient(
+                    base_url=s.llm_base_url,
+                    api_key=s.llm_api_key,
             model_name=s.llm_model_name,
             tool_mode=s.llm_tool_mode,
             max_retries=s.llm_max_retries,
@@ -104,15 +179,16 @@ def _json_safe(value):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/graph")
-def graph(limit: int = Query(default=500, ge=0)) -> dict:
+@router.get("/graph", dependencies=[Depends(require_api_key)])
+def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
     """Serialize a subgraph for the force-directed UI.
 
     With ``limit`` > 0, only the ``limit`` most-recent events and their direct
     neighbors (tickers, politicians, committees, sectors) are returned, so a
     large live graph stays responsive. ``limit=0`` returns everything (demo /
     small graphs). The response carries ``truncated``/``event_count`` so the UI
-    can tell a partial view from a full one.
+    can tell a partial view from a full one. ``limit`` is capped at 5000
+    (#16) so a single request cannot force an unbounded materialization.
     """
     neo4j = _get_neo4j()
     try:
@@ -203,7 +279,7 @@ def graph(limit: int = Query(default=500, ge=0)) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/query")
+@router.post("/query", dependencies=[Depends(require_api_key)])
 def ask_question(request: QueryRequest) -> dict:
     agent = QueryAgent(llm=_get_llm(), store=_get_neo4j())
     try:
@@ -315,7 +391,7 @@ def signals_similar(politician_id: str = Query(min_length=1)) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/stream")
+@router.get("/stream", dependencies=[Depends(require_api_key)])
 async def stream(
     request: Request,
     after_report: int = Query(default=0, ge=0),
@@ -352,8 +428,11 @@ async def stream_events(store, is_disconnected, after_report: int = 0,
         if await is_disconnected():
             break
         try:
-            reports = store.get_reports_since(last_report)
-            alerts = store.get_alerts_since(last_alert)
+            # #17: get_reports_since / get_alerts_since are blocking psycopg
+            # calls; run them off the event loop so one slow query cannot
+            # stall every concurrent stream (or the whole server).
+            reports = await asyncio.to_thread(store.get_reports_since, last_report)
+            alerts = await asyncio.to_thread(store.get_alerts_since, last_alert)
         except Exception:
             logger.exception("stream poll failed")
             break

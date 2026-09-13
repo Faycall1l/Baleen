@@ -333,3 +333,139 @@ def test_signals_similar_returns_traders():
     with _client() as c:
         body = c.get("/api/signals/similar?politician_id=W000187").json()
         assert isinstance(body["similar"], list)
+
+
+# ---------------------------------------------------------------------------
+# #16: /api/graph limit is bounded
+# ---------------------------------------------------------------------------
+
+
+def test_graph_limit_is_capped():
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+    with _client() as c:
+        assert c.get("/api/graph?limit=5001").status_code == 422
+        assert c.get("/api/graph?limit=-1").status_code == 422
+        assert c.get("/api/graph?limit=5000").status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# #17: SSE polls run off the event loop
+# ---------------------------------------------------------------------------
+
+
+def test_stream_polls_run_off_the_event_loop():
+    import asyncio
+
+    from app.api.routes import stream_events
+
+    class ThreadAwareStore:
+        def __init__(self):
+            self.saw_running_loop = False
+
+        def get_reports_since(self, after):
+            self._record()
+            return []
+
+        def get_alerts_since(self, after):
+            self._record()
+            return []
+
+        def _record(self):
+            try:
+                asyncio.get_running_loop()
+                self.saw_running_loop = True
+            except RuntimeError:
+                pass
+
+    store = ThreadAwareStore()
+    polls = {"n": 0}
+
+    async def disconnected():
+        polls["n"] += 1
+        return polls["n"] >= 2
+
+    async def collect():
+        return [c async for c in stream_events(store, disconnected, 0, 0, poll_seconds=0.01)]
+
+    chunks = asyncio.run(collect())
+    assert any(c == ": keepalive\n\n" for c in chunks)
+    assert not store.saw_running_loop  # blocking DB calls never ran on the loop
+
+
+# ---------------------------------------------------------------------------
+# #18: API key guard + rate limiting
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limiter_sliding_window():
+    from app.api.routes import _RateLimiter
+
+    limiter = _RateLimiter(window_seconds=60, max_requests=3)
+    key = "1.2.3.4"
+    assert limiter.allow(key)
+    assert limiter.allow(key)
+    assert limiter.allow(key)
+    assert not limiter.allow(key)  # window exhausted
+    assert limiter.allow("other-ip")  # different key unaffected
+    assert _RateLimiter(0, 3).allow(key)  # window 0 = unlimited
+
+
+def test_api_key_guard_blocks_unauthenticated(monkeypatch):
+    import app.api.routes as routes
+    from app.config import get_settings
+
+    real_settings = get_settings()
+
+    def secure_settings():
+        return real_settings.model_copy(update={"api_key": "secret-key"})
+
+    monkeypatch.setattr(routes, "get_settings", secure_settings)
+
+    with _client() as c:
+        assert c.get("/api/graph").status_code == 401
+        assert (
+            c.get("/api/graph", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        )
+
+
+def test_api_key_guard_accepts_valid_key(monkeypatch):
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+
+    import app.api.routes as routes
+    from app.config import get_settings
+
+    real_settings = get_settings()
+
+    def secure_settings():
+        return real_settings.model_copy(update={"api_key": "secret-key"})
+
+    monkeypatch.setattr(routes, "get_settings", secure_settings)
+
+    with _client() as c:
+        res = c.get("/api/graph", headers={"Authorization": "Bearer secret-key"})
+        assert res.status_code == 200
+
+
+def test_query_rate_limited_per_ip(monkeypatch):
+    if not _services_available():
+        pytest.skip("postgres/neo4j not available")
+
+    import app.api.routes as routes
+    from app.config import get_settings
+
+    real_settings = get_settings()
+
+    def throttled_settings():
+        return real_settings.model_copy(
+            update={"api_rate_window_seconds": 3600, "api_rate_max_requests": 2}
+        )
+
+    monkeypatch.setattr(routes, "get_settings", throttled_settings)
+    monkeypatch.setattr(routes, "_rate_limiter", None)
+
+    with _client() as c:
+        assert c.get("/api/graph").status_code == 200
+        assert c.get("/api/graph").status_code == 200
+        assert c.get("/api/graph").status_code == 429
