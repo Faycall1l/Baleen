@@ -41,9 +41,19 @@ def _work_fn(timeout: float | None):
 class Neo4jStore:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        common = {
+            # Recycle connections before they go stale and liveness-check
+            # any idle pool entry before reuse; without this the driver can
+            # hand out defunct connections after long idle stretches (bit us
+            # in back-to-back full-suite runs).
+            "liveness_check_timeout": 30,
+            "max_connection_lifetime": 1800,
+            "max_connection_pool_size": 50,
+        }
         self._driver: Driver = GraphDatabase.driver(
             settings.neo4j_uri,
             auth=(settings.neo4j_user, settings.neo4j_password),
+            **common,
         )
         # A dedicated read-only role is optional defense-in-depth (see
         # docs/SETUP.md). Until NEO4J_READ_URI is configured we fall back to the
@@ -53,6 +63,7 @@ class Neo4jStore:
             self._read_driver = GraphDatabase.driver(
                 settings.neo4j_read_uri,
                 auth=(settings.neo4j_read_user, settings.neo4j_read_password),
+                **common,
             )
         # Transaction timeout in seconds; ``None`` (or 0) means "no cap".
         self._timeout: float | None = settings.neo4j_query_timeout_seconds or None
