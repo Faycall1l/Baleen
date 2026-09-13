@@ -275,11 +275,14 @@ class EdgarForm4Source(TweetSource):
         for entry in fresh[: self.max_filings_per_poll]:
             if entry["accession"] in self._seen_accessions:
                 continue
-            self._seen_accessions.add(entry["accession"])
             try:
                 tweets.extend(self._filing_records(entry, now))
             except Exception as exc:
                 errors.append(f"Form 4 {entry['accession']} failed: {exc}")
+                continue
+            # issue #12: mark seen only on success, so a transient SEC failure
+            # is retried next tick instead of being skipped for this process.
+            self._seen_accessions.add(entry["accession"])
         logger.info("edgar source: %d trade(s) from filings", len(tweets))
         return FetchResult(tweets=tweets, errors=errors)
 

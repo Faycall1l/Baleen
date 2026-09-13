@@ -127,6 +127,29 @@ def test_source_fetch_failure_returns_errors():
     assert len(result.errors) == 1
 
 
+def test_transient_filing_failure_retried_next_poll_issues_12():
+    calls = {"n": 0}
+
+    def flaky(url: str):
+        if "output=atom" in url or "getcurrent" in url:
+            return ATOM
+        if url.endswith("-index.htm"):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("SEC timeout")
+            return INDEX_HTML
+        return OWNERSHIP_XML
+
+    src = EdgarForm4Source(fetch_text=flaky)
+    first = src.fetch_recent([], 86400 * 7)
+    assert first.tweets == [] and len(first.errors) == 1
+
+    second = src.fetch_recent([], 86400 * 7)
+    assert second.errors == []
+    assert len(second.tweets) == 1
+    assert calls["n"] == 2  # accession not skipped after the transient failure
+
+
 def _tweet() -> RawTweet:
     return RawTweet(
         tweet_id="edgar-x", author_handle="edgar_form4", author_id="edgar_form4",

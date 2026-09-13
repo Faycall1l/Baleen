@@ -133,6 +133,29 @@ def test_source_index_failure_returns_errors():
     assert len(result.errors) == 1
 
 
+def test_transient_pdf_failure_retried_next_poll_issues_12():
+    calls = {"n": 0}
+
+    def flaky(year: int, doc_id: str):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("pdf timeout")
+        return _pdf_bytes(PTR_TEXT)
+
+    src = ClerkHouseSource(
+        year=2026,
+        fetch_index=lambda year: INDEX,
+        fetch_pdf=flaky,
+    )
+    first = src.fetch_recent([], 30 * 86400)
+    assert first.tweets == [] and len(first.errors) == 1
+
+    second = src.fetch_recent([], 30 * 86400)
+    assert second.errors == []
+    assert len(second.tweets) == 4
+    assert calls["n"] == 2  # filing not skipped after the transient failure
+
+
 def test_today_is_used_for_window():
     today = datetime.now(timezone.utc).date()
     iso = today.isoformat()

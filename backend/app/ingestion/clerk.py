@@ -207,10 +207,11 @@ class ClerkHouseSource(TweetSource):
                 pdf = self._fetch_pdf(filing["year"], filing["doc_id"])
                 trades = parse_ptr_pdf(pdf)
             except Exception as exc:
+                # issue #12: only mark a filing seen once it parses cleanly,
+                # otherwise a transient download failure retries forever off.
                 errors.append(f"PTR {filing['doc_id']} failed: {exc}")
                 continue
-            finally:
-                self._seen_docs.add(filing["doc_id"])
+            self._seen_docs.add(filing["doc_id"])
             for row in _rows_from_filing(filing, trades):
                 try:
                     record = _record(row, now)
