@@ -172,6 +172,23 @@ def test_ensure_digest_empty_day_reports_no_events():
     assert "No events recorded" in report["body"]
 
 
+def test_digest_alert_window_is_datetime_aware_issues_11():
+    """#11: string-prefix compare pulled in *future* alerts for past periods."""
+    future = {"title": "tomorrow", "created_at": "2026-09-19 08:00:00.123456+00:00"}
+    today = {"title": "today", "created_at": "2026-09-10 08:00:00.123456+00:00"}
+    broken = {"title": "broken", "created_at": "garbage"}  # must not crash
+
+    class _StoreWithAlerts(_FakeStore):
+        def get_alerts(self, limit=50):
+            return [future, today, broken]
+
+    engine = _engine(store=_StoreWithAlerts())
+    facts = engine._digest_facts("2026-09-10")
+
+    assert "today" in facts["alerts"]
+    assert "tomorrow" not in facts["alerts"]
+
+
 def test_insider_brief_title_and_template():
     from app.models.events import InsiderTradeEvent
 

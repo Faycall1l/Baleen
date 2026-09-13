@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
@@ -260,7 +260,17 @@ class ReportEngine:
         politicians = sorted({r.get("politician") for r in rows if r.get("politician")})
         try:
             alerts = self.store.get_alerts(limit=50)
-            alert_titles = [a["title"] for a in alerts if str(a.get("created_at", "")) >= day]
+            day_start = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
+            day_end = day_start + timedelta(days=1)
+            alert_titles = []
+            for a in alerts:
+                created = a.get("created_at")
+                try:
+                    created_at = datetime.fromisoformat(str(created))
+                except ValueError:
+                    continue
+                if day_start <= created_at < day_end:
+                    alert_titles.append(a["title"])
         except Exception as exc:
             logger.warning("digest alerts fetch failed: %s", exc)
             alert_titles = []
