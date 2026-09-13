@@ -26,7 +26,7 @@ from app.graph.schema import ALLOWED_LABELS, ALLOWED_RELATIONSHIPS
 #: FROM 'file://...'`` reads the server's local filesystem — a read-only
 #: exfiltration vector a crafted prompt could trigger.
 FORBIDDEN_CLAUSES = re.compile(
-    r"\b(CREATE|MERGE|SET|DELETE|DETACH|REMOVE|DROP|ALTER|CALL|LOAD)\b",
+    r"\b(CREATE|MERGE|SET|DELETE|DETACH|REMOVE|DROP|ALTER|CALL|LOAD|USE|SHOW|EXPLAIN|PROFILE)\b",
     re.IGNORECASE,
 )
 
@@ -51,7 +51,7 @@ def validate_cypher(query: str) -> list[str]:
     violations: list[str] = []
 
     if FORBIDDEN_CLAUSES.search(query):
-        violations.append("statement contains a forbidden write clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL/LOAD)")
+        violations.append("statement contains a forbidden clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL/LOAD/USE/SHOW/EXPLAIN/PROFILE)")
     if FORBIDDEN_PATTERNS.search(query):
         violations.append("statement contains an index/constraint definition")
     if _has_embedded_statement_separator(query):

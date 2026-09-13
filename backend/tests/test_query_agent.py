@@ -38,6 +38,19 @@ def test_allowlist_rejects_write_clauses():
         assert validate_cypher(statement), f"expected rejection: {statement}"
 
 
+def test_allowlist_rejects_admin_and_planning_clauses_issues_15():
+    """SHOW/USE/EXPLAIN/PROFILE are read-ish but leak schema or execution
+    plans; the model must not be able to reach them."""
+    for statement in [
+        "SHOW CONSTRAINTS",
+        "SHOW INDEXES YIELD name RETURN name",
+        "USE system SHOW DATABASES",
+        "EXPLAIN MATCH (t:Ticker) RETURN t",
+        "PROFILE MATCH (t:Ticker) RETURN t",
+    ]:
+        assert validate_cypher(statement), f"expected rejection: {statement}"
+
+
 def test_allowlist_accepts_read_only_query():
     query = (
         "MATCH (c:Committee {id: $id})-[:OVERSEES]->(s:Sector)<-[:IN_SECTOR]-(t:Ticker) "
