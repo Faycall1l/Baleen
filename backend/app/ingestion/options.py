@@ -49,6 +49,10 @@ MAX_PER_TICKER = 3
 #: Chains refresh continuously but quotes lag ~15m; re-fetch at most this often.
 CHAIN_TTL_SECONDS = 900
 
+#: A failing chain is not re-downloaded for this long (avoids hammering a
+#: dead/delisted ticker every poll while it sits failing).
+FAIL_TTL_SECONDS = 300
+
 #: Courtesy gap between ticker fetches.
 FETCH_GAP_SECONDS = 1.0
 
@@ -150,6 +154,9 @@ class OptionsChainSource(TweetSource):
         self.timeout_seconds = timeout_seconds
         self._fetcher = fetcher or self._fetch_chain
         self._cache: dict[str, tuple[float, dict]] = {}
+        # issue #13: recent failures are remembered briefly so a dead chain
+        # isn't re-downloaded every poll while it sits failing.
+        self._fail_until: dict[str, float] = {}
 
     # ------------------------------------------------------------------
     # TweetSource interface
@@ -166,8 +173,10 @@ class OptionsChainSource(TweetSource):
             try:
                 payload = self._cached_chain(ticker)
             except Exception as exc:
+                # issue #13: one failing ticker must not starve the rest of
+                # the watchlist — log the error and keep sweeping.
                 errors.append(f"{ticker} chain fetch failed: {exc}")
-                break  # 429/5xx: stop the sweep, try again next tick
+                continue
             contracts = ((payload.get("data") or {}).get("options") or [])
             for anomaly in _anomalies(contracts, day):
                 tweets.append(_record(anomaly, now))
@@ -183,10 +192,18 @@ class OptionsChainSource(TweetSource):
         hit = self._cache.get(ticker)
         if hit is not None and time.monotonic() - hit[0] < CHAIN_TTL_SECONDS:
             return hit[1]
-        payload = self._fetcher(ticker)
-        if not isinstance(payload, dict):
-            raise ValueError(f"chain for {ticker} returned {type(payload).__name__}")
+        until = self._fail_until.get(ticker, 0.0)
+        if time.monotonic() < until:
+            raise ValueError("chain recently failed; holding off")
+        try:
+            payload = self._fetcher(ticker)
+            if not isinstance(payload, dict):
+                raise ValueError(f"chain for {ticker} returned {type(payload).__name__}")
+        except Exception:
+            self._fail_until[ticker] = time.monotonic() + FAIL_TTL_SECONDS
+            raise
         self._cache[ticker] = (time.monotonic(), payload)
+        self._fail_until.pop(ticker, None)
         return payload
 
     def _fetch_chain(self, ticker: str) -> dict:

@@ -60,7 +60,7 @@ def test_caps_at_best_anomalies_per_ticker():
     assert len(src.fetch_recent([], 3600).tweets) == 3
 
 
-def test_chain_failure_returns_errors_and_stops_sweep():
+def test_chain_failure_records_errors_and_keeps_sweeping():
     def boom(ticker: str):
         raise RuntimeError("429 throttled")
 
@@ -68,8 +68,38 @@ def test_chain_failure_returns_errors_and_stops_sweep():
     result = src.fetch_recent([], 3600)
 
     assert result.tweets == []
-    assert len(result.errors) == 1
-    assert "NVDA" in result.errors[0]
+    assert len(result.errors) == 2  # issue #13: sweep continues, both tried
+    assert "NVDA" in result.errors[0] and "AMD" in result.errors[1]
+
+
+def test_dead_ticker_does_not_starve_following_tickers_issues_13():
+    def fetch(ticker: str):
+        if ticker == "ZZZZ":
+            raise RuntimeError("delisted 404")
+        return {"data": {"options": [
+            {"option": "NVDA260909C00110000", "volume": 5000, "open_interest": 500,
+             "last_trade_price": 10.0, "last_trade_time": "2026-09-09T15:12:25"}
+        ]}}
+
+    src = OptionsChainSource(watchlist=["ZZZZ", "NVDA"], fetcher=fetch)
+    result = src.fetch_recent([], 3600)
+
+    assert len(result.errors) == 1 and "ZZZZ" in result.errors[0]
+    assert {t.tweet_id.split("-")[1] for t in result.tweets} == {"NVDA"}
+
+
+def test_recent_failure_is_not_re_downloaded_immediately_issues_13():
+    calls = {"n": 0}
+
+    def flaky(ticker: str):
+        calls["n"] += 1
+        raise RuntimeError("down")
+
+    src = OptionsChainSource(watchlist=["NVDA", "AMD"], fetcher=flaky)
+    src.fetch_recent([], 3600)
+    src.fetch_recent([], 3600)
+
+    assert calls["n"] == 2  # one hit per ticker; cached failures not re-hit
 
 
 def test_sweep_across_watchlist_collects_each_ticker():
