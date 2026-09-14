@@ -91,3 +91,20 @@ def test_since_cursors_return_only_newer_rows(postgres_store):
         title="ta", summary="sa",
     )
     assert [a["event_id"] for a in postgres_store.get_alerts_since(0)] == ["ev-a"]
+
+
+def test_get_reports_filters_by_kind_and_digest_returns_latest(postgres_store):
+    postgres_store.insert_report(kind="brief", event_id="e-1", title="t1", body="b1")
+    postgres_store.insert_report(kind="digest", period="2026-09-10", title="d1", body="b2")
+    postgres_store.insert_report(kind="digest", period="2026-09-11", title="d2", body="b3")
+
+    all_rows = postgres_store.get_reports()
+    assert len(all_rows) == 3
+
+    briefs = postgres_store.get_reports(kind="brief")
+    assert [r["event_id"] for r in briefs] == ["e-1"]
+    assert all(not r["event_id"] for r in postgres_store.get_reports(kind="digest"))
+
+    assert postgres_store.get_digest("2026-09-10")["body"] == "b2"
+    assert postgres_store.get_digest("2026-09-11")["title"] == "d2"
+    assert postgres_store.get_digest("2025-01-01") is None

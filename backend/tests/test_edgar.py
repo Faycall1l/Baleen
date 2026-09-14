@@ -316,3 +316,103 @@ def test_owner_role_orders_multiple_flags():
     )
     assert _owner_role(owner) == "CFO"
     assert _owner_role(ET.fromstring("<o />")) is None
+
+
+def test_owner_role_lists_flags_without_officer_title():
+    """No officer title: the roles are joined in a fixed order (no title
+    overrides), and the empty-role case returns None."""
+    from app.ingestion.edgar import _owner_role
+    import xml.etree.ElementTree as ET
+
+    owner = ET.fromstring(
+        "<o><reportingOwnerRelationship>"
+        "<isDirector>true</isDirector><isTenPercentOwner>true</isTenPercentOwner>"
+        "<isOfficer>true</isOfficer><officerTitle/></reportingOwnerRelationship></o>"
+    )
+    assert _owner_role(owner) == "Director, 10% Owner, Officer"
+
+    quiet = ET.fromstring(
+        "<o><reportingOwnerRelationship><isDirector>false</isDirector>"
+        "<isTenPercentOwner>no</isTenPercentOwner><isOfficer></isOfficer>"
+        "</reportingOwnerRelationship></o>"
+    )
+    assert _owner_role(quiet) is None
+
+
+def test_parse_ownership_skips_unknown_acquired_code():
+    """An open-market transaction coded outside {A, D} is dropped from the
+    parsed rows (the G/Gift row is already excluded by the code gate)."""
+    from app.ingestion.edgar import parse_ownership
+
+    modified = OWNERSHIP_XML.replace(
+        """<transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>""",
+        """<transactionAcquiredDisposedCode><value>X</value></transactionAcquiredDisposedCode>""",
+    )
+    assert parse_ownership(modified)["transactions"] == []
+
+
+def test_xml_href_prefers_plain_document_and_none_without_xml():
+    from app.ingestion.edgar import _xml_href
+
+    assert _xml_href('<a href="/Archives/x/doc4.xml">x</a>') == "https://www.sec.gov/Archives/x/doc4.xml"
+    assert _xml_href('<a href="https://ok/doc4.xml">x</a>') == "https://ok/doc4.xml"
+    assert _xml_href("<p>no anchor here</p>") is None
+
+
+def test_fmt_amount_requires_shares_and_price():
+    from app.ingestion.edgar import _fmt_amount
+
+    assert _fmt_amount(1000, 2.5) == "$2,500.00"
+    assert _fmt_amount(None, 2.5) is None
+    assert _fmt_amount(1000, None) is None
+
+
+def test_record_requires_ticker_and_owner_name():
+    from app.ingestion.edgar import _record
+
+    now = datetime.now(timezone.utc)
+    owner = {"name": "Ada Lovelace", "role": ""}
+    txn = {"side": "buy", "shares": 100, "price": 25.0, "transaction_date": date(2026, 9, 9)}
+
+    record = _record("r1", "https://x", now, owner, txn, "JPM", now)
+    assert record is not None
+    assert "100 shares @ $25.00" in record.text
+    assert _record("r2", "https://x", now, owner, txn, "", now) is None
+    assert _record("r3", "https://x", now, {"name": ""}, txn, "JPM", now) is None
+
+
+def test_parse_ts_tolerates_garbage():
+    from app.ingestion.edgar import _parse_ts
+
+    assert _parse_ts(None) == 0.0
+    assert _parse_ts(12345) == 0.0
+    assert _parse_ts("not-a-date") == 0.0
+    assert _parse_ts("2026-09-11T21:59:18-04:00") == datetime.fromisoformat("2026-09-11T21:59:18-04:00").timestamp()
+
+
+def test_filing_records_raise_without_ownership_xml_link():
+    import pytest
+
+    from app.ingestion.edgar import EdgarForm4Source
+
+    src = EdgarForm4Source(fetch_text=lambda url: "<html>no documents</html>")
+    with pytest.raises(ValueError, match="no ownership XML link"):
+        src._filing_records(
+            {"index_url": "https://www.sec.gov/i", "accession": "1", "updated": "x"},
+            datetime.now(timezone.utc),
+        )
+
+
+def test_enrich_insider_trade_tolerates_invalid_dates():
+    """A malformed transaction_date in the filing meta must not crash
+    enrichment; other authoritative fields still overwrite the model's."""
+    from app.ingestion.edgar import enrich_insider_trade
+
+    tweet = _tweet().model_copy(update={
+        "raw_json": {**_tweet().raw_json, "transaction_date": "not-a-date"},
+    })
+    grounded = enrich_insider_trade(tweet, _event())
+
+    assert grounded.ticker == "GPUS"  # filed facts still win
+    assert grounded.insider_id == "1212502"
+    assert grounded.transaction_date is None  # invalid date never forces one

@@ -177,10 +177,94 @@ def test_parse_ptr_pdf_skips_trade_with_invalid_transaction_date():
         "Name: Hon. David J. Taylor State/District:OH02 "
         "Apple Inc. (AAPL) [ST] "
         "P 99/99/202609/03/2026$1,001 - $15,000 F S: New "
-        + "padding to exceed the 500-byte scanned-form threshold. " * 6
+        + "padding to exceed the 500-byte scanned-form threshold. " * 10
     )
     trades = parse_ptr_pdf(_pdf_bytes(text))
     assert trades == []
+
+
+def test_download_index_unzips_first_txt(monkeypatch):
+    import io
+    import zipfile
+
+    import httpx
+
+    from app.ingestion.clerk import ClerkHouseSource
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr(
+            "index.txt",
+            "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\r\n"
+            "\tTaylor\tDavid\t\tP\tOH02\t2026\t9/5/2026\t20035392\r\n",
+        )
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+        def raise_for_status(self):
+            pass
+
+    seen = {}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        return _Resp(archive.getvalue())
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    src = ClerkHouseSource(year=2026)
+
+    text = src._download_index(2026)
+
+    assert "20035392" in text and "20035392".startswith("2")
+    assert "2026FD.zip" in seen["url"]
+
+
+def test_download_pdf_returns_bytes(monkeypatch):
+    import httpx
+
+    from app.ingestion.clerk import ClerkHouseSource
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+        def raise_for_status(self):
+            pass
+
+    seen = {}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        return _Resp(b"%PDF-1.4 fake")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    src = ClerkHouseSource(year=2026)
+
+    assert src._download_pdf("2026", "20035392") == b"%PDF-1.4 fake"
+    assert "20035392.pdf" in seen["url"]
+
+
+def test_malformed_record_skipped_without_aborting_poll(monkeypatch):
+    """A row that crashes the record builder is logged and skipped; the rest of
+    the poll (and the seen-set marking) still proceeds."""
+    import app.ingestion.clerk as clerk
+
+    def boom(row, now):
+        raise ValueError("row malformed")
+
+    monkeypatch.setattr(clerk, "_record", boom)
+    src = ClerkHouseSource(
+        year=2026,
+        fetch_index=lambda year: INDEX,
+        fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
+    )
+
+    result = src.fetch_recent([], 30 * 86400)
+
+    assert result.tweets == []
+    assert result.errors == []  # a malformed row is not a source failure
 
 
 def test_caps_pdfs_per_poll_then_breaks():

@@ -264,6 +264,61 @@ def test_agent_accepts_nameless_answer_arguments():
     assert result.sources == ["https://disclosures-clerk.house.gov/x.pdf"]
 
 
+def test_allowlist_rejects_index_constraint_statements():
+    """Index/constraint DDL is caught by the dedicated pattern check (beyond
+    the generic CREATE clause block)."""
+    for query in (
+        "CREATE INDEX idx FOR (n:Event) ON (n.id)",
+        "CREATE CONSTRAINT c FOR (n:Event) REQUIRE n.id IS UNIQUE",
+    ):
+        violations = validate_cypher(query)
+        assert any("index/constraint" in v for v in violations)
+
+
+def test_query_result_as_dict_snapshot():
+    from app.query.agent import QueryResult
+
+    q = QueryResult(
+        question="Which tickers?",
+        cypher="MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 5",
+        allowed=True,
+        rows=[{"ticker": "NVDA"}],
+        answer="NVDA.",
+        sources=["https://x.com/unusual_whales/status/1"],
+    )
+    snapshot = q.as_dict()
+    assert snapshot["question"] == "Which tickers?"
+    assert snapshot["allowed"] is True
+    assert snapshot["has_data"] is True
+    assert snapshot["rows"] == [{"ticker": "NVDA"}]
+
+
+def test_bounded_rejects_empty_query():
+    agent = QueryAgent(llm=object(), store=object())  # type: ignore[arg-type]
+    assert agent._bounded("  ;   ") == ""
+
+
+def test_agent_falls_back_when_answer_contains_no_answer_call():
+    """If the LLM replies to the grounding question without an answer tool
+    call, the agent falls back to sources harvested from the rows."""
+
+    class StubbornLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            return LLMResponse(
+                tool_calls=[ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})]
+            )
+
+    class OneRowStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            return [{"ticker": "NVDA", "u": "https://x.com/unusual_whales/status/1"}]
+
+    agent = QueryAgent(llm=StubbornLLM(), store=OneRowStore())
+    result = agent.ask("Which tickers?")
+
+    assert "couldn't summarize" in result.answer
+    assert result.sources == ["https://x.com/unusual_whales/status/1"]
+
+
 def test_sources_from_rows_accepts_any_source_url():
     agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
     rows = [

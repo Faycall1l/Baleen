@@ -197,6 +197,22 @@ def test_real_token_includes_x_source():
     assert len(scheduler.sources) == 5  # disclosures + clerk-direct + EDGAR + options radar + X
 
 
+def test_start_warns_when_x_api_not_configured(caplog):
+    import logging
+
+    settings = Settings(_env_file=None)  # default bearer token is a placeholder
+    scheduler = BaleenScheduler(settings, _FakeProcessing(), interval_seconds=60)
+
+    with caplog.at_level(logging.WARNING, logger="app.scheduler"):
+        scheduler.start()
+    try:
+        assert scheduler.scheduler.running
+        assert "X API token is not configured" in caplog.text
+        assert scheduler.scheduler.get_job(scheduler._job_id) is not None
+    finally:
+        scheduler.stop()
+
+
 def test_build_scheduler_uses_poll_interval(monkeypatch):
     import app.main as main
 

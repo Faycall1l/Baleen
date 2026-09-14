@@ -239,3 +239,88 @@ def test_non_list_fetcher_surfaces_as_source_error():
     assert result.tweets == []
     assert len(result.errors) == 1
     assert "expected a list" in result.errors[0]
+
+
+# ---------------------------------------------------------------------------
+# Feed resilience + download path
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_row_is_skipped_not_crash(monkeypatch):
+    """A row that explodes inside the record builder is skipped; the rest of
+    the poll still emits its records (and the failure is not an error)."""
+    import app.ingestion.disclosures as disclosures
+
+    good = _row(transaction_date="2026-08-26")
+    broken = _row(transaction_date="2026-08-26", id="broken-row")
+
+    real = disclosures._record
+
+    def flaky(row, now):
+        if row.get("id") == "broken-row":
+            raise AttributeError("unexpected field type")
+        return real(row, now)
+
+    monkeypatch.setattr(disclosures, "_record", flaky)
+    src = _source([broken, good], lookback_days=30)
+    result = src.fetch_recent([], 3600)
+
+    assert len(result.tweets) == 1
+    assert result.tweets[0].tweet_id == "ptr-senate_20035392_g5"
+    assert result.errors == []
+
+
+def test_cached_rows_reused_within_ttl():
+    from app.ingestion.disclosures import CongressDisclosureSource
+
+    calls = {"n": 0}
+
+    def fetcher():
+        calls["n"] += 1
+        return [_row(transaction_date="2026-08-26")]
+
+    src = CongressDisclosureSource(fetcher=fetcher, lookback_days=30)
+    src.fetch_recent([], 3600)
+    src.fetch_recent([], 3600)
+
+    assert calls["n"] == 1  # second poll served from the TTL'd cache
+
+
+def test_fetch_mirror_uses_httpx(monkeypatch):
+    import httpx
+
+    from app.ingestion.disclosures import CongressDisclosureSource
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [{"id": "senate_1"}]
+
+    seen = {}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    src = CongressDisclosureSource(
+        mirror_url="https://example.com/trades.json", timeout_seconds=5
+    )
+
+    assert src._fetch_mirror() == [{"id": "senate_1"}]
+    assert "trades.json" in seen["url"]
+
+
+def test_maybe_enrich_event_never_raises_on_enrichment_error(monkeypatch):
+    """Even if grounding itself crashes, maybe_enrich_event keeps the model's
+    output and never raises."""
+    def boom(tweet, event):
+        raise RuntimeError("grounding failed")
+
+    monkeypatch.setattr("app.ingestion.disclosures.enrich_congress_trade", boom)
+    tweet = _tweet()
+    event = _event()
+
+    assert maybe_enrich_event(tweet, event) is event

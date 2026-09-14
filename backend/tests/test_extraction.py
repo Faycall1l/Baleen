@@ -696,3 +696,134 @@ def test_insider_trade_tool_validates():
     )
     assert isinstance(event, InsiderTradeEvent)
     assert event.ticker == "GPUS"
+
+
+# ---------------------------------------------------------------------------
+# Client argument unwrapping + chat-mode matrix
+# ---------------------------------------------------------------------------
+
+
+def test_unwrap_arguments_handles_envelopes_and_bare_action_input():
+    from app.extraction.client import _unwrap_arguments
+
+    assert _unwrap_arguments({"arguments": {"cypher": "MATCH (n) RETURN n"}}) == {"cypher": "MATCH (n) RETURN n"}
+    assert _unwrap_arguments({"arguments": '{"a": 1}'}) == {"a": 1}
+    assert _unwrap_arguments({"parameters": {"b": 2}}) == {"b": 2}
+    # ReAct-style bare string input maps to the query agent's single cypher field
+    assert _unwrap_arguments({"action_input": "MATCH (n) RETURN n"}) == {"cypher": "MATCH (n) RETURN n"}
+    # Unparseable string in a non-action_input key falls through to the envelope
+    assert _unwrap_arguments({"arguments": "not-json", "x": 1}) == {"arguments": "not-json", "x": 1}
+    # No known envelope key: flat field objects pass through unchanged
+    assert _unwrap_arguments({"flat": True}) == {"flat": True}
+
+
+def test_tools_mode_does_not_fallback_to_json(monkeypatch):
+    from app.extraction.client import LLMError
+
+    client = LLMClient("http://x", "k", "m", tool_mode="tools")
+
+    def broken_tools(messages, tools, tool_choice):
+        raise LLMError("native tool-calling is broken")
+
+    monkeypatch.setattr(client, "_chat_tools", broken_tools)
+
+    with pytest.raises(LLMError, match="native tool-calling is broken"):
+        client.chat([{"role": "user", "content": "hi"}], tools=[{"x": 1}])
+
+
+def test_plain_chat_round_trip(monkeypatch):
+    """chat() without tools runs the plain (non-tool) path end to end."""
+    client = LLMClient("http://x", "k", "m")
+    monkeypatch.setattr(
+        client, "_post",
+        lambda payload: {"choices": [{"message": {"role": "assistant", "content": "hello"}}]},
+    )
+
+    resp = client.chat([{"role": "user", "content": "hi"}])
+
+    assert resp.content == "hello"
+    assert not resp.has_tool_call
+
+
+def test_chat_tools_success_path(monkeypatch):
+    client = LLMClient("http://x", "k", "m")
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"function": {"name": "extract_options_flow", "arguments": '{"ticker": "NVDA"}'}}
+                    ],
+                }
+            }
+        ]
+    }
+    monkeypatch.setattr(client, "_post", lambda payload: data)
+
+    resp = client.chat(
+        [{"role": "user", "content": "hi"}],
+        tools=build_tool_definitions(),
+        tool_choice="required",
+    )
+
+    assert resp.has_tool_call
+    assert resp.tool_calls[0].name == "extract_options_flow"
+
+
+def test_chat_tools_raises_when_model_ignores_tool_request(monkeypatch):
+    """A 200 response with no tool_calls for a tools request is an LLMError —
+    in `tools` mode it propagates (the caller decides what to do)."""
+    from app.extraction.client import LLMError
+
+    client = LLMClient("http://x", "k", "m", tool_mode="tools")
+    monkeypatch.setattr(
+        client, "_post",
+        lambda payload: {"choices": [{"message": {"role": "assistant", "content": "sorry"}}]},
+    )
+
+    with pytest.raises(LLMError, match="no tool_calls"):
+        client.chat(
+            [{"role": "user", "content": "hi"}],
+            tools=[{"type": "function", "function": {"name": "t"}}],
+        )
+
+
+def test_post_non_json_body_raises_transport(monkeypatch):
+    import json
+
+    from app.extraction.client import LLMTransportError
+
+    class _FakeResponse:
+        status_code = 200
+        text = "<html>not json</html>"
+
+        def json(self):
+            raise json.JSONDecodeError("Expecting value", "", 0)
+
+    client = LLMClient("http://llm", "k", "m")
+    monkeypatch.setattr(client._http, "post", lambda *a, **k: _FakeResponse())
+
+    with pytest.raises(LLMTransportError, match="non-JSON"):
+        client._post({"messages": []})
+
+
+def test_constrained_json_empty_array_raises():
+    from app.extraction.client import InvalidJSONError
+
+    client = LLMClient("http://x", "k", "m")
+
+    with pytest.raises(InvalidJSONError, match="no tool call matched"):
+        client._parse_tool_calls_from_json("[]", [])
+
+
+def test_malformed_closed_json_block_is_invalid_json_error():
+    """A JSON-looking block that is balanced-brace but invalid inside surfaces
+    InvalidJSONError (issue #14), not a bare JSONDecodeError."""
+    from app.extraction.client import InvalidJSONError
+
+    client = LLMClient("http://x", "k", "m")
+
+    with pytest.raises(InvalidJSONError, match="malformed JSON block"):
+        client._parse_tool_calls_from_json('prefix {"ticker": } trailing', [])

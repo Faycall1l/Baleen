@@ -758,3 +758,153 @@ def test_close_services_survives_close_failures(monkeypatch):
     routes.close_services()  # must not raise
 
     assert routes._neo4j is None and routes._store is None and routes._llm is None
+
+
+# ---------------------------------------------------------------------------
+# Remaining route branches + engine factories
+# ---------------------------------------------------------------------------
+
+
+def test_node_key_falls_back_when_label_key_missing():
+    from app.api.routes import _node_key
+
+    # Ticker's label key is `ticker`; absent props fall back to id, then repr.
+    assert _node_key("Ticker", {"ticker": "NVDA"}) == "NVDA"
+    assert _node_key("Ticker", {"id": "evt-1"}) == "evt-1"
+    fallback = _node_key("Ticker", {"anything": 1})
+    assert fallback.startswith("{")
+
+
+def test_reports_digest_leaderboard_success_paths(monkeypatch):
+    """The happy-path returns for /api/reports, /api/reports/digest and
+    /api/leaderboard (the error 500s are already covered elsewhere)."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+
+    class _Store:
+        @staticmethod
+        def get_reports(limit=20, kind=None):
+            return ["brief-row"] if kind is None else [f"{kind}-row"]
+
+        @staticmethod
+        def get_leaderboard(limit=20):
+            return [{"politician": "Zed Zed"}]
+
+    monkeypatch.setattr(routes, "_get_store", lambda: _Store())
+
+    class _Digest:
+        @staticmethod
+        def ensure_digest(period=None):
+            return {"id": 8, "period": "2026-09-14"}
+
+    monkeypatch.setattr(routes, "get_report_engine", lambda: _Digest())
+
+    with _client() as c:
+        all_reports = c.get("/api/reports").json()
+        assert all_reports == {"reports": ["brief-row"], "count": 1}
+
+        digests = c.get("/api/reports?kind=digest").json()
+        assert digests["reports"] == ["digest-row"]
+
+        digest = c.get("/api/reports/digest").json()
+        assert digest["report"]["id"] == 8
+
+        leaders = c.get("/api/leaderboard").json()
+        assert leaders["count"] == 1 and leaders["leaders"][0]["politician"] == "Zed Zed"
+
+
+def test_engine_factories_wire_real_dependencies(monkeypatch):
+    """The lazy factories build production engines against whatever getters are
+    wired — here stubbed out, so no DB clients are constructed."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    monkeypatch.setattr(routes, "_get_store", lambda: object())
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: object())
+    monkeypatch.setattr(routes, "_get_llm", lambda: object())
+
+    from app.alerts.engine import AlertEngine
+    from app.pipeline import ProcessingPipeline
+    from app.reports.engine import ReportEngine
+
+    assert isinstance(routes.get_alert_engine(), AlertEngine)
+    assert isinstance(routes.get_report_engine(), ReportEngine)
+    assert isinstance(routes._get_processing(), ProcessingPipeline)
+
+
+def test_stream_route_wraps_events_in_sse_response(monkeypatch):
+    """The /api/stream route wires the events generator into an SSE streaming
+    response. Called directly (not over TestClient: infinite streams deadlock
+    its transport), with an immediately-disconnected request so the generator
+    yields the keepalive chunk once and terminates."""
+    import asyncio
+
+    import app.api.routes as routes
+    from starlette.responses import StreamingResponse
+
+    from app.api.routes import stream
+
+    _quiet_settings(monkeypatch)
+
+    class _EmptyStore:
+        @staticmethod
+        def get_reports_since(last_id, limit=50):
+            return []
+
+        @staticmethod
+        def get_alerts_since(last_id, limit=50):
+            return []
+
+    monkeypatch.setattr(routes, "_get_store", lambda: _EmptyStore())
+
+    class _Request:
+        def __init__(self):
+            self._n = 0
+
+        async def is_disconnected(self):
+            self._n += 1
+            return self._n > 1  # one quiet poll, then disconnect
+
+    async def run():
+        response = await stream(
+            request=_Request(), after_report=0, after_alert=0, poll_seconds=1.0
+        )
+        assert isinstance(response, StreamingResponse)
+        assert response.media_type == "text/event-stream"
+        chunks = [c async for c in response.body_iterator]
+        return response, chunks
+
+    response, chunks = asyncio.run(run())
+    assert any("keepalive" in c for c in chunks)
+
+
+def test_lifespan_starts_and_stops_scheduler(monkeypatch):
+    """With scheduler_enabled=True the lifespan boots and later stops a real
+    (here stubbed) scheduler instance."""
+    from app.config import Settings
+
+    captured = {"started": False, "stopped": False}
+
+    class _Recorder:
+        def start(self):
+            captured["started"] = True
+
+        def stop(self):
+            captured["stopped"] = True
+
+    enabled = _quiet_settings(monkeypatch).model_copy(
+        update={"scheduler_enabled": True}
+    )
+    monkeypatch.setattr("app.main.get_settings", lambda: enabled)
+    monkeypatch.setattr("app.api.routes.get_settings", lambda: enabled)
+    monkeypatch.setattr("app.main._build_scheduler", lambda s: _Recorder())
+
+    with _client() as c:
+        try:
+            assert c.get("/health").status_code == 200
+        finally:
+            pass
+
+    assert captured["started"] is True
+    assert captured["stopped"] is True

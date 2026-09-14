@@ -159,3 +159,78 @@ def test_mixed_transport_and_success_does_not_raise(postgres_store):
     # Only the successfully-processed tweet is marked extracted.
     pending = postgres_store.get_new_tweets(limit=10)
     assert [t.tweet_id for t in pending] == ["bad-down"]
+
+
+class _UnparsedExtractor:
+    """Extracts a low-confidence UnparsedEvent for every tweet."""
+
+    def extract(self, tweet: RawTweet):
+        from app.models.events import UnparsedEvent
+
+        return UnparsedEvent(
+            tweet_id=tweet.tweet_id,
+            tweet_url=tweet.url,
+            confidence=0.3,
+            raw_text=tweet.text,
+            reason="low confidence",
+        )
+
+
+class _CountingAlerts:
+    def __init__(self):
+        self.count = 0
+
+    def evaluate_event(self, event) -> list[dict]:
+        self.count += 1
+        return [{"id": self.count}]
+
+
+class _BoomReports:
+    def write_brief(self, event):
+        raise RuntimeError("report engine blew")
+
+
+def test_unparsed_tweets_count_without_alerting_or_reporting(postgres_store):
+    """Unparsed rows still count as processed, but never fire alerts and their
+    report engine (if any) is not consulted."""
+    postgres_store.insert_raw_tweet(_raw("up-1"))
+    postgres_store.insert_raw_tweet(_raw("up-2"))
+
+    alerts = _CountingAlerts()
+    pipeline = ProcessingPipeline(
+        extractor=_UnparsedExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=alerts,
+        store=postgres_store,
+        report_engine=_BoomReports(),  # raises when consulted; unparsed must not consult
+    )
+
+    summary = pipeline.process_new()
+
+    assert summary["processed"] == 2
+    assert summary["unparsed"] == 2
+    assert alerts.count == 0
+    assert summary["alerts"] == 0
+    assert summary["reports"] == 0
+    assert summary["failed"] == 0
+
+
+def test_report_engine_failure_is_isolated_to_that_tweet(postgres_store):
+    """A crash in brief writing must not abort the batch — the tweet is still
+    processed and its alert survives."""
+    postgres_store.insert_raw_tweet(_raw("ok-a"))
+
+    pipeline = ProcessingPipeline(
+        extractor=_RaisingExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=_CountingAlerts(),
+        store=postgres_store,
+        report_engine=_BoomReports(),
+    )
+
+    summary = pipeline.process_new()
+
+    assert summary["processed"] == 1
+    assert summary["alerts"] == 1
+    assert summary["reports"] == 0
+    assert summary["failed"] == 0

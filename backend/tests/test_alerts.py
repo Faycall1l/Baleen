@@ -232,6 +232,17 @@ def test_evaluate_event_self_heals_and_returns_empty_when_no_rules():
     assert store.ensure_calls == len(AlertRules.definitions())
 
 
+def test_evaluate_unknown_rule_never_triggers():
+    """Unregistered rule names evaluate to an empty trigger, never raise."""
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    trigger = rules.evaluate("no_such_rule", None)  # type: ignore[arg-type]
+
+    assert trigger.rule_name == "no_such_rule"
+    assert trigger.facts == []
+    assert trigger.triggered is False
+
+
 def test_evaluate_event_skips_rule_when_evaluation_raises(monkeypatch, postgres_store, neo4j_store):
     """One rule blowing up (e.g. a graph query error) must not stop the loop
     or raise; the alert simply doesn't get created for that rule."""
