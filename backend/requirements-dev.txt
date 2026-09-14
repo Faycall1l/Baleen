@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest>=8.2,<9
+coverage>=7.6,<8
 httpx2>=2,<3  # starlette TestClient prefers httpx2; avoids deprecation fallback to httpx
