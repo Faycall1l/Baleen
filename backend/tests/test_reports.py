@@ -203,3 +203,75 @@ def test_insider_brief_title_and_template():
     assert brief_title(event) == "Milton C Ault III bought GPUS ($2,500.00)"
     body = template_brief(event, brief_facts(event, {}))
     assert "Milton C Ault III" in body and "GPUS" in body
+
+
+def test_unparsed_events_get_fallback_title_and_template():
+    unparsed = UnparsedEvent(tweet_id="u-1", tweet_url="https://x/u", confidence=0.0,
+                             raw_text="noise", reason="x")
+    assert brief_title(unparsed) == f"Event {unparsed.deterministic_id}"
+    facts = brief_facts(unparsed, {})
+    assert template_brief(unparsed, facts) == "Event recorded. Source: https://x/u"
+
+
+def test_brief_survives_neighborhood_failure():
+    """A neo4j outage must not block brief generation — template fallback."""
+    from app.extraction.client import LLMTransportError
+
+    class BoomNeo4j(_FakeNeo4j):
+        def run_read(self, *a, **k):
+            raise RuntimeError("neo4j down")
+
+    class DownLLM(_StubLLM):
+        def chat(self, messages, **kwargs):
+            raise LLMTransportError("down")
+
+    store = _FakeStore()
+    engine = _engine(store=store, rows=[], llm=DownLLM())
+    engine.neo4j = BoomNeo4j([])
+    event = _congress()
+
+    assert engine._neighborhood(event.deterministic_id) == {}
+    report = engine.write_brief(event)
+    assert report is not None
+    assert "Maxine Waters" in store.reports[0]["body"]
+
+
+def test_ensure_digest_serves_race_winner():
+    """If insert_report loses a race but a winner already exists, serve it."""
+    class RaceStore(_FakeStore):
+        def insert_report(self, *a, **k):
+            self.reports.append({"id": 1, "kind": "digest", "period": "2026-09-10",
+                                 "title": "Market digest — 2026-09-10", "body": "winner"})
+            return None
+
+    store = RaceStore()
+    engine = _engine(store=store, rows=[], llm=_StubLLM())
+    result = engine.ensure_digest("2026-09-10")
+    assert result["body"] == "winner"
+    assert result["id"] == 1
+
+
+def test_ensure_digest_degrades_gracefully_on_backend_error():
+    class BoomStore(_FakeStore):
+        def insert_report(self, *a, **k):
+            raise RuntimeError("db down")
+
+    engine = _engine(store=BoomStore(), rows=[], llm=_StubLLM())
+    result = engine.ensure_digest("2026-09-10")
+    assert result["kind"] == "digest" and result["period"] == "2026-09-10"
+    assert "unavailable" in result["body"]
+
+
+def test_digest_facts_survive_graph_and_alert_failures():
+    class BoomNeo4j(_FakeNeo4j):
+        def run_read(self, *a, **k):
+            raise RuntimeError("neo4j down")
+
+    class BoomStore(_FakeStore):
+        def get_alerts(self, limit=50):
+            raise RuntimeError("pg down")
+
+    engine = _engine(store=BoomStore(), rows=[], llm=_StubLLM())
+    engine.neo4j = BoomNeo4j([])
+    facts = engine._digest_facts("2026-09-10")
+    assert facts["events"] == 0 and facts["tickers"] == [] and facts["alerts"] == []

@@ -115,3 +115,54 @@ def test_suspicious_timing_survives_junk_excess_values_issues_10(postgres_store)
     ranked = SignalsEngine(None, postgres_store).suspicious_timing(min_excess_pct=1.0)
 
     assert all(r["who"] != "Junk Gal" for r in ranked)
+
+
+# ---------------------------------------------------------------------------
+# Degradation: every signal degrades to [] when its store is down, and the
+# bundle shape stays intact so the UI never gets a 500 from a query hiccup.
+# ---------------------------------------------------------------------------
+
+
+class _Neo4jDown:
+    def run(self, *a, **k):
+        raise RuntimeError("neo4j down")
+
+    def run_read(self, *a, **k):
+        raise RuntimeError("neo4j down")
+
+
+class _PostgresDown:
+    class engine:
+        class connect:
+            def __enter__(self):
+                raise RuntimeError("postgres down")
+
+            def __exit__(self, *a):
+                pass
+
+    def __init__(self, *a, **k):
+        pass
+
+
+def _down_engine():
+    return SignalsEngine(_Neo4jDown(), _PostgresDown())
+
+
+def test_signal_queries_degrade_to_empty_list_when_neo4j_down():
+    engine = _down_engine()
+    assert engine.momentum("2026-01-01") == []
+    assert engine.clusters("2026-01-01") == []
+    assert engine.options_meter() == []
+    assert engine.uncovered() == []
+    assert engine.similar("W000187") == []
+
+
+def test_suspicious_timing_degrades_to_empty_list_when_postgres_down():
+    assert _down_engine().suspicious_timing() == []
+
+
+def test_bundle_stays_shaped_when_all_backends_down():
+    bundle = _down_engine().bundle(window_days=90)
+    assert bundle["window_days"] == 90
+    for key in ("momentum", "clusters", "options_meter", "uncovered", "suspicious"):
+        assert bundle[key] == []

@@ -469,3 +469,292 @@ def test_query_rate_limited_per_ip(monkeypatch):
         assert c.get("/api/graph").status_code == 200
         assert c.get("/api/graph").status_code == 200
         assert c.get("/api/graph").status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Degradation: every surface returns a clean 500 with a stable body when its
+# backend raises, so a transient DB/Neo4j/LLM failure never leaks a traceback.
+# ---------------------------------------------------------------------------
+
+
+class _Neo4jBoom:
+    def run(self, *a, **k):
+        raise RuntimeError("neo4j exploded")
+
+    def run_read(self, *a, **k):
+        raise RuntimeError("neo4j exploded")
+
+
+class _StoreBoom:
+    def __init__(self, *a, **k):
+        pass
+
+    def ensure_rule(self, *a, **k):
+        pass
+
+    def get_alerts(self, **k):
+        raise RuntimeError("postgres exploded")
+
+    def get_reports(self, **k):
+        raise RuntimeError("postgres exploded")
+
+    def get_leaderboard(self, **k):
+        raise RuntimeError("postgres exploded")
+
+    def get_reports_since(self, after):
+        raise RuntimeError("postgres exploded")
+
+    def get_alerts_since(self, after):
+        raise RuntimeError("postgres exploded")
+
+    class engine:
+        def dispose(self):
+            raise RuntimeError("dispose exploded")
+
+
+def _quiet_settings(monkeypatch):
+    """Point both main.lifespan and routes at settings with the scheduler and
+    alert seeding switched off, so failure-path tests don't spin up live jobs."""
+    from app.config import get_settings
+
+    quiet = get_settings().model_copy(
+        update={"scheduler_enabled": False, "seed_default_alerts": False}
+    )
+    monkeypatch.setattr("app.main.get_settings", lambda: quiet)
+    monkeypatch.setattr("app.api.routes.get_settings", lambda: quiet)
+    return quiet
+
+
+def _boom_app(monkeypatch) -> None:
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: _Neo4jBoom())
+    monkeypatch.setattr(routes, "_get_store", lambda: _StoreBoom())
+
+
+def test_graph_export_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+    with _client() as c:
+        res = c.get("/api/graph")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("graph export failed")
+
+
+def test_alerts_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+    with _client() as c:
+        res = c.get("/api/alerts")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("alerts fetch failed")
+
+
+def test_reports_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+    with _client() as c:
+        res = c.get("/api/reports")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("reports fetch failed")
+
+
+def test_leaderboard_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+    with _client() as c:
+        res = c.get("/api/leaderboard")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("leaderboard fetch failed")
+
+
+def test_signals_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+
+    class _SignalsBoom:
+        def bundle(self, **k):
+            raise RuntimeError("signals exploded")
+
+        def similar(self, **k):
+            raise RuntimeError("signals exploded")
+
+    import app.api.routes as routes
+
+    monkeypatch.setattr(routes, "get_signals_engine", lambda: _SignalsBoom())
+    with _client() as c:
+        assert c.get("/api/signals").status_code == 500
+        assert c.get("/api/signals/similar?politician_id=W000187").status_code == 500
+
+
+def test_digest_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+
+    class _DigestBoom:
+        def ensure_digest(self, **k):
+            raise RuntimeError("digest exploded")
+
+    import app.api.routes as routes
+
+    monkeypatch.setattr(routes, "get_report_engine", lambda: _DigestBoom())
+    with _client() as c:
+        res = c.get("/api/reports/digest")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("digest failed")
+
+
+def test_query_route_returns_payload(monkeypatch):
+    """/api/query happy path with a stubbed agent: no live LLM needed."""
+    import app.api.routes as routes
+
+    class FakeAgent:
+        def __init__(self, llm, store):
+            self.llm, self.store = llm, store
+
+        def ask(self, question):
+            return type(
+                "Res",
+                (),
+                {"as_dict": lambda self: {"answer": "a", "rows": [{"ticker": "NVDA"}], "sources": [], "allowed": True, "has_data": True, "error": None}},
+            )()
+
+    monkeypatch.setattr(routes, "QueryAgent", FakeAgent)
+    monkeypatch.setattr(routes, "_get_llm", lambda: object())
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: object())
+    _quiet_settings(monkeypatch)
+
+    with _client() as c:
+        res = c.post("/api/query", json={"question": "What did Warren buy?"})
+        assert res.status_code == 200
+        assert res.json()["rows"] == [{"ticker": "NVDA"}]
+
+
+def test_query_route_error_is_json_500(monkeypatch):
+    import app.api.routes as routes
+
+    class BoomAgent:
+        def __init__(self, llm, store):
+            pass
+
+        def ask(self, question):
+            raise RuntimeError("agent exploded")
+
+    monkeypatch.setattr(routes, "QueryAgent", BoomAgent)
+    monkeypatch.setattr(routes, "_get_llm", lambda: object())
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: object())
+    _quiet_settings(monkeypatch)
+
+    with _client() as c:
+        res = c.post("/api/query", json={"question": "hi"})
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("query agent failed")
+
+
+def test_stream_breaks_cleanly_when_store_raises():
+    """A backend failure mid-stream terminates the SSE generator without
+    throwing — the client just reconnects and resumes from its cursor."""
+    import asyncio
+
+    from app.api.routes import stream_events
+
+    store = _StoreBoom()
+
+    async def disconnected():
+        return False
+
+    async def collect():
+        return [c async for c in stream_events(store, disconnected, 0, 0, poll_seconds=0.01)]
+
+    assert asyncio.run(collect()) == []
+
+
+def test_stream_emits_alert_and_report_rows():
+    import asyncio
+
+    from app.api.routes import stream_events
+
+    class RowStore:
+        def __init__(self):
+            self.calls = 0
+
+        def get_reports_since(self, after):
+            return [{"id": 1, "kind": "brief", "event_id": "e1", "title": "t", "body": "b"}]
+
+        def get_alerts_since(self, after):
+            return [{"id": 2, "level": "high", "event_id": "e2", "summary": "s", "kind": "k"}]
+
+    polls = {"n": 0}
+
+    async def disconnected():
+        polls["n"] += 1
+        return polls["n"] >= 2
+
+    async def collect():
+        return [c async for c in stream_events(RowStore(), disconnected, 0, 0, poll_seconds=0.01)]
+
+    chunks = asyncio.run(collect())
+    reports = [c for c in chunks if "\nevent: report\n" in c]
+    alerts = [c for c in chunks if "\nevent: alert\n" in c]
+    assert reports and reports[0].startswith("id: r1")
+    assert alerts and alerts[0].startswith("id: a2")
+
+
+def test_client_ip_honors_forwarded_header():
+    import app.api.routes as routes
+    from fastapi import Request
+    from starlette.datastructures import Headers
+
+    req = Request(
+        {
+            "type": "http",
+            "headers": Headers({"x-forwarded-for": "203.0.113.7, 10.0.0.1"}).raw,
+            "client": ("10.0.0.1", 12345),
+        }
+    )
+    assert routes._client_ip(req) == "203.0.113.7"
+
+
+def test_rate_limiter_prunes_stale_keys_on_sweep(monkeypatch):
+    """The sweep only runs past 4096 total keys, but then it evicts every
+    entry older than the window — so a stale flood can never pin the map."""
+    import app.api.routes as routes
+
+    clock = {"now": 0.0}
+
+    def fake_now():
+        return clock["now"]
+
+    monkeypatch.setattr(routes.time, "monotonic", fake_now)
+    monkeypatch.setattr(routes, "_rate_limiter", None)
+
+    limiter = routes._RateLimiter(window_seconds=60, max_requests=2)
+    for i in range(5000):
+        limiter.allow(f"stale-{i}")
+    assert len(limiter._hits) == 5000  # stays resident inside the window
+
+    clock["now"] += 120.0  # every entry is now older than the window
+    for _ in range(3):  # hammer one hot key -> 3rd call is a denial -> sweep
+        limiter.allow("hot")
+
+    assert set(limiter._hits) == {"hot"}  # stale-* entries all evicted
+
+
+def test_close_services_survives_close_failures(monkeypatch):
+    import app.api.routes as routes
+
+    class _BadNeo4j:
+        def close(self):
+            raise RuntimeError("close exploded")
+
+    class _BadStore:
+        class engine:
+            def dispose(self):
+                raise RuntimeError("dispose exploded")
+
+    class _BadLLM:
+        def close(self):
+            raise RuntimeError("llm close exploded")
+
+    monkeypatch.setattr(routes, "_neo4j", _BadNeo4j())
+    monkeypatch.setattr(routes, "_store", _BadStore())
+    monkeypatch.setattr(routes, "_llm", _BadLLM())
+
+    routes.close_services()  # must not raise
+
+    assert routes._neo4j is None and routes._store is None and routes._llm is None

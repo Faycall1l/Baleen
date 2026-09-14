@@ -193,3 +193,49 @@ def test_maybe_enrich_never_raises():
     tweet.raw_json = {"source_kind": SOURCE_KIND}  # minimal meta
     event = _event()
     assert maybe_enrich_event(tweet, event) is not None
+
+
+# ---------------------------------------------------------------------------
+# Deterministic row helpers
+# ---------------------------------------------------------------------------
+
+
+def test_stable_id_falls_back_to_hash_without_row_id():
+    from app.ingestion.disclosures import _stable_id
+
+    row = _row().copy()
+    row.pop("id")
+    sid = _stable_id(row)
+    assert sid.startswith("ptr-")
+    assert sid == _stable_id(row)  # deterministic per (filer, ticker, dates)
+    assert sid != _stable_id({**row, "ticker": "NVDA"})
+
+
+def test_side_verb_covers_buy_sell_exchange_and_unknown():
+    from app.ingestion.disclosures import _side_verb
+
+    assert _side_verb("Purchase") == "purchased"
+    assert _side_verb("buy") == "purchased"
+    assert _side_verb("Sale (Full)") == "sold"
+    assert _side_verb("Sell") == "sold"
+    assert _side_verb("Exchange") == "exchanged"
+    assert _side_verb("transfer") == "traded"
+
+
+def test_parse_day_rejects_garbage():
+    from app.ingestion.disclosures import _parse_day
+
+    assert _parse_day("not-a-date") is None
+    assert _parse_day("2026-13-40") is None
+    assert _parse_day("2026-09-05") == date(2026, 9, 5)
+
+
+def test_non_list_fetcher_surfaces_as_source_error():
+    """A mirror endpoint returning a non-list (e.g. an error envelope) must
+    surface through FetchResult.errors, not crash the poll."""
+    src = _source({"error": "oops"})
+    result = src.fetch_recent([], 3600)
+
+    assert result.tweets == []
+    assert len(result.errors) == 1
+    assert "expected a list" in result.errors[0]

@@ -117,3 +117,71 @@ def test_sweep_across_watchlist_collects_each_ticker():
 
     assert seen == ["NVDA", "AMD"]
     assert {t.tweet_id.split("-")[1] for t in result.tweets} == {"NVDA", "AMD"}
+
+
+# ---------------------------------------------------------------------------
+# Helper + cache defensive branches
+# ---------------------------------------------------------------------------
+
+
+def test_parse_occ_rejects_impossible_expiry():
+    assert parse_occ("NVDA999999C00110000") is None
+
+
+def test_anomaly_rule_skips_low_ratio_and_unparsable_contracts():
+    from app.ingestion.options import MIN_VOLUME_RATIO
+    from app.ingestion.options import _anomalies
+
+    day = "2026-09-09"
+    contracts = [
+        _contract("BADSYM", volume=9000, oi=2_000_000),   # ratio 0.0045 < min
+        _contract("bogus", volume=9000, oi=100),          # unparsable symbol
+    ]
+    assert _anomalies(contracts, day) == []
+
+    ratio_ok = _contract("NVDA260909C00110000", volume=9000, oi=100)
+    assert _anomalies([ratio_ok], day)[0]["ticker"] == "NVDA"
+
+
+def test_cached_chain_hit_skips_fetcher():
+    payload = _payload([_contract("NVDA260909C00110000", volume=5000, oi=500)])
+    calls = {"n": 0}
+
+    def fetch(ticker: str):
+        calls["n"] += 1
+        return payload
+
+    src = OptionsChainSource(watchlist=["NVDA"], fetcher=fetch)
+    src.fetch_recent([], 3600)
+    src.fetch_recent([], 3600)
+
+    assert calls["n"] == 1  # first poll cached; second reused TTL'd chain
+
+
+def test_non_dict_chain_payload_is_a_fetch_error():
+    def bad(ticker: str):
+        return ["not", "a", "payload"]
+
+    src = OptionsChainSource(watchlist=["NVDA"], fetcher=bad)
+    result = src.fetch_recent([], 3600)
+
+    assert result.tweets == []
+    assert len(result.errors) == 1 and "NVDA" in result.errors[0]
+    # the failure is held in the negative cache, so the immediate re-poll
+    # reports the hold-off instead of re-downloading
+    assert "holding off" in src.fetch_recent([], 3600).errors[0]
+
+
+def test_live_fetch_chain_uses_httpx(monkeypatch):
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": {"options": []}}
+
+    src = OptionsChainSource(watchlist=["NVDA"], timeout_seconds=5)
+
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda url, **k: _Resp())
+    assert src._fetch_chain("NVDA") == {"data": {"options": []}}

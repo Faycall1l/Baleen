@@ -151,6 +151,44 @@ def test_placeholder_token_excludes_x_but_still_ingests_and_processes():
     assert _interval_of(scheduler) == 60
 
 
+def test_no_sources_skips_ingestion_but_still_processes():
+    """A tick with zero configured sources must not be a failure: it skips
+    ingestion (there is nothing to poll) yet still drains pending records."""
+    settings = _live_settings()
+    scheduler = _started_scheduler(settings, interval=60)
+    scheduler.sources = []
+    scheduler.ingestion.run_once = Mock()
+    scheduler.processing.process_new = Mock(return_value={"processed": 1})
+
+    scheduler._tick()
+
+    scheduler.ingestion.run_once.assert_not_called()
+    scheduler.processing.process_new.assert_called_once_with(limit=settings.process_batch_size)
+    assert scheduler._consecutive_failures == 0
+    assert _interval_of(scheduler) == 60
+
+
+def test_start_and_stop_lifecycle() -> None:
+    """start() registers the interval job on a running scheduler; stop()
+    shuts the background thread down (and is safe to call twice)."""
+    scheduler = BaleenScheduler(
+        _live_settings(), _FakeProcessing(), interval_seconds=60
+    )
+
+    scheduler.start()
+    try:
+        assert scheduler.scheduler.running
+        assert scheduler.scheduler.get_job(scheduler._job_id) is not None
+        trigger = scheduler.scheduler.get_job(scheduler._job_id).trigger
+        assert isinstance(trigger, IntervalTrigger)
+        assert trigger.interval.total_seconds() == 60
+    finally:
+        scheduler.stop()
+    assert not scheduler.scheduler.running
+
+    scheduler.stop()  # idempotent: never raises after shutdown
+
+
 def test_real_token_includes_x_source():
     from app.ingestion.x_api import XApiSource
 

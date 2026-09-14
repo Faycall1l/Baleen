@@ -156,6 +156,52 @@ def test_transient_pdf_failure_retried_next_poll_issues_12():
     assert calls["n"] == 2  # filing not skipped after the transient failure
 
 
+def test_parse_index_skips_short_lines_and_bad_dates():
+    index = (
+        "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\r\n"
+        "short-line-no-tabs\r\n"
+        "\tShort\tRow\t\tP\tOH02\t2026\t\x00\t20035392\r\n"
+        "\tTaylor\tDavid\t\tP\tOH02\t2026\tnotadate\t20035393\r\n"
+        "\tValid\tRow\t\tP\tOH02\t2026\t9/5/2026\t20035399\r\n"
+    )
+    filings = parse_index(index)
+    assert [f["doc_id"] for f in filings] == ["20035399"]
+
+
+def test_parse_ptr_pdf_unreadable_bytes_return_empty():
+    assert parse_ptr_pdf(b"this is definitely not a pdf") == []
+
+
+def test_parse_ptr_pdf_skips_trade_with_invalid_transaction_date():
+    text = (
+        "Name: Hon. David J. Taylor State/District:OH02 "
+        "Apple Inc. (AAPL) [ST] "
+        "P 99/99/202609/03/2026$1,001 - $15,000 F S: New "
+        + "padding to exceed the 500-byte scanned-form threshold. " * 6
+    )
+    trades = parse_ptr_pdf(_pdf_bytes(text))
+    assert trades == []
+
+
+def test_caps_pdfs_per_poll_then_breaks():
+    src = ClerkHouseSource(
+        year=2026,
+        max_pdfs_per_poll=1,
+        fetch_index=lambda year: INDEX,
+        fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
+    )
+    result = src.fetch_recent([], 30 * 86400)
+    assert len(result.tweets) == 4  # only the top (newest) filing's trades
+
+
+def test_index_short_line_no_crash():
+    """Extra short lines in the raw index (blank / malformed trailing rows)
+    are skipped; a single bad row must not kill the whole parse."""
+    index = INDEX + "\t\n\n"
+    filings = parse_index(index)
+    assert all(f["doc_id"] for f in filings)
+
+
 def test_today_is_used_for_window():
     today = datetime.now(timezone.utc).date()
     iso = today.isoformat()

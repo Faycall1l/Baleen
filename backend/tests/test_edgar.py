@@ -238,3 +238,81 @@ def test_edgar_user_agent_setting_exists():
     from app.config import Settings
 
     assert "contact:" in Settings(_env_file=None).edgar_user_agent
+
+
+# ---------------------------------------------------------------------------
+# Deterministic extractor helpers (defensive branches)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_atom_rejects_malformed_xml():
+    import pytest
+
+    from app.ingestion.edgar import parse_atom
+
+    with pytest.raises(ValueError, match="unparseable Atom"):
+        parse_atom("<<<< not xml")
+
+
+def test_parse_atom_skips_entries_without_accession_or_link():
+    from app.ingestion.edgar import parse_atom
+
+    entries = parse_atom(ATOM)
+    assert len(entries) == 1  # the link-less "No Link Corp" entry is dropped
+    assert entries[0]["accession"] == "0001214659-26-011648"
+    assert "index.htm" in entries[0]["index_url"]
+
+
+def test_parse_ownership_rejects_malformed_xml():
+    import pytest
+
+    from app.ingestion.edgar import parse_ownership
+
+    with pytest.raises(ValueError, match="unparseable ownership"):
+        parse_ownership("<<<< not xml")
+
+
+def test_parse_ownership_skips_owner_without_name():
+    from app.ingestion.edgar import parse_ownership
+
+    xml = """<ownershipDocument><issuer><issuerCik>1</issuerCik>
+    <issuerName>X Corp</issuerName><issuerTradingSymbol>XXX</issuerTradingSymbol>
+    </issuer><reportingOwner><reportingOwnerId><rptOwnerCik>2</rptOwnerCik>
+    </reportingOwnerId></reportingOwner></ownershipDocument>"""
+    parsed = parse_ownership(xml)
+    assert parsed["owners"] == []
+    assert parsed["ticker"] == "XXX"
+
+
+def test_text_flag_number_and_day_helpers():
+    from app.ingestion.edgar import _flag, _number, _parse_day, _text
+    import xml.etree.ElementTree as ET
+
+    assert _text(None, "x") is None
+    root = ET.fromstring("<r><a>  hello  </a><b /></r>")
+    assert _text(root, "a") == "hello"
+    assert _text(root, "b") is None  # empty element -> None
+
+    assert _flag("1") is True and _flag("YES") is True and _flag("nope") is False and _flag(None) is False
+
+    assert _number("1,200.5") == 1200.5
+    assert _number(None) is None
+    assert _number("n/a") is None
+
+    assert _parse_day("2026-09-09T00:00:00") == date(2026, 9, 9)
+    assert _parse_day("garbage") is None
+    assert _parse_day(None) is None
+
+
+def test_owner_role_orders_multiple_flags():
+    from app.ingestion.edgar import _owner_role
+    import xml.etree.ElementTree as ET
+
+    owner = ET.fromstring(
+        "<o><reportingOwnerRelationship><isOfficer>true</isOfficer>"
+        "<officerTitle>CFO</officerTitle>"
+        "<isDirector>true</isDirector><isTenPercentOwner>true</isTenPercentOwner>"
+        "</reportingOwnerRelationship></o>"
+    )
+    assert _owner_role(owner) == "CFO"
+    assert _owner_role(ET.fromstring("<o />")) is None

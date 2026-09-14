@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from app.alerts.engine import AlertEngine
+from app.alerts.rules import AlertRules
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
 from scripts.seed_reference import seed
@@ -197,3 +198,77 @@ def test_llm_down_during_summary_drafting_uses_template_fallback(
     stored = postgres_store.get_alerts(limit=10)
     assert len(stored) == 1
     assert stored[0]["tweet_id"] == "alert-llmdown-1"
+
+
+# ---------------------------------------------------------------------------
+# Degradation: a hostile/missing backend must not raise out of evaluate_event.
+# ---------------------------------------------------------------------------
+
+
+class _EmptyBackend:
+    def __init__(self):
+        self.ensure_calls = 0
+        self.persisted = []
+
+    def get_active_rules(self):
+        return []  # nothing is ever active
+
+    def ensure_rule(self, *a, **k):
+        self.ensure_calls += 1
+
+    def insert_alert(self, **k):
+        raise RuntimeError("postgres exploded")
+
+
+def test_evaluate_event_self_heals_and_returns_empty_when_no_rules():
+    """A database with zero active rules triggers the ensure_default_rules
+    self-heal; if registration still cannot restore them, evaluate_event
+    returns [] instead of raising."""
+    store = _EmptyBackend()
+    engine = AlertEngine(store=store, neo4j=None, llm=None)  # type: ignore[arg-type]
+    event = _congress_event("alert-empty-1", "W000817", "Elizabeth Warren", "JPM", ["SSBK"])
+
+    assert engine.evaluate_event(event) == []
+    assert store.ensure_calls == len(AlertRules.definitions())
+
+
+def test_evaluate_event_skips_rule_when_evaluation_raises(monkeypatch, postgres_store, neo4j_store):
+    """One rule blowing up (e.g. a graph query error) must not stop the loop
+    or raise; the alert simply doesn't get created for that rule."""
+    engine = _engine(postgres_store, neo4j_store)
+
+    def boom(name, event):
+        raise RuntimeError("graph exploded")
+
+    monkeypatch.setattr(engine.rules, "evaluate", boom)
+
+    event = _congress_event(
+        tweet_id="alert-boom-1",
+        politician_id="W000817",
+        politician_name="Elizabeth Warren",
+        ticker="JPM",
+        committees=["SSBK"],
+    )
+    GraphWriter(neo4j_store).write_event(event)
+
+    assert engine.evaluate_event(event) == []
+
+
+def test_evaluate_event_survives_alert_persist_failure(monkeypatch, postgres_store, neo4j_store):
+    """If inserting the alert row itself fails, the engine logs and moves on
+    rather than tearing down the whole evaluation pass."""
+    from unittest.mock import Mock
+
+    engine = _engine(postgres_store, neo4j_store)
+    monkeypatch.setattr(postgres_store, "insert_alert", Mock(side_effect=RuntimeError("insert exploded")))
+
+    event = _congress_event(
+        tweet_id="alert-persist-1",
+        politician_id="W000817",
+        politician_name="Elizabeth Warren",
+        ticker="JPM",
+        committees=["SSBK"],
+    )
+    GraphWriter(neo4j_store).write_event(event)
+
+    assert engine.evaluate_event(event) == []
