@@ -30,6 +30,41 @@ def test_raw_tweet_requires_tweet_id():
         )
 
 
+def test_event_base_rejects_blank_tweet_id():
+    from app.models.events import EventBase
+
+    with pytest.raises(ValidationError):
+        EventBase(  # type: ignore[call-arg]
+            event_type="options",
+            tweet_id="   ",
+            tweet_url="u",
+            confidence=0.5,
+        )
+
+
+def test_clean_schema_prunes_titles_and_nested_defs():
+    from app.models.events import _clean_schema
+
+    schema = {
+        "title": "root",
+        "definitions": {"unused": {}},
+        "properties": {"a": {"title": "A", "type": "string"}},
+        "$defs": {
+            "Inner": {
+                "title": "Inner",
+                "properties": {"b": {"title": "B", "type": "string"}},
+            }
+        },
+    }
+
+    _clean_schema(schema)
+
+    assert "title" not in schema and "definitions" not in schema
+    assert "title" not in schema["properties"]["a"]
+    assert "title" not in schema["$defs"]["Inner"]
+    assert "title" not in schema["$defs"]["Inner"]["properties"]["b"]
+
+
 # ---------------------------------------------------------------------------
 # Deduplication (idempotency)
 # ---------------------------------------------------------------------------
@@ -198,6 +233,24 @@ def test_x_api_source_rejects_non_string_token():
         XApiSource(bearer_token=None)
     with pytest.raises(TypeError):
         XApiSource(bearer_token="")
+
+
+def test_x_api_source_returns_immediately_with_no_handles():
+    """With an empty handle list there is nothing to query: fetch_recent short-
+    circuits without touching tweepy/the network."""
+    result = XApiSource(bearer_token="test").fetch_recent([], 3600)
+    assert result.tweets == []
+    assert result.errors == []
+
+
+def test_sample_source_emits_five_uniquely_keyed_tweets():
+    from app.ingestion.source import SampleSource
+
+    result = SampleSource().fetch_recent([], 3600)
+    ids = {t.tweet_id for t in result.tweets}
+    assert len(result.tweets) == 5
+    assert ids == {f"sample-100{i}" for i in range(1, 6)}
+    assert result.errors == []
 
 
 def test_x_api_source_applies_request_timeout():

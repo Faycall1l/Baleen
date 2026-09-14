@@ -330,6 +330,25 @@ def test_sources_from_rows_accepts_any_source_url():
     assert agent._sources_from_rows(rows) == [r["u"] for r in rows[:3]]
 
 
+def test_generate_cypher_returns_empty_when_llm_never_calls_tool():
+    """A response whose tool calls never mention generate_cypher (nor a
+    nameless cypher) yields an empty string, so the agent answers 'no data'."""
+
+    class _WrongToolLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            return LLMResponse(
+                tool_calls=[
+                    ToolCall("answer_question", {"answer": "42", "sources": []})
+                ]
+            )
+
+    agent = QueryAgent(llm=_WrongToolLLM(), store=EmptyStore())
+    assert (
+        agent._generate_cypher([{"role": "user", "content": "How many tickers?"}])
+        == ""
+    )
+
+
 class _ExecutionErrorStore:
     """Fails the first execution with a graph runtime error, then succeeds."""
 

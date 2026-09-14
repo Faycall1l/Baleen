@@ -234,3 +234,31 @@ def test_report_engine_failure_is_isolated_to_that_tweet(postgres_store):
     assert summary["alerts"] == 1
     assert summary["reports"] == 0
     assert summary["failed"] == 0
+
+
+class _WroteReport:
+    def __init__(self):
+        self.calls = 0
+
+    def write_brief(self, event):
+        self.calls += 1
+        return True  # a brief was produced
+
+
+def test_report_engine_success_increments_reports(postgres_store):
+    postgres_store.insert_raw_tweet(_raw("ok-a"))
+
+    reports = _WroteReport()
+    pipeline = ProcessingPipeline(
+        extractor=_RaisingExtractor(),
+        writer=_FakeWriter(),
+        alert_engine=_NoopAlertEngine(),
+        store=postgres_store,
+        report_engine=reports,
+    )
+
+    summary = pipeline.process_new()
+
+    assert summary["processed"] == 1
+    assert reports.calls == 1
+    assert summary["reports"] == 1

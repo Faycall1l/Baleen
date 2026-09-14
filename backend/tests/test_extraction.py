@@ -183,6 +183,29 @@ def test_transport_failure_raises_instead_of_unparsed(settings):
         extractor.extract(_tweet(text="big $NVDA options flow"))
 
 
+def test_non_transport_llm_error_becomes_unparsed(settings):
+    """A generic LLMError (not a transport failure) decays to an UnparsedEvent
+    instead of raising, so one flaky schema/format error can't escape."""
+    from app.extraction.client import LLMError
+
+    class _BadLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            raise LLMError("bad model response")
+
+    extractor = EventExtractor(client=_BadLLM())
+
+    event = extractor.extract(_tweet(text="$NVDA calls filling", tweet_id="x9"))
+
+    assert isinstance(event, UnparsedEvent)
+    assert "LLM call failed" in event.reason
+
+
+def test_unknown_tool_call_returns_none():
+    """A tool call naming something outside TOOLS is refused (returns None)
+    rather than silently forwarded downstream."""
+    assert EXTRACTOR._validate_call(_tweet(), "made_up_tool", {}) is None
+
+
 # ---------------------------------------------------------------------------
 # Constrained-JSON fallback parsing
 # ---------------------------------------------------------------------------

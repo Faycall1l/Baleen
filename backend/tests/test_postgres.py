@@ -7,6 +7,16 @@ from datetime import datetime, timezone
 from app.ingestion.source import RawTweet
 
 
+def test_mark_extracted_with_no_ids_is_a_noop(postgres_store):
+    """Marking zero tweets extracted must not touch the DB (guard arm of the
+    UPDATE helper)."""
+    postgres_store.insert_raw_tweet(_ptr("ptr-1", "Some Filer", "AAPL", 0.5))
+    postgres_store.mark_extracted([])
+
+    pending = postgres_store.get_new_tweets(limit=10)
+    assert [t.tweet_id for t in pending] == ["ptr-1"]
+
+
 def _ptr(tweet_id: str, filer: str, ticker: str, ret: float | None) -> RawTweet:
     meta: dict = {
         "source_kind": "congress_disclosure",

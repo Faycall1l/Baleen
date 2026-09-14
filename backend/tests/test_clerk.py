@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from app.ingestion.clerk import (
     ClerkHouseSource,
     parse_index,
@@ -246,6 +248,31 @@ def test_download_pdf_returns_bytes(monkeypatch):
     assert "20035392.pdf" in seen["url"]
 
 
+def test_download_index_raises_when_zip_has_no_txt(monkeypatch):
+    import io
+    import zipfile
+
+    import httpx
+
+    from app.ingestion.clerk import ClerkHouseSource
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("cover.pdf", "not an index")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: _Resp(archive.getvalue()))
+
+    with pytest.raises(ValueError, match="no index .txt"):
+        ClerkHouseSource(year=2026)._download_index(2026)
+
+
 def test_malformed_record_skipped_without_aborting_poll(monkeypatch):
     """A row that crashes the record builder is logged and skipped; the rest of
     the poll (and the seen-set marking) still proceeds."""
@@ -268,10 +295,13 @@ def test_malformed_record_skipped_without_aborting_poll(monkeypatch):
 
 
 def test_caps_pdfs_per_poll_then_breaks():
+    # Two valid e-filed PTR filings inside the 30-day window (Smith's doc id
+    # does not start with "2", so it is already dropped by parse_index).
+    idx = INDEX + "\tZed\tZara\t\tP\tNY01\t2026\t9/6/2026\t20037777\r\n"
     src = ClerkHouseSource(
         year=2026,
         max_pdfs_per_poll=1,
-        fetch_index=lambda year: INDEX,
+        fetch_index=lambda year: idx,
         fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
     )
     result = src.fetch_recent([], 30 * 86400)

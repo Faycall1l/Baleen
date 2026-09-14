@@ -208,6 +208,21 @@ def test_maybe_enrich_is_noop_without_marker_or_other_types():
     assert maybe_enrich_insider(_tweet(), options) is options
 
 
+def test_maybe_enrich_keeps_model_output_when_enrichment_raises(monkeypatch):
+    """A crash inside enrichment must not surface: the model's own output is
+    kept so the event still flows through extraction/pipeline."""
+    import app.ingestion.edgar as edgar
+
+    def boom(tweet, event):
+        raise RuntimeError("grounding exploded")
+
+    monkeypatch.setattr(edgar, "enrich_insider_trade", boom)
+    tweet = _tweet()
+    event = _event()
+
+    assert maybe_enrich_insider(tweet, event) is event
+
+
 def test_custom_user_agent_sent_to_sec(monkeypatch):
     import httpx
 
