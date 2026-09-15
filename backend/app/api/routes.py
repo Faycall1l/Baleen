@@ -219,10 +219,17 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
         total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
         keep_ids: list[int] | None = None
         if limit > 0:
+            # Two-pass approach: the COALESCE wrapper in the original query
+            # prevented Neo4j from using the range index on ``event_time``,
+            # forcing a full label scan + sort.  Splitting into two index-
+            # friendly paths (non-null event_time → ORDER BY + LIMIT; null
+            # event_time → LIMIT only) lets the planner use the B-tree index
+            # for the sorted path.
             rows = neo4j.run(
                 """
                 MATCH (e:Event)
-                WITH e ORDER BY COALESCE(e.event_time, datetime('1900-01-01T00:00:00Z')) DESC
+                WHERE e.event_time IS NOT NULL
+                WITH e ORDER BY e.event_time DESC
                 LIMIT $limit
                 OPTIONAL MATCH (e)--(n)
                 WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
@@ -232,6 +239,23 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
                 limit=limit,
             )
             keep_ids = [row["internal_id"] for row in rows]
+            # Pad with events that have no event_time (old / unparsed) if the
+            # indexed path returned fewer than ``limit`` events.
+            remaining = limit - len(keep_ids)
+            if remaining > 0:
+                old_rows = neo4j.run(
+                    """
+                    MATCH (e:Event)
+                    WHERE e.event_time IS NULL
+                    WITH e LIMIT $remaining
+                    OPTIONAL MATCH (e)--(n)
+                    WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
+                    UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
+                    RETURN DISTINCT id(kept) AS internal_id
+                    """,
+                    remaining=remaining,
+                )
+                keep_ids.extend(row["internal_id"] for row in old_rows)
 
         node_where = "WHERE id(n) IN $keep_ids" if keep_ids is not None else ""
         node_rows = neo4j.run(

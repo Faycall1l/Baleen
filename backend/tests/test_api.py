@@ -478,6 +478,9 @@ def test_query_rate_limited_per_ip(monkeypatch):
 
 
 class _Neo4jBoom:
+    def ensure_indexes(self):
+        pass
+
     def run(self, *a, **k):
         raise RuntimeError("neo4j exploded")
 

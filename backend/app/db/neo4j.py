@@ -108,6 +108,23 @@ class Neo4jStore:
             return self._timeout
         return None if timeout == 0 else timeout
 
+    def ensure_indexes(self) -> None:
+        """Create idempotent indexes used by the graph endpoint.
+
+        ``CREATE RANGE INDEX ... IF NOT EXISTS`` is safe to call repeatedly;
+        the schema-change statements are committed in their own transaction.
+        """
+        stmts = [
+            # Enables index-backed ``ORDER BY e.event_time DESC`` in the
+            # graph endpoint instead of a full label scan + sort.
+            "CREATE RANGE INDEX event_event_time IF NOT EXISTS FOR (e:Event) ON (e.event_time)",
+            # Covers the ``WHERE e.tweet_id = ...`` dedup path in the writer.
+            "CREATE RANGE INDEX event_tweet_id IF NOT EXISTS FOR (e:Event) ON (e.tweet_id)",
+        ]
+        with self._driver.session() as session:
+            for stmt in stmts:
+                session.run(stmt).consume()
+
     @contextlib.contextmanager
     def transaction(self, timeout: float | None = None):
         """Run a group of statements in one server transaction (#19).

@@ -41,6 +41,13 @@ async def lifespan(app: FastAPI):
             store.ensure_rule(name, definition["description"], definition.get("config"))
         logger.info("default alert rules ensured")
 
+    try:
+        routes._get_neo4j().ensure_indexes()
+    except Exception:
+        logger.warning("neo4j index ensure failed; graph reads fall back to slow path", exc_info=True)
+    else:
+        logger.info("neo4j indexes ensured")
+
     scheduler = None
     if settings.scheduler_enabled:
         scheduler = _build_scheduler(settings)
