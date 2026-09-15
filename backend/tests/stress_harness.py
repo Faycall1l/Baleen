@@ -379,7 +379,7 @@ def probe_pipeline_race():
                 "SELECT status, count(*) FROM raw_tweets GROUP BY status")).all())
         statuses = {**statuses, "after_second_run": statuses2}
     log("P6 pipeline duplicate-race", "PASS" if ok else "WARN",
-        "8 concurrent process_new() over the same 60 'new' tweets (rows double-fetched)",
+        "8 concurrent process_new() over the same 'new' tweets (rows double-fetched)",
         {"wall_s": round(wall, 2), "statuses": statuses, "alerts": n_alerts,
          "briefs": n_briefs, "dup_alerts": dup_a, "dup_briefs": dup_b,
          "tail_starved": statuses.get("new", 0)})
