@@ -4,6 +4,13 @@ Runs load / concurrency / idempotency / failure-injection / fuzz probes
 against the live Postgres (baleen_test, :5433) and Neo4j (:7687) instances
 and prints structured PASS/WARN/FAIL evidence. Does not assert a fixed
 world view: it measures and reports honestly.
+
+Run it from anywhere with the backend venv:
+
+    TEST_DATABASE_URL=... backend/.venv/bin/python backend/tests/stress_harness.py
+
+It sets ``SCHEDULER_ENABLED=false`` and points ``DATABASE_URL`` at the test
+DB itself, seeds its own ``ZZSTRESS*`` fixtures, and cleans up after itself.
 """
 
 from __future__ import annotations
@@ -19,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-sys.path.insert(0, "/Users/faycalamrouche/WorkspaceHub/Projects/Baleen/backend")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ["SCHEDULER_ENABLED"] = "false"
 os.environ["DATABASE_URL"] = (
