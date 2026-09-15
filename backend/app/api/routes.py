@@ -48,26 +48,40 @@ class _RateLimiter:
     Config: ``api_rate_window_seconds`` (0 = unlimited) and
     ``api_rate_max_requests`` per window. In-memory only: fine for guarding a
     single-process uvicorn deployment before any public exposure.
+
+    Thread-safe: a lock serializes the per-key read-modify-write, so concurrent
+    requests for the same IP cannot slip past ``max_requests``. Eviction is
+    time-gated — the full-dict sweep runs at most once per window — so traffic
+    across many distinct IPs never pays an O(active keys) rebuild on every
+    request.
     """
 
     def __init__(self, window_seconds: int, max_requests: int) -> None:
         self.window_seconds = window_seconds
         self.max_requests = max_requests
         self._hits: dict[str, list[float]] = {}
+        self._last_sweep = 0.0
+        self._lock = threading.Lock()
 
     def allow(self, key: str) -> bool:
         if self.window_seconds <= 0:
             return True
         now = time.monotonic()
         cutoff = now - self.window_seconds
-        hits = [t for t in self._hits.get(key, []) if t > cutoff]
-        if len(hits) >= self.max_requests:
+        with self._lock:
+            hits = [t for t in self._hits.get(key, []) if t > cutoff]
+            if len(hits) >= self.max_requests:
+                self._hits[key] = hits
+                return False
+            hits.append(now)
             self._hits[key] = hits
-            return False
-        hits.append(now)
-        self._hits[key] = hits
-        if len(self._hits) > 4096:  # occasional sweep for long-running servers
-            self._hits = {k: v for k, v in self._hits.items() if v[-1] > cutoff}
+            if (
+                len(self._hits) > 4096
+                and now - self._last_sweep >= self.window_seconds
+            ):
+                # Once per window: evict every key whose newest hit is stale.
+                self._hits = {k: v for k, v in self._hits.items() if v[-1] > cutoff}
+                self._last_sweep = now
         return True
 
 
