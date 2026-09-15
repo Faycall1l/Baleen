@@ -217,7 +217,7 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
     neo4j = _get_neo4j()
     try:
         total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
-        keep_ids: list[int] | None = None
+        keep_ids: list[str] | None = None
         if limit > 0:
             # Two-pass approach: the COALESCE wrapper in the original query
             # prevented Neo4j from using the range index on ``event_time``,
@@ -234,11 +234,11 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
                 OPTIONAL MATCH (e)--(n)
                 WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
                 UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
-                RETURN DISTINCT id(kept) AS internal_id
+                RETURN DISTINCT elementId(kept) AS internal_id
                 """,
                 limit=limit,
             )
-            keep_ids = [row["internal_id"] for row in rows]
+            keep_ids: list[str] = [row["internal_id"] for row in rows]
             # Pad with events that have no event_time (old / unparsed) if the
             # indexed path returned fewer than ``limit`` events.
             remaining = limit - len(keep_ids)
@@ -251,18 +251,18 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
                     OPTIONAL MATCH (e)--(n)
                     WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
                     UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
-                    RETURN DISTINCT id(kept) AS internal_id
+                    RETURN DISTINCT elementId(kept) AS internal_id
                     """,
                     remaining=remaining,
                 )
                 keep_ids.extend(row["internal_id"] for row in old_rows)
 
-        node_where = "WHERE id(n) IN $keep_ids" if keep_ids is not None else ""
+        node_where = "WHERE elementId(n) IN $keep_ids" if keep_ids is not None else ""
         node_rows = neo4j.run(
             f"MATCH (n) {node_where} RETURN n AS node, labels(n) AS labels",
             keep_ids=keep_ids or [],
         )
-        link_where = "WHERE id(a) IN $keep_ids AND id(b) IN $keep_ids" if keep_ids is not None else ""
+        link_where = "WHERE elementId(a) IN $keep_ids AND elementId(b) IN $keep_ids" if keep_ids is not None else ""
         link_rows = neo4j.run(
             f"""
             MATCH (a)-[r]->(b)
