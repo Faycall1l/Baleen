@@ -710,6 +710,28 @@ def test_client_ip_honors_forwarded_header():
     assert routes._client_ip(req) == "203.0.113.7"
 
 
+def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
+    """Garbage in X-Forwarded-For must not become a rate-limit key: a client
+    could otherwise rotate keys to defeat the limiter and its eviction sweep."""
+    import app.api.routes as routes
+    from fastapi import Request
+    from starlette.datastructures import Headers
+
+    def req(xff: str):
+        return Request(
+            {
+                "type": "http",
+                "headers": Headers({"x-forwarded-for": xff}).raw,
+                "client": ("203.0.113.9", 12345),
+            }
+        )
+
+    for spoofed in ["not-an-ip", "evil.example", "203.0.113.7 garbage", ":::" , ""]:
+        assert routes._client_ip(req(spoofed)) == "203.0.113.9"
+    # a valid IPv6 address is accepted as a bonafide proxy-derived peer
+    assert routes._client_ip(req("2001:db8::1, 10.0.0.1")) == "2001:db8::1"
+
+
 def test_rate_limiter_prunes_stale_keys_on_sweep(monkeypatch):
     """The sweep only runs past 4096 total keys, but then it evicts every
     entry older than the window — so a stale flood can never pin the map."""

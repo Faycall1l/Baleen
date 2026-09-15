@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import threading
@@ -99,7 +100,16 @@ def _get_rate_limiter() -> _RateLimiter:
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        # Only honor a plausible IP from the proxy chain; drop spoofed
+        # junk (hostnames, garbage) by falling back to the direct peer so
+        # the rate limiter keys cannot be arbitrarily rotated by a client.
+        first = forwarded.split(",")[0].strip()
+        try:
+            ipaddress.ip_address(first)
+        except ValueError:
+            pass
+        else:
+            return first
     return request.client.host if request.client else "unknown"
 
 
