@@ -537,6 +537,7 @@ def get_report_engine() -> "ReportEngine":
 
 def _get_processing() -> "ProcessingPipeline":
     from app.extraction.extractor import EventExtractor
+    from app.graph.resolution import EntityResolver
     from app.graph.writer import GraphWriter
     from app.pipeline import ProcessingPipeline
     from app.reports.engine import ReportEngine
@@ -544,7 +545,9 @@ def _get_processing() -> "ProcessingPipeline":
     s = _get_settings()
     return ProcessingPipeline(
         extractor=EventExtractor(client=_get_llm(), confidence_threshold=s.confidence_threshold),
-        writer=GraphWriter(store=_get_neo4j()),
+        # Every Politician/Insider mention is written with its canonical
+        # spelling; LLM mention spelling variants stop fragmenting node names.
+        writer=GraphWriter(store=_get_neo4j(), entity_resolver=EntityResolver(_get_store())),
         alert_engine=get_alert_engine(),
         store=_get_store(),
         report_engine=ReportEngine(store=_get_store(), neo4j=_get_neo4j(), llm=_get_llm()),

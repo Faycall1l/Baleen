@@ -42,6 +42,24 @@ CONSTRAINTS = [
 ]
 
 
+def seed_aliases(entity_db: PostgresStore) -> int:
+    """Register the reference roster's canonical spellings in the alias table.
+
+    Postgres-only (no Neo4j round-trips), idempotent, and safe to run on every
+    app startup: seed-source entries always win over later LLM mentions, so a
+    dynamic alias never drifts a roster politician's node name.
+    """
+    for politician in POLITICIANS:
+        entity_db.ensure_alias(
+            "Politician",
+            alias=politician["name"],
+            canonical_id=politician["id"],
+            canonical_name=politician["name"],
+            source="seed",
+        )
+    return len(POLITICIANS)
+
+
 def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
     for constraint in CONSTRAINTS:
         store.run(constraint)
@@ -107,15 +125,7 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
 
     alias_count = 0
     if entity_db is not None:
-        for politician in POLITICIANS:
-            entity_db.ensure_alias(
-                "Politician",
-                alias=politician["name"],
-                canonical_id=politician["id"],
-                canonical_name=politician["name"],
-                source="seed",
-            )
-            alias_count += 1
+        alias_count = seed_aliases(entity_db)
 
     summary = {
         "sectors": len(SECTORS),

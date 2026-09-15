@@ -288,6 +288,28 @@ def test_app_lifecycle_does_not_leak_extra_postgres_engine(monkeypatch):
     assert created["n"] == 1
 
 
+def test_pipeline_writer_is_wired_with_entity_resolver(postgres_store, monkeypatch):
+    """The production pipeline's GraphWriter must resolve Politician/Insider
+    names through the alias registry, sharing the store instance (no second
+    engine pool). Selective: needs only real Postgres; the Neo4j driver is
+    constructed lazily and never queried here."""
+    import app.api.routes as routes
+    from app.graph.resolution import EntityResolver
+
+    monkeypatch.setattr(routes, "_get_store", lambda: postgres_store)
+    monkeypatch.setattr(routes, "_store", None)
+    monkeypatch.setattr(routes, "_neo4j", None)
+    monkeypatch.setattr(routes, "_llm", None)
+
+    pipeline = routes._get_processing()
+    try:
+        resolver = pipeline.writer.entity_resolver
+        assert isinstance(resolver, EntityResolver)
+        assert resolver._db is postgres_store
+    finally:
+        routes.close_services()
+
+
 def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
     """Live SSE feed: catch-up rows first (oldest first), resumable cursors,
     keepalive when quiet. Drives the generator directly (HTTP streaming

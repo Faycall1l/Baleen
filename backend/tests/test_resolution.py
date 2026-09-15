@@ -172,6 +172,15 @@ class TestCanonicalName:
 
 
 class TestRosterSeeding:
+    def test_seed_aliases_registers_roster_without_neo4j(self, postgres_store):
+        from scripts.seed_reference import seed_aliases
+
+        n = seed_aliases(postgres_store)
+        assert n > 0
+        assert postgres_store.get_canonical("Politician", WARREN_NAME) == {
+            "canonical_id": WARREN_ID,
+            "canonical_name": WARREN_NAME,
+        }
     def test_seed_reference_registers_roster_aliases(self, postgres_store, neo4j_store):
         summary = seed(neo4j_store, postgres_store)
         assert summary["aliases_seeded"] > 0

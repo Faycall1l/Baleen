@@ -42,6 +42,16 @@ async def lifespan(app: FastAPI):
         logger.info("default alert rules ensured")
 
     try:
+        from scripts.seed_reference import seed_aliases
+
+        n = seed_aliases(store)
+        logger.info("reference roster aliases ensured (%d politicians)", n)
+    except Exception:
+        logger.warning(
+            "reference roster alias seeding failed; entity names may drift", exc_info=True
+        )
+
+    try:
         routes._get_neo4j().ensure_indexes()
     except Exception:
         logger.warning("neo4j index ensure failed; graph reads fall back to slow path", exc_info=True)
