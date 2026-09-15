@@ -37,6 +37,13 @@ _store: PostgresStore | None = None
 _neo4j: Neo4jStore | None = None
 _llm: LLMClient | None = None
 
+# Short-TTL cache for the /api/graph payload (keyed by ``limit``). The
+# force-directed UI polls the endpoint, and rebuilding the subgraph costs 4
+# Cypher round-trips; serving a copy refreshed every ``graph_cache_ttl_seconds``
+# keeps the endpoint snappy. 0 TTL disables caching.
+_graph_cache: dict[int, tuple[float, dict]] = {}
+_graph_cache_lock = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Auth + rate limiting (#18)
@@ -213,7 +220,26 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
     small graphs). The response carries ``truncated``/``event_count`` so the UI
     can tell a partial view from a full one. ``limit`` is capped at 5000
     (#16) so a single request cannot force an unbounded materialization.
+
+    The payload is cached for ``graph_cache_ttl_seconds`` to keep UI polling
+    cheap (``event_count``/``truncated`` tolerate a few seconds of staleness).
     """
+    ttl = get_settings().graph_cache_ttl_seconds
+    if ttl > 0:
+        with _graph_cache_lock:
+            hit = _graph_cache.get(limit)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+
+    payload = _render_graph(limit)
+
+    if ttl > 0:
+        with _graph_cache_lock:
+            _graph_cache[limit] = (time.monotonic() + ttl, payload)
+    return payload
+
+
+def _render_graph(limit: int) -> dict:
     neo4j = _get_neo4j()
     try:
         total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]

@@ -17,6 +17,18 @@ from app.db.postgres import PostgresStore
 from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
 
 
+@pytest.fixture(autouse=True)
+def _clear_graph_cache():
+    """The /api/graph payload cache is module-level and keyed by ``limit``;
+    without clearing it, one test's payload (real or boom-mock) leaks into the
+    next test's assertions."""
+    from app.api import routes
+
+    routes._graph_cache.clear()
+    yield
+    routes._graph_cache.clear()
+
+
 def test_json_safe_serializes_native_temporal_props():
     """The writer stores temporal props natively; /api/graph must hand the JSON
     encoder plain ISO strings, including for the Neo4j driver's own temporal
@@ -542,6 +554,61 @@ def test_graph_export_error_is_json_500(monkeypatch):
         res = c.get("/api/graph")
         assert res.status_code == 500
         assert res.json()["detail"].startswith("graph export failed")
+
+
+class _CountingNeo4j:
+    def __init__(self):
+        self.runs = 0
+
+    def run(self, query: str, **k):
+        self.runs += 1
+        if query.startswith("MATCH (e:Event) RETURN count"):
+            return [{"n": 0}]
+        return []
+
+    def ensure_indexes(self):
+        pass
+
+
+def test_graph_response_is_cached_within_ttl(monkeypatch):
+    """Polling the force-directed endpoint must not replay the 4 Cypher
+    round-trips on every request when caching is enabled."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    neo = _CountingNeo4j()
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: neo)
+
+    with monkeypatch.context() as m:
+        m.setattr(routes, "_graph_cache", {})
+
+        with _client() as c:
+            assert c.get("/api/graph?limit=20").status_code == 200
+            assert c.get("/api/graph?limit=20").status_code == 200
+            assert c.get("/api/graph?limit=500").status_code == 200
+        # Each rebuild is count + keep_ids + (null-event_time pad, since the
+        # mock's keep_ids are empty) + node fetch + link fetch = 5 Cypher
+        # round-trips: limit=20 rebuilt once (2nd call cached), limit=500 once
+        # = 10 runs total, not 15.
+        assert neo.runs == 10
+
+
+def test_graph_cache_disabled_when_ttl_zero(monkeypatch):
+    """graph_cache_ttl_seconds=0 must bypass the cache entirely (the config
+    kill-switch for anyone who wants live data on every poll)."""
+    import app.api.routes as routes
+    from app.config import get_settings
+
+    _quiet_settings(monkeypatch)
+    no_cache = get_settings().model_copy(update={"graph_cache_ttl_seconds": 0})
+    monkeypatch.setattr("app.api.routes.get_settings", lambda: no_cache)
+    neo = _CountingNeo4j()
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: neo)
+
+    with _client() as c:
+        assert c.get("/api/graph?limit=20").status_code == 200
+        assert c.get("/api/graph?limit=20").status_code == 200
+    assert neo.runs == 10  # two full rebuilds, nothing cached
 
 
 def test_alerts_error_is_json_500(monkeypatch):
