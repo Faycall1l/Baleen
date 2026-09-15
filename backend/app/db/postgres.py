@@ -17,6 +17,34 @@ from app.ingestion.source import RawTweet
 
 logger = logging.getLogger(__name__)
 
+
+def _strip_nulls(value: str) -> str:
+    """Postgres text cannot hold NUL bytes (``\\x00``); strip them so a
+    poisoned row from a hostile source cannot abort an entire ingest batch."""
+    if "\x00" in value:
+        return value.replace("\x00", "")
+    return value
+
+
+def _scrub_nulls(value):
+    """Recursively strip actual NUL bytes (``\\x00``) from JSON payloads.
+
+    Applied *before* ``json.dumps``: Postgres can neither store a NUL byte nor
+    decode one from a ``\\u0000`` escape in a JSON document, and a single
+    poisoned row would otherwise raise ``DataError`` and roll back the whole
+    batch. Doing this at the value layer (instead of on the encoded string)
+    leaves text that *literally* reads ``\\u0000`` untouched, since that is
+    valid JSON text and not a control character.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "") if "\x00" in value else value
+    if isinstance(value, list):
+        return [_scrub_nulls(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _scrub_nulls(v) for k, v in value.items()}
+    return value
+
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS raw_tweets (
     id            BIGSERIAL PRIMARY KEY,
@@ -107,6 +135,10 @@ class PostgresStore:
         per-row statements. Counts come from the statement's own rowcount
         (Postgres reports only actually-inserted rows), so they stay exact
         under concurrent writers — no separate COUNT round trip.
+
+        Text and JSON payloads are stripped of NUL bytes: Postgres text
+        cannot store ``\\x00``, and a single poisoned row would otherwise
+        raise ``DataError`` and roll back the whole batch.
         """
         if not tweets:
             return 0, 0
@@ -126,10 +158,10 @@ class PostgresStore:
                         "tweet_id": t.tweet_id,
                         "author_handle": t.author_handle,
                         "author_id": t.author_id,
-                        "text": t.text,
+                        "text": _strip_nulls(t.text),
                         "created_at": t.created_at,
-                        "url": t.url,
-                        "raw_json": json.dumps(t.raw_json),
+                        "url": _strip_nulls(t.url),
+                        "raw_json": json.dumps(_scrub_nulls(t.raw_json)),
                     }
                     for t in tweets
                 ],
