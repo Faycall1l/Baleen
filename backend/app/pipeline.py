@@ -43,21 +43,29 @@ class ProcessingPipeline:
         self.report_engine = report_engine
 
     def process_new(self, limit: int = 50) -> dict:
-        """Process tweets with status ``new``; returns per-type counts.
+        """Process tweets awaiting extraction; returns per-type counts.
 
-        Each tweet is isolated: a failure in one tweet (extraction, graph write,
-        or alert evaluation) is logged and skipped, never aborting the batch.
-        Only fully-successful tweets are marked ``extracted``, so a failed tweet
-        is retried on the next run (all stages are idempotent).
+        Tweets are *claimed* atomically (``status -> processing``) before work
+        begins, so concurrent ``process_new`` runs partition the queue instead
+        of re-reading the same head window. Successful tweets are marked
+        ``extracted``; failed ones are released back to ``new`` so the next run
+        retries them (all stages are idempotent). A crash mid-batch leaves rows
+        ``processing``; they are reclaimed by the claim layer after its lease
+        expires.
+
+        Each tweet is isolated: a failure in one tweet (extraction, graph
+        write, or alert evaluation) is logged and skipped, never aborting the
+        batch.
 
         If the *entire* batch failed only because the LLM endpoint was
         unreachable, :class:`LLMTransportError` is raised so the scheduler can
         back off instead of hammering a dead endpoint every tick. Mixed
         failures never raise.
         """
-        tweets = self.store.get_new_tweets(limit=limit)
+        tweets = self.store.claim_new_tweets(limit=limit)
         summary = {"processed": 0, "unparsed": 0, "alerts": 0, "reports": 0, "failed": 0}
         done_ids: list[str] = []
+        failed_ids: list[str] = []
         transport_failures = 0
 
         for tweet in tweets:
@@ -94,12 +102,14 @@ class ProcessingPipeline:
                 )
             except LLMTransportError:
                 transport_failures += 1
+                failed_ids.append(tweet.tweet_id)
                 summary["failed"] += 1
                 logger.warning(
                     "LLM unreachable while processing tweet %s; leaving pending",
                     tweet.tweet_id,
                 )
             except Exception:
+                failed_ids.append(tweet.tweet_id)
                 summary["failed"] += 1
                 logger.exception(
                     "processing failed for tweet %s; will retry next run",
@@ -108,6 +118,8 @@ class ProcessingPipeline:
 
         if done_ids:
             self.store.mark_extracted(done_ids)
+        if failed_ids:
+            self.store.reset_status(failed_ids, "new")
 
         if (
             tweets

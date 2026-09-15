@@ -56,11 +56,16 @@ CREATE TABLE IF NOT EXISTS raw_tweets (
     url           TEXT NOT NULL,
     raw_json      JSONB NOT NULL DEFAULT '{}'::jsonb,
     fetched_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    status        TEXT NOT NULL DEFAULT 'new'
+    status        TEXT NOT NULL DEFAULT 'new',
+    claimed_at    TIMESTAMPTZ
 );
+-- Idempotent upgrade for tables created before the claim column existed.
+ALTER TABLE raw_tweets ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_raw_tweets_status ON raw_tweets (status);
 CREATE INDEX IF NOT EXISTS idx_raw_tweets_status_created
     ON raw_tweets (status, created_at);
+CREATE INDEX IF NOT EXISTS idx_raw_tweets_status_claimed
+    ON raw_tweets (status, claimed_at);
 
 CREATE TABLE IF NOT EXISTS alert_rules (
     id          SERIAL PRIMARY KEY,
@@ -168,6 +173,51 @@ class PostgresStore:
             )
             inserted = result.rowcount
         return inserted, len(tweets) - inserted
+
+    def claim_new_tweets(
+        self, limit: int = 100, lease_seconds: int = 600
+    ) -> list[RawTweet]:
+        """Atomically claim a batch of tweets for processing.
+
+        Unlike a plain read, this flips the claimed rows to
+        ``status='processing'`` before returning them, so two concurrent
+        ``process_new`` runs can never grab the same tweet: the ``FOR UPDATE
+        SKIP LOCKED`` scan makes each tweet claimable by exactly one worker at
+        a time (previously concurrent runs each read the same first ``limit``
+        rows, starving the tail until the next tick — no duplicates, but
+        delayed processing).
+
+        Rows left ``processing`` past ``lease_seconds`` (worker crashed
+        mid-batch) are considered abandoned and re-admitted to the claim pool.
+        """
+        with self.engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    WITH candidates AS (
+                        SELECT tweet_id
+                        FROM raw_tweets
+                        WHERE status = 'new'
+                           OR (status = 'processing'
+                               AND claimed_at < now() - make_interval(secs => :lease))
+                        ORDER BY created_at ASC
+                        LIMIT :limit
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE raw_tweets
+                    SET status = 'processing',
+                        claimed_at = now()
+                    FROM candidates
+                    WHERE raw_tweets.tweet_id = candidates.tweet_id
+                    RETURNING raw_tweets.tweet_id, raw_tweets.author_handle,
+                              raw_tweets.author_id, raw_tweets.text,
+                              raw_tweets.created_at, raw_tweets.url,
+                              raw_tweets.raw_json
+                    """
+                ),
+                {"limit": limit, "lease": lease_seconds},
+            ).mappings()
+            return [RawTweet(**dict(row)) for row in rows]
 
     def get_new_tweets(self, limit: int = 100) -> list[RawTweet]:
         """Tweets not yet handed to the extraction stage."""
