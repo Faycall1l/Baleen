@@ -328,6 +328,68 @@ class TestReviewQueue:
 
 
 # ----------------------------------------------------------------------
+# review CLI (scripts.entity_review) against the real test Postgres
+# ----------------------------------------------------------------------
+
+
+def _call_cli(argv, capsys):
+    from scripts.entity_review import main
+
+    code = main(argv)
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err
+
+
+class TestReviewCLI:
+    def _seed_gray_band_pair(self, postgres_store) -> int:
+        postgres_store.ensure_alias(
+            "Politician", "John Johnson", "X070", "John Johnson", source="seed"
+        )
+        postgres_store.ensure_alias(
+            "Politician", "John Johnsen", "X071", "John Johnsen", source="seed"
+        )
+        _resolver(postgres_store).suggest_merges("Politician")
+        return _resolver(postgres_store).pending_reviews()[0]["id"]
+
+    def test_list_lists_pending_reviews(self, postgres_store, capsys):
+        queue_id = self._seed_gray_band_pair(postgres_store)
+
+        code, out, err = _call_cli(["--list"], capsys)
+        assert code == 0
+        assert "John Johnson" in out and "John Johnsen" in out
+        assert str(queue_id) in out
+
+    def test_list_raw_emits_csv(self, postgres_store, capsys):
+        self._seed_gray_band_pair(postgres_store)
+        code, out, err = _call_cli(["--list", "--raw"], capsys)
+        assert code == 0
+        assert out.splitlines()[0] == "id,entity_type,candidate,canonical,confidence,reason"
+
+    def test_approve_resolves_and_is_idempotent_in_cli(self, postgres_store, capsys):
+        queue_id = self._seed_gray_band_pair(postgres_store)
+
+        code, out, err = _call_cli(["--approve", str(queue_id)], capsys)
+        assert code == 0
+        assert f"approved review #{queue_id}" in out
+        assert postgres_store.pending_resolutions() == []
+
+        code, out, err = _call_cli(["--approve", str(queue_id)], capsys)
+        assert code == 1
+        assert "not found or already resolved" in err
+
+    def test_reject_removes_from_pending(self, postgres_store, capsys):
+        queue_id = self._seed_gray_band_pair(postgres_store)
+        code, out, err = _call_cli(["--reject", str(queue_id)], capsys)
+        assert code == 0
+        assert f"rejected review #{queue_id}" in out
+
+    def test_missing_action_is_an_arg_error(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            _call_cli([], capsys)
+        assert exc.value.code == 2
+
+
+# ----------------------------------------------------------------------
 # end-to-end: GraphWriter uses the resolver (real Neo4j)
 # ----------------------------------------------------------------------
 

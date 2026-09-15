@@ -212,9 +212,13 @@ class EntityResolver:
                 id_a, id_b = ids[i], ids[j]
                 if id_a == id_b:
                     continue
-                name_a = normalize_mention(by_id[id_a])
-                name_b = normalize_mention(by_id[id_b])
-                ratio = difflib.SequenceMatcher(None, name_a, name_b).ratio()
+                # Human-readable spelling goes into the queue; the normalized
+                # key is only used to score similarity.
+                name_a = by_id[id_a]
+                name_b = by_id[id_b]
+                ratio = difflib.SequenceMatcher(
+                    None, normalize_mention(name_a), normalize_mention(name_b)
+                ).ratio()
                 if ratio < REVIEW_MIN_THRESHOLD:
                     continue
                 if ratio >= AUTO_MERGE_THRESHOLD:
