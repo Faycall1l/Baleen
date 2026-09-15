@@ -1,4 +1,4 @@
-"""Load the reference dataset into the Neo4j graph (idempotent).
+"""Load the reference dataset into Neo4j and the alias registry (idempotent).
 
 Usage:
     python -m scripts.seed_reference
@@ -7,6 +7,11 @@ Creates Sector, Committee, Politician, and Ticker nodes plus the
 OVERSEES / MEMBER_OF / IN_SECTOR relationships from ``app.graph.seed_data``,
 and adds uniqueness constraints on every natural identifier. Safe to run
 repeatedly — everything is ``MERGE``.
+
+When a PostgresStore is supplied, the canonical spelling for every Politician
+in the reference roster is also registered in ``entity_aliases``. The resolver
+reads these entries on pipeline startup so that downstream tweets always
+resolve to the seeded canonical name.
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ import logging
 
 from app.config import get_settings
 from app.db.neo4j import Neo4jStore
+from app.db.postgres import PostgresStore
 from app.graph.schema import LABEL_KEYS
 from app.graph.seed_data import (
     COMMITTEES,
@@ -36,7 +42,7 @@ CONSTRAINTS = [
 ]
 
 
-def seed(store: Neo4jStore) -> dict:
+def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
     for constraint in CONSTRAINTS:
         store.run(constraint)
 
@@ -99,11 +105,24 @@ def seed(store: Neo4jStore) -> dict:
             ticker=ticker, sector=sector, **SYNTHETIC_SOURCE,
         )
 
+    alias_count = 0
+    if entity_db is not None:
+        for politician in POLITICIANS:
+            entity_db.ensure_alias(
+                "Politician",
+                alias=politician["name"],
+                canonical_id=politician["id"],
+                canonical_name=politician["name"],
+                source="seed",
+            )
+            alias_count += 1
+
     summary = {
         "sectors": len(SECTORS),
         "committees": len(COMMITTEES),
         "politicians": len(POLITICIANS),
         "tickers": len(TICKER_SECTORS),
+        "aliases_seeded": alias_count,
     }
     logger.info("reference data seeded: %s", summary)
     return summary
@@ -111,7 +130,9 @@ def seed(store: Neo4jStore) -> dict:
 
 if __name__ == "__main__":
     store = Neo4jStore(get_settings())
+    entity_db = PostgresStore(get_settings())
     try:
-        seed(store)
+        seed(store, entity_db)
     finally:
         store.close()
+        entity_db.close()

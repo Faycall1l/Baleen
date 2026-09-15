@@ -11,6 +11,7 @@ import logging
 from typing import Callable
 
 from app.db.neo4j import Neo4jStore
+from app.graph.resolution import EntityResolver
 from app.graph.schema import LABEL_KEYS
 from app.graph.seed_data import COMMITTEES, TICKER_SECTORS
 from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent, UnparsedEvent
@@ -24,9 +25,18 @@ DEFAULT_RESOLVER: SectorResolver = lambda ticker: TICKER_SECTORS.get(ticker)
 
 
 class GraphWriter:
-    def __init__(self, store: Neo4jStore, sector_resolver: SectorResolver | None = None) -> None:
+    def __init__(
+        self,
+        store: Neo4jStore,
+        sector_resolver: SectorResolver | None = None,
+        entity_resolver: EntityResolver | None = None,
+    ) -> None:
         self.store = store
         self.sector_resolver = sector_resolver or DEFAULT_RESOLVER
+        # When set, Politician/Insider nodes are written with their canonical
+        # spelling (entity resolution, naming layer) instead of whatever mention
+        # the LLM produced. None keeps the historical raw-mention behaviour.
+        self.entity_resolver = entity_resolver
 
     # ------------------------------------------------------------------
     # Public API
@@ -151,11 +161,16 @@ class GraphWriter:
 
     def _write_politician_flow(self, event: CongressTradeEvent) -> None:
         provenance = self._provenance(event)
+        name = event.politician_name
+        if self.entity_resolver is not None:
+            name = self.entity_resolver.canonical_name(
+                "Politician", event.politician_name, event.politician_id
+            )
         self._merge_node(
             "Politician",
             {
                 "id": event.politician_id,
-                "name": event.politician_name,
+                "name": name,
                 "chamber": event.chamber,
                 **({"party": event.party} if event.party else {}),
             },
@@ -185,11 +200,16 @@ class GraphWriter:
 
     def _write_insider_flow(self, event: InsiderTradeEvent) -> None:
         provenance = self._provenance(event)
+        name = event.insider_name
+        if self.entity_resolver is not None:
+            name = self.entity_resolver.canonical_name(
+                "Insider", event.insider_name, event.insider_id
+            )
         self._merge_node(
             "Insider",
             {
                 "id": event.insider_id,
-                "name": event.insider_name,
+                "name": name,
                 **({"cik": event.insider_cik} if event.insider_cik else {}),
                 **({"role": event.role} if event.role else {}),
             },
