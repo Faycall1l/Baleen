@@ -409,10 +409,10 @@ class TestWriterIntegration:
         writer = GraphWriter(neo4j_store)
         writer.write_event(_congress_event("res-no-resolver-1", WARREN_ID, "Sen. Elizabeth Warren"))
 
-        row = neo4j_store.run(
+        rows = neo4j_store.run(
             "MATCH (p:Politician {id: $id}) RETURN p.name AS name", id=WARREN_ID
-        ).single()
-        assert row["name"] == "Sen. Elizabeth Warren"
+        )
+        assert rows[0]["name"] == "Sen. Elizabeth Warren"
 
     def test_writer_with_resolver_writes_canonical_name(self, postgres_store, neo4j_store):
         seed(neo4j_store, postgres_store)
