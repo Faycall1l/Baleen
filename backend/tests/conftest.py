@@ -48,7 +48,7 @@ def postgres_store():
         conn.execute(
             text(
                 "TRUNCATE raw_tweets, alerts, alert_rules, reports, "
-                "entity_aliases, entity_resolution_queue"
+                "entity_aliases, entity_resolution_queue, entity_identities"
             )
         )
     yield store

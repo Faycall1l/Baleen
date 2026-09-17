@@ -149,6 +149,27 @@ CREATE TABLE IF NOT EXISTS entity_resolution_queue (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_resolution_pair
     ON entity_resolution_queue (entity_type, candidate_id, canonical_id);
+
+-- Identity remap registry (entity resolution, identity layer). When a human
+-- confirms a review, the candidate id is declared an alias of the canonical
+-- id. Every future event claiming the candidate id MERGEs onto the canonical
+-- node instead — ids converge at the KEY level, exactly like ``entity_aliases``
+-- converged the NAME level. Chains are possible (consolidation); resolvers
+-- follow them to the root.
+CREATE TABLE IF NOT EXISTS entity_identities (
+    id            BIGSERIAL PRIMARY KEY,
+    entity_type   TEXT NOT NULL,
+    candidate_id  TEXT NOT NULL,
+    canonical_id  TEXT NOT NULL,
+    confidence    FLOAT NOT NULL DEFAULT 1.0,
+    source        TEXT NOT NULL,              -- 'review'
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolution_id INTEGER REFERENCES entity_resolution_queue (id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_identity_candidate
+    ON entity_identities (entity_type, candidate_id);
+CREATE INDEX IF NOT EXISTS idx_identity_canonical
+    ON entity_identities (entity_type, canonical_id);
 """
 
 
@@ -673,6 +694,142 @@ class PostgresStore:
                 {"status": status, "id": queue_id},
             )
             return result.rowcount == 1
+
+    def confirm_resolution(self, queue_id: int) -> bool:
+        """Confirm a queue entry AND record its identity remap, atomically.
+
+        The human's decision is two things at once: (a) this pair is resolved,
+        and (b) from now on ``candidate_id`` is an alias of ``canonical_id`` at
+        the id level. Both need to land or neither does, so they share one
+        transaction. Returns False when the entry was not pending (already
+        resolved or unknown — idempotent).
+        """
+        with self.engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    UPDATE entity_resolution_queue
+                    SET status = 'confirmed', resolved_at = now()
+                    WHERE id = :id AND status = 'pending'
+                    RETURNING entity_type, candidate_id, canonical_id, confidence
+                    """
+                ),
+                {"id": queue_id},
+            ).mappings().first()
+            if row is None:
+                return False
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO entity_identities
+                        (entity_type, candidate_id, canonical_id, confidence, source, resolution_id)
+                    VALUES (:entity_type, :candidate_id, :canonical_id, :confidence, 'review', :resolution_id)
+                    ON CONFLICT (entity_type, candidate_id) DO UPDATE SET
+                        canonical_id = EXCLUDED.canonical_id,
+                        confidence   = GREATEST(entity_identities.confidence, EXCLUDED.confidence),
+                        resolution_id = EXCLUDED.resolution_id
+                    """
+                ),
+                {
+                    "entity_type": row["entity_type"],
+                    "candidate_id": row["candidate_id"],
+                    "canonical_id": row["canonical_id"],
+                    "confidence": row["confidence"],
+                    "resolution_id": queue_id,
+                },
+            )
+            return True
+
+    def get_resolution(self, queue_id: int) -> dict | None:
+        """A queue entry by id, regardless of status (for the apply/undo flows)."""
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT id, entity_type, candidate_id, candidate_name,
+                           canonical_id, canonical_name, confidence, reason, status, created_at
+                    FROM entity_resolution_queue
+                    WHERE id = :id
+                    """
+                ),
+                {"id": queue_id},
+            ).mappings().first()
+            return dict(row) if row is not None else None
+
+    # ------------------------------------------------------------------
+    # entity resolution (identity remap registry)
+    # ------------------------------------------------------------------
+
+    def get_identity(self, entity_type: str, candidate_id: str) -> dict | None:
+        """The canonical an id has been remapped to, if any."""
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT candidate_id, canonical_id, confidence
+                    FROM entity_identities
+                    WHERE entity_type = :entity_type AND candidate_id = :candidate_id
+                    """
+                ),
+                {"entity_type": entity_type, "candidate_id": candidate_id},
+            ).mappings().first()
+            return dict(row) if row is not None else None
+
+    def record_identity(
+        self,
+        entity_type: str,
+        candidate_id: str,
+        canonical_id: str,
+        confidence: float = 1.0,
+        source: str = "review",
+        resolution_id: int | None = None,
+    ) -> None:
+        """Declare ``candidate_id`` an alias of ``canonical_id`` at the id level.
+
+        Idempotent per (entity_type, candidate_id); a later declaration simply
+        retargets the candidate. No graph rewrite happens here — that is the
+        caller's separate, explicit step.
+        """
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO entity_identities
+                        (entity_type, candidate_id, canonical_id, confidence, source, resolution_id)
+                    VALUES (:entity_type, :candidate_id, :canonical_id, :confidence, :source, :resolution_id)
+                    ON CONFLICT (entity_type, candidate_id) DO UPDATE SET
+                        canonical_id   = EXCLUDED.canonical_id,
+                        confidence     = GREATEST(entity_identities.confidence, EXCLUDED.confidence),
+                        resolution_id  = EXCLUDED.resolution_id,
+                        source         = EXCLUDED.source
+                    """
+                ),
+                {
+                    "entity_type": entity_type,
+                    "candidate_id": candidate_id,
+                    "canonical_id": canonical_id,
+                    "confidence": confidence,
+                    "source": source,
+                    "resolution_id": resolution_id,
+                },
+            )
+
+    def list_identity_remaps(self, entity_type: str | None = None) -> list[dict]:
+        """Every remap row (candidate -> canonical), optionally per type."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, entity_type, candidate_id, canonical_id, confidence,
+                           source, created_at, resolution_id
+                    FROM entity_identities
+                    WHERE (:entity_type IS NULL OR entity_type = :entity_type)
+                    ORDER BY entity_type, candidate_id
+                    """
+                ),
+                {"entity_type": entity_type},
+            ).mappings()
+            return [dict(row) for row in rows]
 
     # ------------------------------------------------------------------
     # leaderboard

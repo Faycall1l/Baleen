@@ -1,4 +1,4 @@
-"""Entity resolution — canonical-name layer (v1).
+"""Entity resolution — naming layer (v1) + identity remap registry (v2).
 
 The graph stores entities (Politician, Insider, Ticker) keyed on stable natural
 ids (``politician_id``, ``insider_id``, the ticker symbol). The *name* written
@@ -18,9 +18,15 @@ in the ``entity_aliases`` table:
   literature: auto-band at 0.95+ vs. gray band 0.85-0.95) for confirmation or
   rejection.
 
-The **identity layer** (embedding-based cross-id detection, Neo4j node merges,
-edge rewriting) is intentionally out of scope for v1; ``approve`` currently
-only updates resolution state, it does not rewrite graph edges.
+The **identity layer** extends this at the KEY level. Confirming a review
+(``approve``) also records an ``entity_identities`` remap: ``candidate_id``
+becomes an alias of ``canonical_id``, so every future event claiming the
+candidate id resolves its *node* to the canonical one (``canonical_identity``
+follows consolidation chains to the root). Physically rewriting an already-
+written graph (transferring relationships, tombstoning the candidate node,
+creating ``SAME_AS`` edges) is a separate, explicit step — see
+``app.graph.identity.IdentityEngine`` — so a human decides first and the graph
+is rewritten only on demand.
 """
 
 from __future__ import annotations
@@ -144,6 +150,32 @@ class EntityResolver:
         )
 
     # ------------------------------------------------------------------
+    # Identity remap (id-level canonicalization)
+    # ------------------------------------------------------------------
+
+    def canonical_identity(self, entity_type: str, candidate_id: str) -> str:
+        """The node id an event claiming ``candidate_id`` should actually MERGE on.
+
+        Returns the *root* canonical id, following consolidation chains to the
+        end (a confirmed candidate can itself later be remapped into a larger
+        canonical). An id with no remap returns itself unchanged. Bounded: a
+        malformed cycle degrades to the first repeated id instead of looping.
+        """
+        seen: set[str] = set()
+        current = candidate_id
+        while current not in seen:
+            seen.add(current)
+            row = self._db.get_identity(entity_type, current)
+            if row is None or row["canonical_id"] == current:
+                break
+            current = row["canonical_id"]
+        return current
+
+    def identity_remaps(self, entity_type: str | None = None) -> list[dict]:
+        """All recorded id remaps (audit / CLI display)."""
+        return self._db.list_identity_remaps(entity_type)
+
+    # ------------------------------------------------------------------
     # Fuzzy near-duplicate pass (feeds the human review queue)
     # ------------------------------------------------------------------
 
@@ -179,12 +211,17 @@ class EntityResolver:
         return added
 
     def approve(self, queue_id: int) -> bool:
-        """Confirm a queued pair. v1 only marks resolution state; the graph
-        (identity-layer) merge is a follow-up."""
-        return self._db.mark_resolution(queue_id, "confirmed")
+        """Confirm a queued pair. The decision is atomic: the pair leaves the
+        pending set AND its id remap (candidate -> canonical) is recorded, so
+        every future write resolves to the canonical node. Rewriting the graph
+        is a separate, explicit application step."""
+        return self._db.confirm_resolution(queue_id)
 
     def reject(self, queue_id: int) -> bool:
         return self._db.mark_resolution(queue_id, "rejected")
+
+    def get_resolution(self, queue_id: int) -> dict | None:
+        return self._db.get_resolution(queue_id)
 
     def pending_reviews(self) -> list[dict]:
         return self._db.pending_resolutions()
