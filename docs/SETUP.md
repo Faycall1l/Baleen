@@ -278,14 +278,21 @@ the single multi-statement identity-merge transaction).
 ### Measure performance (bench harness)
 `scripts/bench.py` produces trusted, statistically-backed numbers even on the
 saturated shared host (k3d/gmem co-tenancy). It replays a fixed synthetic
-tweet batch through the real pipeline with warmup + sampling, times each stage
-per call (extract / graph write / alerts / reports / Neo4j read probe), logs
-the host load average alongside, and reports median, p90/p99, CV and a
-bootstrap CI — never a bare mean.
+tweet batch (deterministic ids, `DeterministicLLM` stub so no external model
+latency) through the real pipeline with warmup + adaptive sampling: rounds
+continue until the bootstrap 95% CI width of **throughput (tweets/s)** is at
+or below `--target-ci` (default 10%), bounded by `--min-rounds`/`--max-rounds`
+(6/24) so one contended host can't balloon the run. It times each stage per
+call (extract / graph write / alerts / reports / Neo4j read probe), logs the
+host load average alongside, and reports median, p90/p99, CV and a bootstrap
+CI — never a bare mean — plus a **load-adjusted throughput** (OLS of tps on
+host `load1`, read off at `--ref-load`) so a busy neighbor isn't mistaken for
+a regression.
 
 ```bash
-python -m scripts.bench                         # full protocol (10 rounds + 2 warmup, batch 8)
-python -m scripts.bench --rounds 20 --batch 8 --json /tmp/bench.json
+python -m scripts.bench                          # adaptive (6-24 rounds), batch 8
+python -m scripts.bench --rounds 20 --batch 8 --json /tmp/bench.json   # fixed rounds
+python -m scripts.bench --min-rounds 12 --target-ci 0.05 --batch 16    # tighter, longer
 ```
 
 Targets `baleen_test` (5433) and the isolated `neo4j-test` (7690) by default
