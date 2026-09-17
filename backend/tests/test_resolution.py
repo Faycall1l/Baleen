@@ -467,6 +467,74 @@ class TestReviewCLI:
         assert exc.value.code == 2
 
 
+class TestReviewCLIApply:
+    """--apply drives the IdentityEngine graph rewrite for a confirmed review."""
+
+    def test_apply_rewrites_graph_for_confirmed_review(self, postgres_store, neo4j_store, capsys):
+        cand_id, canon_id = "X070", "X071"
+        postgres_store.ensure_alias("Politician", "John Johnson", cand_id, "John Johnson", source="seed")
+        postgres_store.ensure_alias("Politician", "John Johnsen", canon_id, "John Johnsen", source="seed")
+        _resolver(postgres_store).suggest_merges("Politician")
+        queue_id = _resolver(postgres_store).pending_reviews()[0]["id"]
+
+        writer = GraphWriter(neo4j_store)
+        evt_a = writer.write_event(_congress_event("res-cli-app-a", cand_id, "John Johnson"))
+        evt_b = writer.write_event(_congress_event("res-cli-app-b", canon_id, "John Johnsen"))
+        try:
+            code, out, err = _call_cli(["--approve", str(queue_id)], capsys)
+            assert code == 0
+            code, out, err = _call_cli(["--apply", str(queue_id)], capsys)
+            assert code == 0
+            assert f"applied review #{queue_id}" in out
+
+            assert (
+                neo4j_store.run(
+                    "MATCH (p:Politician {id: $id}) RETURN p.merged_into AS m",
+                    id=cand_id,
+                )[0]["m"]
+                == canon_id
+            )
+            sa = neo4j_store.run(
+                "MATCH (:Politician {id: $c})-[r:SAME_AS]->(:Politician {id: $o}) "
+                "RETURN r.resolution_id AS rid",
+                c=cand_id,
+                o=canon_id,
+            )[0]
+            assert sa["rid"] == queue_id
+            assert (
+                neo4j_store.run(
+                    "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->"
+                    "(:Politician {id: $pid}) RETURN count(*) AS count",
+                    id=evt_a,
+                    pid=canon_id,
+                )[0]["count"]
+                == 1
+            )
+        finally:
+            neo4j_store.run(
+                "MATCH (p:Politician) WHERE p.id IN $ids DETACH DELETE p",
+                ids=[cand_id, canon_id],
+            )
+            for event_id in (evt_a, evt_b):
+                neo4j_store.run("MATCH (e:Event {id: $id}) DETACH DELETE e", id=event_id)
+
+    def test_apply_refuses_unconfirmed_review(self, postgres_store, capsys):
+        queue_id = self._make_pending(postgres_store)
+        code, out, err = _call_cli(["--apply", str(queue_id)], capsys)
+        assert code == 1
+        assert "not a confirmed merge" in err
+
+    def _make_pending(self, postgres_store) -> int:
+        postgres_store.ensure_alias(
+            "Politician", "John Johnson", "X070", "John Johnson", source="seed"
+        )
+        postgres_store.ensure_alias(
+            "Politician", "John Johnsen", "X071", "John Johnsen", source="seed"
+        )
+        _resolver(postgres_store).suggest_merges("Politician")
+        return _resolver(postgres_store).pending_reviews()[0]["id"]
+
+
 # ----------------------------------------------------------------------
 # end-to-end: GraphWriter uses the resolver (real Neo4j)
 # ----------------------------------------------------------------------

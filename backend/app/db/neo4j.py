@@ -102,6 +102,25 @@ class Neo4jStore:
                 params,
             )
 
+    def write_transaction(self, fn, timeout: float | None = None):
+        """Run ``fn(run)`` atomically inside a single write transaction.
+
+        ``run(query, **params)`` behaves like :meth:`run` (list-of-dict rows),
+        but all statements commit together — either the whole multi-statement
+        rewrite (identity merge) lands or none of it does. The configured query
+        cap applies to every statement via the same ``_resolve_timeout`` path.
+        """
+        cap = self._resolve_timeout(timeout)
+
+        def _body(tx):
+            def run(query: str, **params) -> list[dict]:
+                return [record.data() for record in tx.run(query, timeout=cap, **params)]
+
+            return fn(run)
+
+        with self._driver.session() as session:
+            return session.execute_write(_body)
+
     def _resolve_timeout(self, timeout: float | None) -> float | None:
         """Per-call override: ``None`` -> configured cap, ``0`` -> no cap."""
         if timeout is None:
@@ -113,6 +132,10 @@ class Neo4jStore:
 
         ``CREATE RANGE INDEX ... IF NOT EXISTS`` is safe to call repeatedly;
         the schema-change statements are committed in their own transaction.
+
+        Besides the two query-path indexes, every node key in ``LABEL_KEYS`` is
+        indexed so the writer's equality MERGEs and the identity rewrite resolve
+        the anchor node through an index instead of a full label scan.
         """
         stmts = [
             # Enables index-backed ``ORDER BY e.event_time DESC`` in the
@@ -120,6 +143,14 @@ class Neo4jStore:
             "CREATE RANGE INDEX event_event_time IF NOT EXISTS FOR (e:Event) ON (e.event_time)",
             # Covers the ``WHERE e.tweet_id = ...`` dedup path in the writer.
             "CREATE RANGE INDEX event_tweet_id IF NOT EXISTS FOR (e:Event) ON (e.tweet_id)",
+            # Equality anchors for GraphWriter MERGEs and IdentityEngine
+            # anchor/lookup statements (LABEL_KEYS in app/graph/schema.py).
+            "CREATE RANGE INDEX event_id IF NOT EXISTS FOR (e:Event) ON (e.id)",
+            "CREATE RANGE INDEX politician_id IF NOT EXISTS FOR (p:Politician) ON (p.id)",
+            "CREATE RANGE INDEX insider_id IF NOT EXISTS FOR (i:Insider) ON (i.id)",
+            "CREATE RANGE INDEX committee_id IF NOT EXISTS FOR (c:Committee) ON (c.id)",
+            "CREATE RANGE INDEX ticker_ticker IF NOT EXISTS FOR (t:Ticker) ON (t.ticker)",
+            "CREATE RANGE INDEX sector_name IF NOT EXISTS FOR (s:Sector) ON (s.name)",
         ]
         with self._driver.session() as session:
             for stmt in stmts:

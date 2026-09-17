@@ -71,7 +71,11 @@ class Settings(BaseSettings):
 
     # Cap on any single Cypher statement (query agent, graph export, etc.) so a
     # pathological query can't hang the API. 0 disables the cap.
-    neo4j_query_timeout_seconds: int = Field(default=30, ge=0, le=600)
+    # The writer fans one event out into ~13 MERGEs inside a single transaction,
+    # and even one index-backed lookup can take several seconds on a shared,
+    # loaded Neo4j — so the cap needs headroom over 30s to avoid
+    # TransactionTimedOutClientConfiguration on legitimate work (see #21/#23).
+    neo4j_query_timeout_seconds: int = Field(default=120, ge=0, le=600)
 
     # Cache TTL (seconds) for the read-heavy /api/graph force-directed payload.
     # The UI polls the endpoint continuously and the subgraph is expensive to

@@ -202,7 +202,77 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
     )
 
 
-def test_graph_limit_prefers_typed_events_over_unparsed_without_event_time(neo4j_store):
+def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store):
+    """IdentityEngine tombstones the merged-away node (merged_into set); the
+    /api/graph view must not surface it — only the canonical remains."""
+    from datetime import date
+
+    from app.graph.identity import IdentityEngine
+    from app.graph.resolution import EntityResolver
+    from app.graph.writer import GraphWriter
+
+    cand_id, canon_id = "X080", "X081"
+    resolver = EntityResolver(postgres_store)
+    postgres_store.ensure_alias("Politician", "John Johnson", cand_id, "John Johnson", source="seed")
+    postgres_store.ensure_alias("Politician", "John Johnsen", canon_id, "John Johnsen", source="seed")
+    resolver.suggest_merges("Politician")
+    queue_id = resolver.pending_reviews()[0]["id"]
+    assert resolver.approve(queue_id)
+
+    writer = GraphWriter(neo4j_store)
+    # Future event_time keeps the fixtures inside the "most recent N events"
+    # window of the /api/graph?limit=N render regardless of live scheduler
+    # ingesting newer events while this long integration test runs.
+    evt_a = writer.write_event(
+        CongressTradeEvent(
+            tweet_id="gt-x080",
+            tweet_url="https://x.com/congress_trades/status/gt-x080",
+            confidence=0.95,
+            politician_name="John Johnson",
+            politician_id=cand_id,
+            chamber="senate",
+            party="D",
+            committee_ids=["SSBK"],
+            ticker="NVDA",
+            transaction_type="buy",
+            amount_range="$1,001 - $15,000",
+            transaction_date=date(2026, 1, 15),
+            event_time=datetime(2031, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    evt_b = writer.write_event(
+        CongressTradeEvent(
+            tweet_id="gt-x081",
+            tweet_url="https://x.com/congress_trades/status/gt-x081",
+            confidence=0.95,
+            politician_name="John Johnsen",
+            politician_id=canon_id,
+            chamber="senate",
+            party="D",
+            committee_ids=["SSHR"],
+            ticker="AMD",
+            transaction_type="buy",
+            amount_range="$1,001 - $15,000",
+            transaction_date=date(2026, 1, 16),
+            event_time=datetime(2031, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    try:
+        IdentityEngine(resolver, neo4j_store).apply_merge(queue_id, "Politician")
+
+        # Unique limit keeps the module-level graph cache out of the way.
+        with _client() as c:
+            body = c.get("/api/graph?limit=137").json()
+        keys = {(n["label"], n["key"]) for n in body["nodes"]}
+        assert ("Politician", canon_id) in keys
+        assert ("Politician", cand_id) not in keys
+    finally:
+        neo4j_store.run(
+            "MATCH (p:Politician) WHERE p.id IN $ids DETACH DELETE p",
+            ids=[cand_id, canon_id],
+        )
+        for event_id in (evt_a, evt_b):
+            neo4j_store.run("MATCH (e:Event {id: $id}) DETACH DELETE e", id=event_id)
     """UnparsedEvent has no ``event_time``; the limit query falls back to a
     1900 sentinel so those events always sort as the oldest and never claim the
     recent-view slots over genuinely recent typed events."""

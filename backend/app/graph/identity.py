@@ -1,0 +1,157 @@
+"""Identity dedup layer: apply confirmed identities to the graph.
+
+The naming layer (``app/graph/resolution.py``) decides — with human review in
+the gray band — that two ids are the same person. This engine *rewrites the
+graph* to reflect that decision:
+
+* relationships of the candidate node are transferred to the canonical node
+  (duplicates already present on the canonical are skipped);
+* the candidate node is tombstoned with ``merged_into = canonical id`` so a
+  future write cannot silently resurrect a separate node for the same id;
+* a directed ``SAME_AS`` edge (candidate -> canonical) records the merge with
+  source / confidence / resolution id / timestamp for full provenance.
+
+The whole rewrite runs atomically in one Neo4j transaction. It is idempotent:
+re-applying the same confirmed resolution on an already-tombstoned candidate
+is a no-op.
+
+Relationship types are read from the graph itself, so the engine stays
+agnostic to the schema's vocabulary; each type is validated against a strict
+identifier pattern before it is interpolated into a Cypher statement.
+"""
+
+import re
+
+from app.db.neo4j import Neo4jStore
+from app.graph.resolution import EntityResolver
+
+_RELTYPE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Identity node labels the engine knows how to merge. Anything else is refused:
+# this is a deliberate, auditable surface, not a generic delete-everything tool.
+_MERGEABLE_LABELS = {"Politician", "Insider"}
+
+
+class IdentityEngine:
+    def __init__(self, resolver: EntityResolver, neo4j: Neo4jStore):
+        self.resolver = resolver
+        self.neo4j = neo4j
+
+    def apply_merge(self, resolution_id: int, label: str) -> dict:
+        """Rewrite the graph for a *confirmed* resolution.
+
+        Returns a summary dict::
+
+            {"transferred": int, "skipped_duplicates": int,
+             "same_as": 1, "already_merged": bool}
+
+        Raises ``ValueError`` if the resolution is unknown / not confirmed or
+        the label is not mergeable, and ``RuntimeError`` if the candidate is
+        already tombstoned into a *different* canonical.
+        """
+        resolution = self.resolver.get_resolution(resolution_id)
+        if resolution is None or resolution["status"] != "confirmed":
+            raise ValueError(f"resolution {resolution_id} is not a confirmed merge")
+        if label not in _MERGEABLE_LABELS:
+            raise ValueError(f"refusing to merge label {label!r}")
+        candidate_id = resolution["candidate_id"]
+        canonical_id = resolution["canonical_id"]
+        confidence = resolution["confidence"]
+        # Merges must not be aborted mid-flight by the app-wide 30s query cap:
+        # a partial transfer would corrupt the graph. Merges are human-gated,
+        # small, and run inside one atomic transaction, so we hand the engine a
+        # dedicated budget.
+        return self.neo4j.write_transaction(
+            lambda run: self._merge_tx(
+                run, label, candidate_id, canonical_id, confidence, resolution_id
+            ),
+            timeout=0,
+        )
+
+    def _merge_tx(self, run, label, candidate_id, canonical_id, confidence, resolution_id) -> dict:
+        anchor = run(
+            f"MATCH (cand:{label} {{id:$cid}}), (canon:{label} {{id:$xid}}) "
+            "RETURN elementId(cand) AS c, cand.merged_into AS merged_into",
+            cid=candidate_id,
+            xid=canonical_id,
+        )
+        if not anchor:
+            raise ValueError(
+                f"candidate {candidate_id!r} or canonical {canonical_id!r} "
+                f"not found in the {label} graph"
+            )
+        if anchor[0]["merged_into"] == canonical_id:
+            return {"transferred": 0, "skipped_duplicates": 0, "same_as": 0, "already_merged": True}
+        if anchor[0]["merged_into"] is not None:
+            raise RuntimeError(
+                f"candidate {candidate_id!r} is already merged into "
+                f"{anchor[0]['merged_into']!r}"
+            )
+
+        collect_out = run(
+            f"MATCH (cand:{label} {{id:$cid}})-[r]->(x) "
+            "WHERE type(r) <> 'SAME_AS' AND elementId(x) <> elementId(cand) "
+            "RETURN type(r) AS t, count(r) AS total",
+            cid=candidate_id,
+        )
+        collect_in = run(
+            f"MATCH (x)-[r]->(cand:{label} {{id:$cid}}) "
+            "WHERE type(r) <> 'SAME_AS' "
+            "RETURN type(r) AS t, count(r) AS total",
+            cid=candidate_id,
+        )
+
+        transferred = 0
+        skipped = 0
+        # Each transfer stays pattern-based (driven by the candidate's existing
+        # relationships) so the planner resolves targets through indexes instead
+        # of scanning the graph for elementIds.
+        for rel in collect_out:
+            t = _validated(rel["t"])
+            created = run(
+                f"MATCH (canon:{label} {{id:$xid}}) "
+                f"MATCH (cand:{label} {{id:$cid}})-[r:{t}]->(x) "
+                f"WHERE NOT EXISTS((canon)-[:{t}]->(x)) "
+                f"CREATE (canon)-[nr:{t}]->(x) SET nr = properties(r) "
+                "RETURN count(nr) AS n",
+                xid=canonical_id,
+                cid=candidate_id,
+            )[0]["n"]
+            transferred += created
+            skipped += rel["total"] - created
+        for rel in collect_in:
+            t = _validated(rel["t"])
+            created = run(
+                f"MATCH (canon:{label} {{id:$xid}}) "
+                f"MATCH (x)-[r:{t}]->(cand:{label} {{id:$cid}}) "
+                f"WHERE NOT EXISTS((x)-[:{t}]->(canon)) "
+                f"CREATE (x)-[nr:{t}]->(canon) SET nr = properties(r) "
+                "RETURN count(nr) AS n",
+                xid=canonical_id,
+                cid=candidate_id,
+            )[0]["n"]
+            transferred += created
+            skipped += rel["total"] - created
+
+        run(
+            f"MATCH (cand:{label} {{id:$cid}})-[r]-(x) "
+            "WHERE type(r) <> 'SAME_AS' DELETE r",
+            cid=candidate_id,
+        )
+        run(
+            f"MATCH (cand:{label} {{id:$cid}}), (canon:{label} {{id:$xid}}) "
+            "CREATE (cand)-[:SAME_AS {source:'review', confidence:$conf, "
+            "resolution_id:$rid, merged_at:datetime()}]->(canon) "
+            "SET cand.merged_into = $xid",
+            cid=candidate_id,
+            xid=canonical_id,
+            conf=round(confidence, 4),
+            rid=resolution_id,
+        )
+        return {"transferred": transferred, "skipped_duplicates": skipped, "same_as": 1, "already_merged": False}
+
+
+def _validated(rel_type: str) -> str:
+    if not _RELTYPE_RE.match(rel_type):
+        raise ValueError(f"refusing to interpolate relationship type {rel_type!r} into Cypher")
+    return rel_type
