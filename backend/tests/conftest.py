@@ -2,17 +2,41 @@
 
 Tests that require live services (Postgres, Neo4j) connect on demand and are
 skipped when the service is unreachable, so unit tests always run.
+
+Neo4j isolation (#24): the integration suite prefers the dedicated
+``neo4j-test`` container (bolt://localhost:7690, see docker-compose.yml) so
+tests never mutate the live graph the scheduler writes to. When that container
+is not running, the suite falls back to the regular instance on 7687 so plain
+``pytest`` keeps working out of the box.
 """
 
 from __future__ import annotations
 
 import os
+import socket
 
 import pytest
 
 # Keep the app-level background scheduler out of tests regardless of .env.
 os.environ["SCHEDULER_ENABLED"] = "false"
 os.environ["SEED_DEFAULT_ALERTS"] = "true"
+
+# Promote the whole test process to the isolated test Neo4j when it is up
+# (respecting an explicitly exported NEO4J_URI). Must run before pydantic
+# Settings is first instantiated (get_settings is lru-cached).
+_TEST_NEO4J_BOLT = "bolt://localhost:7690"
+
+
+def _prefer_test_neo4j_if_available() -> None:
+    try:
+        with socket.create_connection(("127.0.0.1", 7690), timeout=1.0):
+            os.environ.setdefault("NEO4J_URI", _TEST_NEO4J_BOLT)
+            os.environ.setdefault("NEO4J_READ_URI", _TEST_NEO4J_BOLT)
+    except OSError:
+        pass  # dev fallback: tests run against the regular 7687 instance
+
+
+_prefer_test_neo4j_if_available()
 
 from app.config import Settings
 from app.db.neo4j import Neo4jStore
@@ -58,6 +82,10 @@ def postgres_store():
 @pytest.fixture
 def neo4j_store():
     """Neo4jStore for integration tests. Skipped when Neo4j is unreachable.
+
+    Targets the isolated ``neo4j-test`` instance (7688) when it is up — the
+    suite then never touches the live graph the scheduler writes to (#24) —
+    and falls back to the regular instance otherwise.
 
     The read-only role (see docs/SETUP.md) is not provisioned in CI, so the
     test store points the read driver at the same admin credentials. The

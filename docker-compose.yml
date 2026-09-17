@@ -20,6 +20,11 @@ services:
   neo4j:
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j
+    # Bounded resources so a co-tenanted host (e.g. a k3d/gmem VM) cannot
+    # starve the graph of CPU/memory (see #21). Bump the *_CPUS/*_MEM env vars
+    # on a dedicated box.
+    cpus: ${NEO4J_CPUS:-2.0}
+    mem_limit: ${NEO4J_MEM:-1.5g}
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-baleen_dev_pass}
       NEO4J_server_memory_heap_max__size: 1G
@@ -30,6 +35,32 @@ services:
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Isolated Neo4j for the integration suite (#24): tests never mutate the live
+  # graph the scheduler writes to. Not started by default — bring it up with
+  # `docker compose up -d neo4j-test`; the test harness auto-promotes to it
+  # (bolt://localhost:7690) when it is reachable, else falls back to 7687.
+  # (7688 is deliberately avoided: the co-located gmem project already binds it.)
+  neo4j-test:
+    image: neo4j:${NEO4J_VERSION:-5}-community
+    container_name: baleen-neo4j-test
+    cpus: ${NEO4J_TEST_CPUS:-1.0}
+    mem_limit: ${NEO4J_TEST_MEM:-768m}
+    environment:
+      NEO4J_AUTH: ${NEO4J_TEST_USER:-${NEO4J_USER:-neo4j}}/${NEO4J_TEST_PASSWORD:-${NEO4J_PASSWORD:-baleen_dev_pass}}
+      NEO4J_server_memory_heap_max__size: 512M
+      NEO4J_server_memory_pagecache_size: 256M
+    ports:
+      - "7690:7687"
+    volumes:
+      - neo4j_test_data:/data
+      - neo4j_test_logs:/logs
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -71,3 +102,5 @@ volumes:
   postgres_data:
   neo4j_data:
   neo4j_logs:
+  neo4j_test_data:
+  neo4j_test_logs:
