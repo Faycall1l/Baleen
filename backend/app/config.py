@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     # TransactionTimedOutClientConfiguration on legitimate work (see #21/#23).
     neo4j_query_timeout_seconds: int = Field(default=120, ge=0, le=600)
 
+    # Budget for the IdentityEngine merge transaction (a multi-statement graph
+    # rewrite). Unlike statement caps, the merge needs one cumulative budget;
+    # it stays finite so a stalled Neo4j can't hold locks indefinitely (#23),
+    # and a mid-flight abort is safe: the whole merge is one transaction and
+    # re-apply resumes/heals an incomplete tombstone (#22).
+    neo4j_merge_timeout_seconds: int = Field(default=300, ge=30, le=3600)
+
     # Cache TTL (seconds) for the read-heavy /api/graph force-directed payload.
     # The UI polls the endpoint continuously and the subgraph is expensive to
     # rebuild (4 Cypher round-trips + serialization), so serving a slightly
