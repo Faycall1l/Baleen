@@ -90,7 +90,13 @@ def test_apply_merge_transfers_relationships_and_tombstones(
 
         # The candidate's unique MEMBER_OF C1 is skipped (canon already has it),
         # but the EventA inbound relationship is transferred to the canonical.
-        assert summary == {"transferred": 1, "skipped_duplicates": 1, "same_as": 1, "already_merged": False}
+        assert summary == {
+            "transferred": 1,
+            "skipped_duplicates": 1,
+            "same_as": 1,
+            "already_merged": False,
+            "resumed": False,
+        }
 
         assert (
             neo4j_store.run(
@@ -176,6 +182,58 @@ def test_apply_merge_raises_when_events_missing(neo4j_store, postgres_store):
     with pytest.raises(ValueError):
         # No nodes exist under these ids: nothing to merge.
         engine.apply_merge(queue_id, "Politician")
+
+
+def test_apply_merge_resumes_pre_existing_tombstone_without_same_as(
+    neo4j_store, postgres_store
+):
+    """A tombstone that lost its SAME_AS edge (aborted/manual op) is healed by
+    re-applying the merge instead of reporting 'already merged' (#22)."""
+    cand_id, canon_id = "P-CAND", "P-CANON"
+    event_a = _write(neo4j_store, _congress("ident-ra", cand_id, "John Johnson", ["C1"]))
+    _write(neo4j_store, _congress("ident-rb", canon_id, "John Johnsen", ["C2"]))
+    queue_id = _confirmed_resolution(postgres_store, cand_id, "John Johnson")
+
+    try:
+        # Simulate the partial state: tombstoned into the canonical but with no
+        # SAME_AS provenance edge and relationships still on the candidate.
+        neo4j_store.run(
+            "MATCH (p:Politician {id: $id}) SET p.merged_into = $canon",
+            id=cand_id,
+            canon=canon_id,
+        )
+
+        engine = IdentityEngine(EntityResolver(postgres_store), neo4j_store)
+        summary = engine.apply_merge(queue_id, "Politician")
+        assert summary["resumed"] is True
+        assert summary["already_merged"] is False
+        assert summary["same_as"] == 1
+
+        # Transfer completed and provenance healed.
+        assert (
+            neo4j_store.run(
+                "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->"
+                "(:Politician {id: $pid}) RETURN count(*) AS count",
+                id=event_a,
+                pid=canon_id,
+            )[0]["count"]
+            == 1
+        )
+        assert (
+            neo4j_store.run(
+                "MATCH (:Politician {id: $c})-[r:SAME_AS]->(:Politician {id: $o}) "
+                "RETURN r.resolution_id AS rid",
+                c=cand_id,
+                o=canon_id,
+            )[0]["rid"]
+            == queue_id
+        )
+
+        # A subsequent normal re-run is the idempotent no-op.
+        again = engine.apply_merge(queue_id, "Politician")
+        assert again["already_merged"] is True
+    finally:
+        _cleanup(neo4j_store, [cand_id, canon_id], [event_a, "ident-rb"])
 
 
 def test_writer_remaps_candidate_id_after_merge(neo4j_store, postgres_store):

@@ -57,10 +57,13 @@ class IdentityEngine:
         candidate_id = resolution["candidate_id"]
         canonical_id = resolution["canonical_id"]
         confidence = resolution["confidence"]
-        # Merges must not be aborted mid-flight by the app-wide 30s query cap:
-        # a partial transfer would corrupt the graph. Merges are human-gated,
+        # Merges must not be aborted mid-flight by the app-wide query cap (#23):
+        # the whole rewrite is one transaction, so an abort commits nothing and
+        # no partial transfer can corrupt the graph. Merges are human-gated,
         # small, and run inside one atomic transaction, so we hand the engine a
-        # dedicated budget.
+        # dedicated budget. Should a *pre-existing* tombstone ever be missing
+        # its SAME_AS edge (manual ops, older versions), the merge resumes and
+        # heals it instead of reporting "already merged" (see _merge_tx).
         return self.neo4j.write_transaction(
             lambda run: self._merge_tx(
                 run, label, candidate_id, canonical_id, confidence, resolution_id
@@ -71,7 +74,9 @@ class IdentityEngine:
     def _merge_tx(self, run, label, candidate_id, canonical_id, confidence, resolution_id) -> dict:
         anchor = run(
             f"MATCH (cand:{label} {{id:$cid}}), (canon:{label} {{id:$xid}}) "
-            "RETURN elementId(cand) AS c, cand.merged_into AS merged_into",
+            "OPTIONAL MATCH (cand)-[sa:SAME_AS]->(canon) "
+            "RETURN elementId(cand) AS c, cand.merged_into AS merged_into, "
+            "count(sa) AS same_as",
             cid=candidate_id,
             xid=canonical_id,
         )
@@ -80,13 +85,17 @@ class IdentityEngine:
                 f"candidate {candidate_id!r} or canonical {canonical_id!r} "
                 f"not found in the {label} graph"
             )
-        if anchor[0]["merged_into"] == canonical_id:
+        if anchor[0]["merged_into"] == canonical_id and anchor[0]["same_as"] > 0:
             return {"transferred": 0, "skipped_duplicates": 0, "same_as": 0, "already_merged": True}
-        if anchor[0]["merged_into"] is not None:
+        if anchor[0]["merged_into"] is not None and anchor[0]["merged_into"] != canonical_id:
             raise RuntimeError(
                 f"candidate {candidate_id!r} is already merged into "
                 f"{anchor[0]['merged_into']!r}"
             )
+        # Tombstoned into THIS canonical but SAME_AS missing (pre-existing
+        # partial state): resume — transfers are idempotent and we re-create
+        # the provenance edge.
+        resumed = anchor[0]["merged_into"] == canonical_id
 
         collect_out = run(
             f"MATCH (cand:{label} {{id:$cid}})-[r]->(x) "
@@ -140,15 +149,22 @@ class IdentityEngine:
         )
         run(
             f"MATCH (cand:{label} {{id:$cid}}), (canon:{label} {{id:$xid}}) "
-            "CREATE (cand)-[:SAME_AS {source:'review', confidence:$conf, "
-            "resolution_id:$rid, merged_at:datetime()}]->(canon) "
+            "MERGE (cand)-[sa:SAME_AS]->(canon) "
+            "ON CREATE SET sa.source = 'review', sa.confidence = $conf, "
+            "sa.resolution_id = $rid, sa.merged_at = datetime() "
             "SET cand.merged_into = $xid",
             cid=candidate_id,
             xid=canonical_id,
             conf=round(confidence, 4),
             rid=resolution_id,
         )
-        return {"transferred": transferred, "skipped_duplicates": skipped, "same_as": 1, "already_merged": False}
+        return {
+            "transferred": transferred,
+            "skipped_duplicates": skipped,
+            "same_as": 1,
+            "already_merged": False,
+            "resumed": resumed,
+        }
 
 
 def _validated(rel_type: str) -> str:
