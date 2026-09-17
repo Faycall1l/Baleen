@@ -84,6 +84,22 @@ def neo4j_store():
     store.close()
 
 
+@pytest.fixture
+def future_event_time():
+    """A fixed future timestamp for graph-visibility fixtures.
+
+    The live scheduler ingests new events minute-by-minute into the shared
+    graph (see #21), so fixtures that must appear inside the
+    ``/api/graph?limit=N`` "most recent N events" window cannot rely on "now" —
+    by the time a slow integration test renders the graph, newer events have
+    pushed the fixtures out (#24). Events seeded with a far-future ``event_time``
+    always sort newest; every such fixture must clean up after itself.
+    """
+    from datetime import datetime, timezone
+
+    return datetime(2031, 1, 1, tzinfo=timezone.utc)
+
+
 class StubLLM:
     """Deterministic LLM stub for extraction tests.
 

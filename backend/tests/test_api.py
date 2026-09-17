@@ -202,7 +202,7 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
     )
 
 
-def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store):
+def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store, future_event_time):
     """IdentityEngine tombstones the merged-away node (merged_into set); the
     /api/graph view must not surface it — only the canonical remains."""
     from datetime import date
@@ -237,7 +237,7 @@ def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store):
             transaction_type="buy",
             amount_range="$1,001 - $15,000",
             transaction_date=date(2026, 1, 15),
-            event_time=datetime(2031, 1, 1, tzinfo=timezone.utc),
+            event_time=future_event_time,
         )
     )
     evt_b = writer.write_event(
@@ -254,7 +254,7 @@ def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store):
             transaction_type="buy",
             amount_range="$1,001 - $15,000",
             transaction_date=date(2026, 1, 16),
-            event_time=datetime(2031, 1, 1, tzinfo=timezone.utc),
+            event_time=future_event_time,
         )
     )
     try:
