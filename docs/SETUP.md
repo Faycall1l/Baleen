@@ -275,6 +275,35 @@ app lays down a staggered set of Neo4j budgets: `NEO4J_QUERY_TIMEOUT_SECONDS`
 (cap per statement), and `NEO4J_MERGE_TIMEOUT_SECONDS` (cumulative budget for
 the single multi-statement identity-merge transaction).
 
+### Measure performance (bench harness)
+`scripts/bench.py` produces trusted, statistically-backed numbers even on the
+saturated shared host (k3d/gmem co-tenancy). It replays a fixed synthetic
+tweet batch through the real pipeline with warmup + sampling, times each stage
+per call (extract / graph write / alerts / reports / Neo4j read probe), logs
+the host load average alongside, and reports median, p90/p99, CV and a
+bootstrap CI — never a bare mean.
+
+```bash
+python -m scripts.bench                         # full protocol (10 rounds + 2 warmup, batch 8)
+python -m scripts.bench --rounds 20 --batch 8 --json /tmp/bench.json
+```
+
+Targets `baleen_test` (5433) and the isolated `neo4j-test` (7690) by default
+and refuses a non-test DSN. For version-vs-version regressions, the **duet**
+mode compares the current checkout and a baseline SHA in alternating rounds on
+the same host (same instances, interleaved order) and reports the per-pair
+ratio with a bootstrap CI and an exact sign test — the right tool when noisy
+neighbors dominate absolute numbers:
+
+```bash
+python -m scripts.bench --aa --duet-pairs 6             # A/A false-positive calibration
+python -m scripts.bench --duet <baseline-sha> --duet-pairs 6
+```
+
+The determined-LLM stub removes external model latency so the harness measures
+Baleen's own stack; replace `DeterministicLLM` with a live endpoint if you
+want end-to-end numbers including the model.
+
 ## 8. Troubleshooting
 
 - **Backend can't reach Neo4j/Postgres** — ensure `docker-compose up` is running
