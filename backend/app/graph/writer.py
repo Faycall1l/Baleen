@@ -162,14 +162,18 @@ class GraphWriter:
     def _write_politician_flow(self, event: CongressTradeEvent) -> None:
         provenance = self._provenance(event)
         name = event.politician_name
+        identity_id = event.politician_id
         if self.entity_resolver is not None:
-            name = self.entity_resolver.canonical_name(
-                "Politician", event.politician_name, event.politician_id
-            )
+            # A confirmed identity remap collapses the id onto its canonical
+            # BEFORE any write: mentions of a tombstoned candidate never
+            # resurrect a separate node, and INVOLVES_*/MEMBER_OF attach to the
+            # canonical node the engine merged into.
+            identity_id = self.entity_resolver.canonical_identity("Politician", event.politician_id)
+            name = self.entity_resolver.canonical_name("Politician", event.politician_name, identity_id)
         self._merge_node(
             "Politician",
             {
-                "id": event.politician_id,
+                "id": identity_id,
                 "name": name,
                 "chamber": event.chamber,
                 **({"party": event.party} if event.party else {}),
@@ -178,7 +182,7 @@ class GraphWriter:
         )
         self._merge_relation(
             "Event", event.deterministic_id, "INVOLVES_POLITICIAN", "Politician",
-            event.politician_id, provenance,
+            identity_id, provenance,
         )
         for committee_id in event.committee_ids:
             self._merge_node(
@@ -194,21 +198,21 @@ class GraphWriter:
                 provenance,
             )
             self._merge_relation(
-                "Politician", event.politician_id, "MEMBER_OF", "Committee", committee_id,
+                "Politician", identity_id, "MEMBER_OF", "Committee", committee_id,
                 provenance,
             )
 
     def _write_insider_flow(self, event: InsiderTradeEvent) -> None:
         provenance = self._provenance(event)
         name = event.insider_name
+        identity_id = event.insider_id
         if self.entity_resolver is not None:
-            name = self.entity_resolver.canonical_name(
-                "Insider", event.insider_name, event.insider_id
-            )
+            identity_id = self.entity_resolver.canonical_identity("Insider", event.insider_id)
+            name = self.entity_resolver.canonical_name("Insider", event.insider_name, identity_id)
         self._merge_node(
             "Insider",
             {
-                "id": event.insider_id,
+                "id": identity_id,
                 "name": name,
                 **({"cik": event.insider_cik} if event.insider_cik else {}),
                 **({"role": event.role} if event.role else {}),
@@ -217,5 +221,5 @@ class GraphWriter:
         )
         self._merge_relation(
             "Event", event.deterministic_id, "INVOLVES_INSIDER", "Insider",
-            event.insider_id, provenance,
+            identity_id, provenance,
         )

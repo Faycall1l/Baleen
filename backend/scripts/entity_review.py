@@ -10,6 +10,7 @@ Usage:
     python -m scripts.entity_review --list                  # show pending reviews
     python -m scripts.entity_review --suggest Politician    # run the pass for one entity type
     python -m scripts.entity_review --approve 12            # confirm suggestion #12
+    python -m scripts.entity_review --apply 12              # rewrite the graph for confirmed #12
     python -m scripts.entity_review --reject 12             # reject suggestion #12
     python -m scripts.entity_review --list --raw            # print a copy-pasteable CSV
 
@@ -85,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
                          help="run the fuzzy near-duplicate pass and queue new pairs")
     actions.add_argument("--list", action="store_true", help="show pending reviews")
     actions.add_argument("--approve", type=int, metavar="ID", help="confirm a pending review")
+    actions.add_argument("--apply", type=int, metavar="ID",
+                         help="rewrite the graph for an already-confirmed review (IdentityEngine merge)")
     actions.add_argument("--reject", type=int, metavar="ID", help="reject a pending review")
     parser.add_argument("entity_type", nargs="?", choices=ADMINISTERED_TYPES,
                         help="restrict --suggest to one entity type")
@@ -93,8 +96,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Postgres DSN (default: settings-database-dsn)")
     args = parser.parse_args(argv)
 
-    if not (args.suggest or args.list or args.approve or args.reject):
-        parser.error("one of --suggest/--list/--approve/--reject is required")
+    if not (args.suggest or args.list or args.approve or args.apply or args.reject):
+        parser.error("one of --suggest/--list/--approve/--apply/--reject is required")
 
     dsn = args.dsn or os.getenv("TEST_DATABASE_URL") or get_settings().postgres_dsn
     store = PostgresStore(dsn)
@@ -119,6 +122,29 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             print(f"review #{args.approve} not found or already resolved", file=sys.stderr)
             return 1
+
+        if args.apply is not None:
+            resolution = resolver.get_resolution(args.apply)
+            if resolution is None or resolution["status"] != "confirmed":
+                print(f"review #{args.apply} is not a confirmed merge", file=sys.stderr)
+                return 1
+            from app.graph.identity import IdentityEngine, _MERGEABLE_LABELS
+
+            label = resolution["entity_type"]
+            if label not in _MERGEABLE_LABELS:
+                print(f"label {label!r} is not mergeable", file=sys.stderr)
+                return 1
+            from app.config import get_settings as _get_settings
+            from app.db.neo4j import Neo4jStore
+
+            neo4j = Neo4jStore(_get_settings())
+            engine = IdentityEngine(resolver, neo4j)
+            try:
+                summary = engine.apply_merge(args.apply, label)
+            finally:
+                neo4j.close()
+            print(f"applied review #{args.apply}: {summary}")
+            return 0
 
         if args.reject is not None:
             if resolver.reject(args.reject):

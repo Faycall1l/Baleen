@@ -283,9 +283,16 @@ def _render_graph(limit: int) -> dict:
                 )
                 keep_ids.extend(row["internal_id"] for row in old_rows)
 
-        node_where = "WHERE elementId(n) IN $keep_ids" if keep_ids is not None else ""
+        node_conditions = [
+            *([f"elementId(n) IN $keep_ids"] if keep_ids is not None else []),
+            # Tombstoned identity nodes (merged_into set, see IdentityEngine)
+            # are hidden from the UI: their SAME_AS edge is provenance, not a
+            # user-facing connection.
+            "(NOT n:Politician OR n.merged_into IS NULL)",
+            "(NOT n:Insider OR n.merged_into IS NULL)",
+        ]
         node_rows = neo4j.run(
-            f"MATCH (n) {node_where} RETURN n AS node, labels(n) AS labels",
+            f"MATCH (n) WHERE {' AND '.join(node_conditions)} RETURN n AS node, labels(n) AS labels",
             keep_ids=keep_ids or [],
         )
         link_where = "WHERE elementId(a) IN $keep_ids AND elementId(b) IN $keep_ids" if keep_ids is not None else ""

@@ -176,3 +176,67 @@ def test_apply_merge_raises_when_events_missing(neo4j_store, postgres_store):
     with pytest.raises(ValueError):
         # No nodes exist under these ids: nothing to merge.
         engine.apply_merge(queue_id, "Politician")
+
+
+def test_writer_remaps_candidate_id_after_merge(neo4j_store, postgres_store):
+    cand_id, canon_id = "P-CAND", "P-CANON"
+    event_a = _write(neo4j_store, _congress("ident-wa", cand_id, "John Johnson", ["C1"]))
+    event_b = _write(neo4j_store, _congress("ident-wb", canon_id, "John Johnsen", ["C2"]))
+    queue_id = _confirmed_resolution(postgres_store, cand_id, "John Johnson")
+
+    try:
+        engine = IdentityEngine(EntityResolver(postgres_store), neo4j_store)
+        engine.apply_merge(queue_id, "Politician")
+
+        # A new mention of the *candidate* id must land on the canonical node,
+        # not resurrect a second candidate node.
+        writer = GraphWriter(
+            neo4j_store, entity_resolver=EntityResolver(postgres_store)
+        )
+        event_c = writer.write_event(
+            _congress("ident-wc", cand_id, "John Johnson", ["C3"])
+        )
+
+        assert (
+            neo4j_store.run(
+                "MATCH (p:Politician) WHERE p.id = $id RETURN count(p) AS count",
+                id=cand_id,
+            )[0]["count"]
+            == 1  # only the tombstone remains
+        )
+        assert (
+            neo4j_store.run(
+                "MATCH (p:Politician {id: $id}) RETURN p.merged_into AS m",
+                id=cand_id,
+            )[0]["m"]
+            == canon_id
+        )
+        # The canonical node now carries all three Events' INVOLVES_POLITICIAN
+        # (event_a was transferred, event_b + event_c went straight there).
+        assert (
+            neo4j_store.run(
+                "MATCH (:Event)-[:INVOLVES_POLITICIAN]->(:Politician {id: $id}) "
+                "RETURN count(*) AS count",
+                id=canon_id,
+            )[0]["count"]
+            == 3
+        )
+        # Candidate and canonical are the only Politician nodes for these ids.
+        assert (
+            neo4j_store.run(
+                "MATCH (p:Politician) WHERE p.id IN $ids RETURN count(p) AS count",
+                ids=[cand_id, canon_id],
+            )[0]["count"]
+            == 2
+        )
+
+        # The canonical node remembers the canonical roster spelling.
+        assert (
+            neo4j_store.run(
+                "MATCH (p:Politician {id: $id}) RETURN p.name AS name",
+                id=canon_id,
+            )[0]["name"]
+            == "John Johnsen"
+        )
+    finally:
+        _cleanup(neo4j_store, [cand_id, canon_id], [event_a, event_b, event_c])
