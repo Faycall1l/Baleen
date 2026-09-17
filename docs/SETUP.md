@@ -255,6 +255,26 @@ Tests that need live Postgres/Neo4j are skipped when the services are down
 (they check connectivity first). Run `docker-compose up postgres neo4j` to
 exercise the integration tests, or bring up the full stack.
 
+### Test Neo4j isolation
+The entity-resolution suite never mutates the live graph the scheduler writes
+to. Bring up the dedicated test instance with:
+
+```bash
+docker compose up -d neo4j-test   # bolt://localhost:7690
+```
+
+The test harness auto-detects it (a one-second socket probe) and promotes the
+whole test process to it; without it, tests fall back to the regular `neo4j`
+instance on 7687 so plain `pytest` keeps working out of the box.
+
+### Resource budgeting
+Both Neo4j containers run with bounded CPU/memory (`NEO4J_CPUS`/`NEO4J_MEM` for
+the live graph, `NEO4J_TEST_CPUS`/`NEO4J_TEST_MEM` for the test instance) so a
+co-tenanted host can't starve them. On a dedicated box, raise the env vars. The
+app lays down a staggered set of Neo4j budgets: `NEO4J_QUERY_TIMEOUT_SECONDS`
+(cap per statement), and `NEO4J_MERGE_TIMEOUT_SECONDS` (cumulative budget for
+the single multi-statement identity-merge transaction).
+
 ## 8. Troubleshooting
 
 - **Backend can't reach Neo4j/Postgres** — ensure `docker-compose up` is running
@@ -262,8 +282,10 @@ exercise the integration tests, or bring up the full stack.
 - **LLM extraction returns `UnparsedEvent` for everything** — the model may not
   be responding; check backend logs, try `LLM_TOOL_MODE=json`, and confirm the
   mock/model is actually listening on `LLM_BASE_URL`.
-- **Ports in use** — Baleen uses 5432, 7474, 7687, 8000, 8001 (mock LLM),
-  5173. Stop other projects on these ports before `docker-compose up`.
+- **Ports in use** — Baleen uses 5432, 7474, 7687, 7690 (test Neo4j), 8000,
+  8001 (mock LLM), 5173. Stop other projects on these ports before
+  `docker-compose up`; 7688 is deliberately avoided because the co-located
+  gmem project binds it.
 
 ---
 
