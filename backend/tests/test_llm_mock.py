@@ -1,5 +1,5 @@
 """The bundled LLM mock (dev tool) must satisfy the OpenAI-compatible contract
-that preflight and the ``--live`` health probe rely on (``GET /v1/models``),
+that the health probe relies on (``GET /v1/models``),
 plus serve tool calls for the extraction stage."""
 
 from __future__ import annotations

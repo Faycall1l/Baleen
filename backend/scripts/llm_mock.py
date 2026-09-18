@@ -29,8 +29,8 @@ app = FastAPI(title="Baleen LLM mock")
 
 @app.get("/v1/models")
 async def list_models() -> dict:
-    """Minimal OpenAI-compatible model list so ``scripts.preflight`` and the
-    ``--live`` health probe (``GET /models``) accept the mock as a real LLM."""
+    """Minimal OpenAI-compatible model list so the health probe
+    (``GET /models``) accepts the mock as a real LLM."""
     return {"object": "list", "data": [{"id": "mock", "object": "model", "owned_by": "baleen"}]}
 
 

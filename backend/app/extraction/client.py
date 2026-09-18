@@ -200,7 +200,7 @@ class LLMClient:
     def health(self) -> bool:
         """Probe the OpenAI-compatible ``/models`` endpoint. Never raises.
 
-        Used as a preflight check before live runs so a misconfigured vLLM
+        Used as a readiness probe before live runs so a misconfigured vLLM
         address fails fast with a clear message instead of mid-pipeline.
         Sends the configured API key: auth-gated endpoints (401 without it)
         must report healthy when the key is valid.

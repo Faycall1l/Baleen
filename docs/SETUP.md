@@ -221,22 +221,6 @@ Every Cypher statement runs inside a transaction with a server-enforced timeout
 (`NEO4J_QUERY_TIMEOUT_SECONDS`, default 30; set `0` to disable). This protects
 the API and the query agent from pathological queries hanging the stack.
 
-### Preflight check (before a live run)
-
-Before pointing Baleen at the real X API and vLLM, run the preflight script —
-one command that validates every config value and dependency (X token, LLM
-reachability incl. the `GET /models` probe, Postgres, Neo4j, scheduler) and
-exits non-zero with a clear message when anything is missing or unreachable:
-
-```bash
-cd backend
-.venv/bin/python -m scripts.preflight
-```
-
-The LLM probe also catches the classic mistake of leaving `LLM_BASE_URL`
-pointing at a port that serves something other than vLLM (non-2xx `GET /models`
-is reported as FAIL).
-
 ### Health endpoint
 
 `GET /health` reports Postgres and Neo4j connectivity (503 when either is
@@ -274,42 +258,6 @@ co-tenanted host can't starve them. On a dedicated box, raise the env vars. The
 app lays down a staggered set of Neo4j budgets: `NEO4J_QUERY_TIMEOUT_SECONDS`
 (cap per statement), and `NEO4J_MERGE_TIMEOUT_SECONDS` (cumulative budget for
 the single multi-statement identity-merge transaction).
-
-### Measure performance (bench harness)
-`scripts/bench.py` produces trusted, statistically-backed numbers even on the
-saturated shared host (k3d/gmem co-tenancy). It replays a fixed synthetic
-tweet batch (deterministic ids, `DeterministicLLM` stub so no external model
-latency) through the real pipeline with warmup + adaptive sampling: rounds
-continue until the bootstrap 95% CI width of **throughput (tweets/s)** is at
-or below `--target-ci` (default 10%), bounded by `--min-rounds`/`--max-rounds`
-(6/24) so one contended host can't balloon the run. It times each stage per
-call (extract / graph write / alerts / reports / Neo4j read probe), logs the
-host load average alongside, and reports median, p90/p99, CV and a bootstrap
-CI — never a bare mean — plus a **load-adjusted throughput** (OLS of tps on
-host `load1`, read off at `--ref-load`) so a busy neighbor isn't mistaken for
-a regression.
-
-```bash
-python -m scripts.bench                          # adaptive (6-24 rounds), batch 8
-python -m scripts.bench --rounds 20 --batch 8 --json /tmp/bench.json   # fixed rounds
-python -m scripts.bench --min-rounds 12 --target-ci 0.05 --batch 16    # tighter, longer
-```
-
-Targets `baleen_test` (5433) and the isolated `neo4j-test` (7690) by default
-and refuses a non-test DSN. For version-vs-version regressions, the **duet**
-mode compares the current checkout and a baseline SHA in alternating rounds on
-the same host (same instances, interleaved order) and reports the per-pair
-ratio with a bootstrap CI and an exact sign test — the right tool when noisy
-neighbors dominate absolute numbers:
-
-```bash
-python -m scripts.bench --aa --duet-pairs 6             # A/A false-positive calibration
-python -m scripts.bench --duet <baseline-sha> --duet-pairs 6
-```
-
-The determined-LLM stub removes external model latency so the harness measures
-Baleen's own stack; replace `DeterministicLLM` with a live endpoint if you
-want end-to-end numbers including the model.
 
 ## 8. Troubleshooting
 
