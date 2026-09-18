@@ -855,8 +855,8 @@ class PostgresStore:
                            url AS source_url
 FROM raw_tweets
                    WHERE tweet_id LIKE 'ptr-%'
-                     AND raw_json->>'ret_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
-                     AND raw_json->>'excess_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
+                     AND jsonb_typeof(raw_json->'ret_since') = 'number'
+                     AND jsonb_typeof(raw_json->'excess_since') = 'number'
                    ORDER BY (raw_json->>'ret_since')::float DESC
                     LIMIT :limit
                     """

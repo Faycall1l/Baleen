@@ -77,6 +77,28 @@ def test_filters_out_executive_branch_and_stale_filings():
     assert [t.tweet_id for t in result.tweets] == ["ptr-new-1"]
 
 
+def test_coerces_mirror_return_fields_to_numbers_issues_25():
+    """#25: numeric-looking mirror values become JSON numbers; junk sentinels
+    are dropped at ingest so no query ever parses text defensively."""
+    src = _source(
+        [
+            _row(id="ok-1", filing_date=_today(), ret_since="12.5", excess_since="1.2e-5"),
+            _row(id="junk-1", filing_date=_today(), ret_since="N/A", excess_since="."),
+            _row(id="nan-1", filing_date=_today(), ret_since="nan", excess_since=None),
+        ]
+    )
+    result = src.fetch_recent([], 3600)
+
+    assert result.errors == []
+    by_id = {t.tweet_id: t.raw_json for t in result.tweets}
+    assert by_id["ptr-ok-1"]["ret_since"] == 12.5
+    assert by_id["ptr-ok-1"]["excess_since"] == 1.2e-05
+    assert "ret_since" not in by_id["ptr-junk-1"]
+    assert "excess_since" not in by_id["ptr-junk-1"]
+    assert "ret_since" not in by_id["ptr-nan-1"]
+    assert "excess_since" not in by_id["ptr-nan-1"]
+
+
 def test_mirror_emits_senate_only_issues_9():
     """#9: the mirror covers Senate; Clerk owns House, so House rows are
     dropped here to avoid double events from the two lanes."""

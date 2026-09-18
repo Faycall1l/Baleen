@@ -16,6 +16,7 @@ contributes classification + confidence, never hallucinated identifiers.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import time
 from datetime import date, datetime, timezone
@@ -92,6 +93,29 @@ def _side_verb(transaction_type: str) -> str:
     return "traded"
 
 
+def _coerce_returns(meta: dict) -> None:
+    """Normalize mirror ``ret_since``/``excess_since`` to JSON numbers.
+
+    The mirror occasionally strands junk sentinels (``"N/A"``, ``"."``, empty
+    strings) in these return fields. Storing them verbatim forces every query
+    to defensively regex-parse text (and silently drops scientific notation).
+    Coerce to a finite float here — or drop the field — so the graph only ever
+    sees real numbers (see #25).
+    """
+    for key in ("ret_since", "excess_since"):
+        if key not in meta:
+            continue
+        try:
+            parsed = float(meta[key])
+        except (TypeError, ValueError):
+            meta.pop(key, None)
+            continue
+        if not math.isfinite(parsed):
+            meta.pop(key, None)
+        else:
+            meta[key] = parsed
+
+
 def _record(row: dict, now: datetime) -> RawTweet | None:
     ticker = str(row.get("ticker") or "").strip().upper()
     filer = str(row.get("filer_name") or "").strip()
@@ -123,6 +147,7 @@ def _record(row: dict, now: datetime) -> RawTweet | None:
     )
     meta = dict(row)
     meta["source_kind"] = SOURCE_KIND
+    _coerce_returns(meta)
     return RawTweet(
         tweet_id=_stable_id(row),
         author_handle=f"congress_{chamber or 'unknown'}",
