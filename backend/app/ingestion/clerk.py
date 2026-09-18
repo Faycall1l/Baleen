@@ -26,7 +26,7 @@ import httpx
 from pypdf import PdfReader
 
 from app.ingestion.disclosures import _record
-from app.ingestion.source import FetchResult, RawTweet, TweetSource
+from app.ingestion.source import BoundedSeen, FetchResult, RawTweet, TweetSource
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,11 @@ MAX_PDFS_PER_POLL = 20
 #: Default emission window (filing date). The mirror backfills history; this
 #: lane exists for fresh filings.
 LOOKBACK_DAYS = 3
+
+#: Cap on the in-memory seen set (doc ids). Bounded so a long-running
+#: scheduler doesn't leak memory; eviction only causes a redundant download
+#: that Postgres dedup drops (see #27).
+SEEN_CAP = 500
 
 
 def parse_index(text: str) -> list[dict]:
@@ -173,7 +178,7 @@ class ClerkHouseSource(TweetSource):
         self._fetch_index = fetch_index or self._download_index
         self._fetch_pdf = fetch_pdf or self._download_pdf
         self._index_cache: tuple[float, str] | None = None
-        self._seen_docs: set[str] = set()
+        self._seen_docs = BoundedSeen(SEEN_CAP)
 
     # ------------------------------------------------------------------
     # TweetSource interface
@@ -211,7 +216,7 @@ class ClerkHouseSource(TweetSource):
                 # otherwise a transient download failure retries forever off.
                 errors.append(f"PTR {filing['doc_id']} failed: {exc}")
                 continue
-            self._seen_docs.add(filing["doc_id"])
+            self._seen_docs.remember(filing["doc_id"])
             for row in _rows_from_filing(filing, trades):
                 try:
                     record = _record(row, now)

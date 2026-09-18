@@ -8,10 +8,39 @@ in-memory fake implementing the same interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
+
+
+class BoundedSeen:
+    """A membership set that evicts the oldest entry once it exceeds ``cap``.
+
+    Used by the filing sources to skip filings a poll already handled this
+    process run. The in-memory set is purely an optimization — downstream
+    dedup by ``tweet_id`` is authoritative — so eviction only causes an
+    occasional redundant download of an old filing, never a duplicate insert.
+    """
+
+    def __init__(self, cap: int) -> None:
+        if cap < 1:
+            raise ValueError("cap must be >= 1")
+        self._cap = cap
+        self._order: deque[str] = deque()
+        self._seen: set[str] = set()
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._seen
+
+    def remember(self, key: str) -> None:
+        if key in self._seen:
+            return
+        if len(self._seen) >= self._cap:
+            self._seen.discard(self._order.popleft())
+        self._seen.add(key)
+        self._order.append(key)
 
 
 class RawTweet(BaseModel):
