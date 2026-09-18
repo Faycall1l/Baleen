@@ -22,7 +22,7 @@ from typing import Any, Callable
 
 import httpx
 
-from app.ingestion.source import FetchResult, RawTweet, TweetSource
+from app.ingestion.source import BoundedSeen, FetchResult, RawTweet, TweetSource
 from app.models.events import Event, InsiderTradeEvent
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,11 @@ SOURCE_KIND = "insider_filing"
 
 #: Bound per-poll filing downloads (newest first).
 MAX_FILINGS_PER_POLL = 15
+
+#: Cap on the in-memory seen set (accessions). Bounded so a long-running
+#: scheduler doesn't leak memory; eviction only triggers a redundant download
+#: that Postgres dedup drops (see #27).
+SEEN_CAP = 2000
 
 #: Emission window floor: filings trickle 24/7, so always cover the last day.
 LOOKBACK_SECONDS = 86400
@@ -253,7 +258,7 @@ class EdgarForm4Source(TweetSource):
         self.max_filings_per_poll = max_filings_per_poll
         self.timeout_seconds = timeout_seconds
         self._fetch_text = fetch_text or self._download
-        self._seen_accessions: set[str] = set()
+        self._seen_accessions = BoundedSeen(SEEN_CAP)
 
     # ------------------------------------------------------------------
     # TweetSource interface
@@ -282,7 +287,7 @@ class EdgarForm4Source(TweetSource):
                 continue
             # issue #12: mark seen only on success, so a transient SEC failure
             # is retried next tick instead of being skipped for this process.
-            self._seen_accessions.add(entry["accession"])
+            self._seen_accessions.remember(entry["accession"])
         logger.info("edgar source: %d trade(s) from filings", len(tweets))
         return FetchResult(tweets=tweets, errors=errors)
 

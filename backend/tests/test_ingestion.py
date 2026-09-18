@@ -463,6 +463,42 @@ def test_multi_source_fans_out_and_namespaces_errors():
     assert any("ExplodingSource" in e for e in result.errors)
 
 
+def test_bounded_seen_evicts_oldest_issues_27():
+    """#27: the seen-set is capped; evicted keys can be re-remembered."""
+    from app.ingestion.source import BoundedSeen
+
+    seen = BoundedSeen(cap=3)
+    seen.remember("a")
+    seen.remember("b")
+    seen.remember("c")
+    assert "a" in seen and "b" in seen and "c" in seen
+
+    seen.remember("d")  # evicts "a"
+    assert "a" not in seen
+    assert "b" in seen and "c" in seen and "d" in seen
+
+    seen.remember("a")  # earliest surviving entry ("b") is evicted next
+    assert "b" not in seen
+    assert "a" in seen
+
+    # Re-remembering an existing key is a no-op (doesn't reorder eviction).
+    seen.remember("c")
+    seen.remember("zzz")
+    assert "d" in seen and "a" in seen and "zzz" in seen
+    assert "c" not in seen  # "logically oldest" surviving entry was evicted
+
+
+def test_bounded_seen_rejects_invalid_cap():
+    from app.ingestion.source import BoundedSeen
+
+    try:
+        BoundedSeen(cap=0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("BoundedSeen(cap=0) must raise")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
