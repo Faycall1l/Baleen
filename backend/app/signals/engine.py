@@ -163,7 +163,7 @@ class SignalsEngine:
                                url AS source_url
                         FROM raw_tweets
                         WHERE (tweet_id LIKE 'ptr-%%' OR tweet_id LIKE 'edgar-%%')
-                          AND raw_json->>'excess_since' ~ '^-?[0-9]+(\.[0-9]+)?$'
+                          AND jsonb_typeof(raw_json->'excess_since') = 'number'
                           AND (raw_json->>'excess_since')::float >= :min_excess
                         ORDER BY (raw_json->>'excess_since')::float DESC
                         LIMIT 10

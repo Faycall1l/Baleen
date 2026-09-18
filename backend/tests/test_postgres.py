@@ -82,6 +82,18 @@ def test_leaderboard_ignores_non_numeric_excess_since_issues_10(postgres_store):
     assert all(r["politician"] != "Bad Row" for r in leaders)
 
 
+def test_leaderboard_accepts_scientific_notation_issues_25(postgres_store):
+    """#25: a JSONB number in scientific notation must rank, not be dropped."""
+    postgres_store.insert_raw_tweets(
+        [_ptr("ptr-sci-1", "Sci Gal", "DDD", 1.2e-5)]
+    )
+
+    leaders = postgres_store.get_leaderboard(limit=10)
+
+    assert [r["politician"] for r in leaders] == ["Sci Gal"]
+    assert leaders[0]["ret_pct"] == 1.2e-5
+
+
 def test_since_cursors_return_only_newer_rows(postgres_store):
     first = postgres_store.insert_report(
         kind="brief", event_id="e-1", title="t1", body="b1"
