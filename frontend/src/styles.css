@@ -51,20 +51,27 @@ a:hover {
 
 .brand {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 9px;
   white-space: nowrap;
+}
+
+.brand img {
+  display: block;
 }
 
 .brand h1 {
   font-size: 18px;
   margin: 0;
+  line-height: 1;
   letter-spacing: 0.02em;
 }
 
 .brand .tagline {
   color: #9b9ba5;
   font-size: 12px;
+  padding-left: 9px;
+  border-left: 1px solid #33333a;
 }
 
 .app-body {
