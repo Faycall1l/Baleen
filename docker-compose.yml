@@ -1,5 +1,6 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     container_name: baleen-postgres
     environment:
@@ -18,13 +19,14 @@ services:
       retries: 10
 
   neo4j:
+    restart: unless-stopped
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j
     # Bounded resources so a co-tenanted host (e.g. a k3d/gmem VM) cannot
     # starve the graph of CPU/memory (see #21). Bump the *_CPUS/*_MEM env vars
     # on a dedicated box.
     cpus: ${NEO4J_CPUS:-2.0}
-    mem_limit: ${NEO4J_MEM:-1.5g}
+    mem_limit: ${NEO4J_MEM:-2g}
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-baleen_dev_pass}
       NEO4J_server_memory_heap_max__size: 1G
@@ -48,6 +50,7 @@ services:
   # (bolt://localhost:7690) when it is reachable, else falls back to 7687.
   # (7688 is deliberately avoided: the co-located gmem project already binds it.)
   neo4j-test:
+    restart: unless-stopped
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j-test
     cpus: ${NEO4J_TEST_CPUS:-1.0}
@@ -69,6 +72,7 @@ services:
       start_period: 20s
 
   backend:
+    restart: unless-stopped
     build: ./backend
     container_name: baleen-backend
     # Optional: every variable below already has a default, so a plain
@@ -99,6 +103,7 @@ services:
   # alerts, and answers out of the box. Point LLM_BASE_URL at a real vLLM
   # and this container just idles.
   llm-mock:
+    restart: unless-stopped
     build: ./backend
     container_name: baleen-llm-mock
     command: ["python", "-m", "scripts.llm_mock"]
@@ -114,6 +119,7 @@ services:
       start_period: 10s
 
   frontend:
+    restart: unless-stopped
     build: ./frontend
     container_name: baleen-frontend
     ports:
