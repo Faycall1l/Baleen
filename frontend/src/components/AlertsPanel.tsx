@@ -24,8 +24,8 @@ export default function AlertsPanel({ alerts, error }: Props) {
       )}
       {!error && alerts.length === 0 && (
         <div className="empty-hint">
-          No alerts yet. They fire when a politician trades a ticker in a
-          sector their committee oversees.
+          No alerts yet. They fire when trades match a watch rule — oversight-sector
+          trades, $1M+ insider buys, unusual options sweeps.
         </div>
       )}
       {alerts.map((a) => (
