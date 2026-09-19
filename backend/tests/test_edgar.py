@@ -101,7 +101,7 @@ def _fetcher():
 
 def test_source_emits_one_record_per_trade():
     src = EdgarForm4Source(fetch_text=_fetcher())
-    result = src.fetch_recent([], 86400 * 7)
+    result = src.fetch_recent([], 86400 * 365)
 
     assert result.errors == []
     assert len(result.tweets) == 1
@@ -114,8 +114,8 @@ def test_source_emits_one_record_per_trade():
 
 def test_source_skips_seen_filings_on_repill():
     src = EdgarForm4Source(fetch_text=_fetcher())
-    assert len(src.fetch_recent([], 86400 * 7).tweets) == 1
-    assert src.fetch_recent([], 86400 * 7).tweets == []
+    assert len(src.fetch_recent([], 86400 * 365).tweets) == 1
+    assert src.fetch_recent([], 86400 * 365).tweets == []
 
 
 def test_source_fetch_failure_returns_errors():
@@ -141,10 +141,10 @@ def test_transient_filing_failure_retried_next_poll_issues_12():
         return OWNERSHIP_XML
 
     src = EdgarForm4Source(fetch_text=flaky)
-    first = src.fetch_recent([], 86400 * 7)
+    first = src.fetch_recent([], 86400 * 365)
     assert first.tweets == [] and len(first.errors) == 1
 
-    second = src.fetch_recent([], 86400 * 7)
+    second = src.fetch_recent([], 86400 * 365)
     assert second.errors == []
     assert len(second.tweets) == 1
     assert calls["n"] == 2  # accession not skipped after the transient failure
