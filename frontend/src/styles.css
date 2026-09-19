@@ -31,6 +31,30 @@ a:hover {
   text-decoration: underline;
 }
 
+:focus-visible {
+  outline: 2px solid rgba(224, 164, 88, 0.65);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #33333a;
+  border: 2px solid #232328;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* ------------------------------------------------------------------ layout */
 
 .app {
@@ -188,7 +212,15 @@ a:hover {
 .query-example {
   font-size: 12px;
   padding: 4px 10px;
+  border-radius: 999px;
   color: #9b9ba5;
+  background: transparent;
+}
+
+.query-example:hover:not(:disabled) {
+  color: #d6d6dd;
+  background: #2b2b31;
+  border-color: #33333a;
 }
 
 button {
@@ -199,6 +231,10 @@ button {
   padding: 8px 14px;
   cursor: pointer;
   font-size: 14px;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    opacity 120ms ease;
 }
 
 button:hover:not(:disabled) {
