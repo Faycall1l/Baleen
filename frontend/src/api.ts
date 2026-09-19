@@ -33,8 +33,21 @@ export function fetchAlerts(limit = 20): Promise<{ alerts: Alert[]; count: numbe
   return json<{ alerts: Alert[]; count: number }>(`/api/alerts?limit=${limit}`);
 }
 
-export function fetchHealth(): Promise<Health> {
-  return json<Health>('/health');
+export async function fetchHealth(): Promise<Health | null> {
+  // Lenient on purpose: a degraded backend answers 503 with a body naming
+  // the failing check, and the pill should read "degraded" — not "offline".
+  // Only an unreachable backend resolves to null.
+  let res: Response;
+  try {
+    res = await fetch('/health');
+  } catch {
+    return null;
+  }
+  try {
+    return (await res.json()) as Health;
+  } catch {
+    return null;
+  }
 }
 
 export function fetchReports(limit = 20): Promise<{ reports: Report[]; count: number }> {

@@ -173,10 +173,7 @@ export default function App() {
   }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals]);
 
   useEffect(() => {
-    const checkHealth = () =>
-      fetchHealth()
-        .then(setHealth)
-        .catch(() => setHealth(null));
+    const checkHealth = () => fetchHealth().then(setHealth);
     checkHealth();
     const id = setInterval(checkHealth, 15_000);
     return () => clearInterval(id);
