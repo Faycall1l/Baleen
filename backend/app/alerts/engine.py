@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from app.alerts.rules import AlertRules
+from app.alerts.rules import AlertRules, RuleTrigger
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
@@ -88,7 +88,7 @@ class AlertEngine:
                 event.deterministic_id,
                 len(trigger.facts),
             )
-            alert = self._persist(name, rule_ids[name], event, trigger.facts)
+            alert = self._persist(name, rule_ids[name], event, trigger)
             if alert:
                 alerts_created.append(alert)
 
@@ -98,14 +98,15 @@ class AlertEngine:
     # Internals
     # ------------------------------------------------------------------
 
-    def _persist(self, rule_name: str, rule_id: int, event: Event, facts: list[dict]) -> dict | None:
+    def _persist(self, rule_name: str, rule_id: int, event: Event, trigger: RuleTrigger) -> dict | None:
+        facts = trigger.facts
         first = facts[0]
-        title = (
+        title = trigger.title or (
             f"{first.get('politician', event.politician_name if hasattr(event, 'politician_name') else 'Politician')} "
             f"traded {first.get('ticker', getattr(event, 'ticker', ''))} in "
             f"{first.get('sector', '')}, a sector their committee oversees"
         )
-        summary = self._draft_summary(event, facts)
+        summary = self._draft_summary(event, facts, fallback=trigger.blurb)
 
         refs = self._graph_refs(facts, event)
         try:
@@ -142,7 +143,7 @@ class AlertEngine:
         logger.info("alert persisted (id=%d, rule=%s, event=%s)", alert_id, rule_name, event.deterministic_id)
         return alert
 
-    def _draft_summary(self, event: Event, facts: list[dict]) -> str:
+    def _draft_summary(self, event: Event, facts: list[dict], fallback: str | None = None) -> str:
         from app.extraction.client import draft_text
 
         prompt = (
@@ -155,7 +156,7 @@ class AlertEngine:
             self.llm,
             system="You write short, factual, non-alarmist alerts.",
             prompt=prompt,
-            fallback=self._template_summary(facts),
+            fallback=fallback or self._template_summary(facts),
         )
 
     def _template_summary(self, facts: list[dict]) -> str:

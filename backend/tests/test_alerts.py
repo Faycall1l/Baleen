@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from app.alerts.engine import AlertEngine
 from app.alerts.rules import AlertRules
 from app.graph.writer import GraphWriter
-from app.models.events import CongressTradeEvent, OptionsFlowEvent
+from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent
 from scripts.seed_reference import seed
 
 from conftest import StubLLM
@@ -241,6 +241,76 @@ def test_evaluate_unknown_rule_never_triggers():
     assert trigger.rule_name == "no_such_rule"
     assert trigger.facts == []
     assert trigger.triggered is False
+
+
+def _insider_event(tweet_id: str, side: str, shares: float | None, price: float | None) -> InsiderTradeEvent:
+    return InsiderTradeEvent(
+        tweet_id=tweet_id,
+        tweet_url=f"https://x.com/edgar_form4/status/{tweet_id}",
+        confidence=0.95,
+        insider_name="Milton C Ault III",
+        insider_id="0001212502",
+        ticker="DPW",
+        transaction_type=side,  # type: ignore[arg-type]
+        shares=shares,
+        price=price,
+        transaction_date=date(2026, 9, 9),
+        event_time=datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+
+
+def _options_event(tweet_id: str, volume: int, open_interest: int) -> OptionsFlowEvent:
+    return OptionsFlowEvent(
+        tweet_id=tweet_id,
+        tweet_url=f"https://x.com/unusual_whales/status/{tweet_id}",
+        confidence=0.9,
+        ticker="NVDA",
+        contract_type="call",
+        strike=250.0,
+        sentiment="bullish",
+        volume=volume,
+        open_interest=open_interest,
+        event_time=datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+
+
+def test_insider_large_buy_triggers_above_threshold():
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    trigger = rules.evaluate("insider_large_buy", _insider_event("a-ins-1", "buy", 5000.0, 250.0))
+
+    assert trigger.triggered is True
+    assert "Milton C Ault III" in (trigger.title or "")
+    assert "DPW" in (trigger.title or "")
+
+
+def test_insider_large_buy_ignores_small_sells_and_missing_figures():
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    assert rules.evaluate("insider_large_buy", _insider_event("a-ins-2", "sell", 5000.0, 250.0)).triggered is False
+    assert rules.evaluate("insider_large_buy", _insider_event("a-ins-3", "buy", 100.0, 2.5)).triggered is False
+    assert rules.evaluate("insider_large_buy", _insider_event("a-ins-4", "buy", None, 250.0)).triggered is False
+    assert rules.evaluate("insider_large_buy", _insider_event("a-ins-5", "buy", 5000.0, None)).triggered is False
+
+
+def test_unusual_options_sweep_triggers_at_5x_not_at_radar_bar():
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    hot = rules.evaluate("unusual_options_sweep", _options_event("a-opt-1", 10_000, 1_000))
+    assert hot.triggered is True
+    assert "NVDA" in (hot.title or "")
+
+    warm = rules.evaluate("unusual_options_sweep", _options_event("a-opt-2", 3_000, 1_000))
+    assert warm.triggered is False
+
+
+def test_new_rules_ship_as_active_defaults(postgres_store, neo4j_store):
+    engine = _engine(postgres_store, neo4j_store)
+
+    alerts = engine.evaluate_event(_insider_event("a-ins-6", "buy", 5000.0, 250.0))
+
+    assert [a["rule_name"] for a in alerts] == ["insider_large_buy"]
+    assert "Milton C Ault III" in alerts[0]["title"]
 
 
 def test_evaluate_event_skips_rule_when_evaluation_raises(monkeypatch, postgres_store, neo4j_store):
