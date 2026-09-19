@@ -141,6 +141,12 @@ class Neo4jStore:
             # Enables index-backed ``ORDER BY e.event_time DESC`` in the
             # graph endpoint instead of a full label scan + sort.
             "CREATE RANGE INDEX event_event_time IF NOT EXISTS FOR (e:Event) ON (e.event_time)",
+            # Backs the ``e.transaction_date >= date($since)`` filters in the
+            # momentum/cluster signals instead of a full label scan.
+            "CREATE RANGE INDEX event_transaction_date IF NOT EXISTS FOR (e:Event) ON (e.transaction_date)",
+            # Backs the ``e.first_seen_at >= datetime($since_ts)`` filter in
+            # the options-meter signal.
+            "CREATE RANGE INDEX event_first_seen_at IF NOT EXISTS FOR (e:Event) ON (e.first_seen_at)",
             # Covers the ``WHERE e.tweet_id = ...`` dedup path in the writer.
             "CREATE RANGE INDEX event_tweet_id IF NOT EXISTS FOR (e:Event) ON (e.tweet_id)",
             # Equality anchors for GraphWriter MERGEs and IdentityEngine
