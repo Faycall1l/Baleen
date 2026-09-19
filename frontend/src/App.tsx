@@ -238,7 +238,7 @@ export default function App() {
         <div className="brand">
           <img src="/baleen.svg" alt="Baleen logo" width={28} height={28} />
           <h1 style={{ color: theme.accent }}>Baleen</h1>
-          <span className="tagline">agentic graph over financial tweets</span>
+          <span className="tagline">watch Congress trade · ask anything</span>
         </div>
         <QueryBar onResult={setQueryResult} />
         <span className="graph-stats">

@@ -5,7 +5,7 @@
 <h1 align="center">Baleen</h1>
 
 <p align="center">
-  Agentic Graph-RAG for the financial side of X/Twitter.
+  Watch Congress trade. Ask anything.
 </p>
 
 <p align="center">
