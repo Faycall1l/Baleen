@@ -71,8 +71,11 @@ services:
   backend:
     build: ./backend
     container_name: baleen-backend
+    # Optional: every variable below already has a default, so a plain
+    # `docker compose up` boots a working demo with zero setup.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       POSTGRES_HOST: postgres
       # .env's DATABASE_URL points at localhost, which inside the container is
