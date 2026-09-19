@@ -1,6 +1,18 @@
-# <img src="frontend/public/baleen.svg" alt="Baleen logo" width="64"> Baleen
+<p align="center">
+  <img src="frontend/public/baleen.svg" alt="Baleen logo" width="112" />
+</p>
 
-**Agentic Graph-RAG for the financial side of X/Twitter.**
+<h1 align="center">Baleen</h1>
+
+<p align="center">
+  Agentic Graph-RAG for the financial side of X/Twitter.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green" /></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" /></a>
+  <a href="docker-compose.yml"><img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" /></a>
+</p>
 
 Baleen turns a live stream of congressional trading disclosures and unusual
 options flow (in the style of [@unusual_whales](https://x.com/unusual_whales))
