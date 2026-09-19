@@ -27,7 +27,7 @@ export default function NodeDetail({ node, onClose }: Props) {
         </div>
         {node.tweet_url && (
           <a href={node.tweet_url} target="_blank" rel="noreferrer">
-            Source tweet ↗
+            Source ↗
           </a>
         )}
         <div style={{ marginTop: 6 }}>
