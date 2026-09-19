@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect x="6" y="6" width="5" height="20" rx="2.5" fill="#e0a458"/>
-  <rect x="13.5" y="11" width="5" height="10" rx="2.5" fill="#e0a458" opacity="0.7"/>
-  <rect x="21" y="6" width="5" height="20" rx="2.5" fill="#e0a458" opacity="0.45"/>
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5bd6d"/>
+      <stop offset="1" stop-color="#d9973f"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="#232328" stroke="#3a3a41" stroke-width="1"/>
+  <rect x="6.8" y="13.5" width="4.2" height="11.5" rx="2.1" fill="url(#plate)" opacity="0.78"/>
+  <rect x="13.9" y="8.5"  width="4.2" height="16.5" rx="2.1" fill="url(#plate)"/>
+  <rect x="21"   y="13.5" width="4.2" height="11.5" rx="2.1" fill="url(#plate)" opacity="0.52"/>
 </svg>
