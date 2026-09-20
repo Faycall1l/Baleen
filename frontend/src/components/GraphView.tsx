@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { EdgeCurvedArrowProgram } from '@sigma/edge-curve';
 import { createNodeBorderProgram } from '@sigma/node-border';
 import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 import Sigma from 'sigma';
-import { EdgeArrowProgram } from 'sigma/rendering';
 
 import { theme } from '../theme';
 import type { GraphData, GraphNode } from '../types';
@@ -25,6 +25,11 @@ interface Props {
 // are placed at their neighborhood centroid, removals drop out — and sigma
 // itself runs no simulation at all. The map is static by construction: no
 // popping, no flicker. Pan/zoom/drag still work; drag rewrites coordinates.
+//
+// Visual model (network-readability rules): curved directed edges declutter
+// crossings; labels carry a halo and render for important nodes first;
+// sizes follow sqrt(degree) in a ~3x band; edges sit behind nodes at low
+// opacity via dimming.
 //
 // Exploration model (Shneiderman, condensed): search to find, click to focus
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
@@ -59,8 +64,27 @@ function shade(hex: string, factor: number): string {
 }
 
 function nodeSize(label: string, degree: number): number {
-  const base = label === 'Event' ? 2 : 3.2;
-  return base * (1 + Math.min(degree, 16) * 0.06);
+  // Literature range ~3x from leaf to hub, sqrt-scaled so mega-hubs don't
+  // eat the canvas; events stay small regardless of degree.
+  if (label === 'Event') return 1.6 + Math.min(Math.sqrt(degree) * 0.8, 2.4);
+  return 2.2 + Math.min(Math.sqrt(degree) * 1.2, 5);
+}
+
+// Default label painter plus a 1-2px background halo so text lifts off
+// edges and nodes on the dark canvas. Same geometry as sigma's default.
+function drawLabelWithHalo(
+  context: CanvasRenderingContext2D,
+  data: { x: number; y: number; size: number; label?: string | null; color: string },
+  settings: { labelSize: number; labelFont: string; labelWeight: string },
+): void {
+  if (!data.label) return;
+  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
+  context.font = `${weight} ${size}px ${font}`;
+  context.lineWidth = 3;
+  context.strokeStyle = theme.bg;
+  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
+  context.fillStyle = theme.text;
+  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
 }
 
 function hashStr(s: string): number {
@@ -119,7 +143,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       const key = `${l.source}>${l.target}:${l.type}`;
       seenEdges.add(key);
       if (!graph.hasEdge(key)) {
-        graph.addEdgeWithKey(key, l.source, l.target, { type: 'arrow', label: l.type });
+        graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
       }
     }
     graph.forEachEdge((e) => {
@@ -157,13 +181,15 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         labelWeight: '500',
         labelColor: { color: theme.textDim },
         labelFont: 'system-ui, sans-serif',
-        labelRenderedSizeThreshold: 7,
+        labelRenderedSizeThreshold: 8,
+        labelDensity: 0.06,
+        defaultDrawNodeLabel: drawLabelWithHalo,
         defaultNodeColor: theme.accent,
         defaultEdgeColor: '#3d3d45',
         minCameraRatio: 0.05,
         maxCameraRatio: 20,
         nodeProgramClasses: { bordered: BorderedNodeProgram },
-        edgeProgramClasses: { arrow: EdgeArrowProgram },
+        edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
       });
       sigmaRef.current = fresh;
 
