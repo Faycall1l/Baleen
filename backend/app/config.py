@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     # rebuild (4 Cypher round-trips + serialization), so serving a slightly
     # stale copy and refreshing on expiry keeps the endpoint responsive under
     # polling. 0 disables the cache.
-    graph_cache_ttl_seconds: float = Field(default=30.0, ge=0)
+    graph_cache_ttl_seconds: float = Field(default=120.0, ge=0)
 
     # --- Scheduler ---
     scheduler_enabled: bool = True
