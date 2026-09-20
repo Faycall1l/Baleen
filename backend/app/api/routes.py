@@ -291,17 +291,16 @@ def _render_graph(limit: int) -> dict:
             "(NOT n:Politician OR n.merged_into IS NULL)",
             "(NOT n:Insider OR n.merged_into IS NULL)",
         ]
-        node_rows = neo4j.run(
-            f"MATCH (n) WHERE {' AND '.join(node_conditions)} RETURN n AS node, labels(n) AS labels",
-            keep_ids=keep_ids or [],
-        )
-        link_where = "WHERE elementId(a) IN $keep_ids AND elementId(b) IN $keep_ids" if keep_ids is not None else ""
-        link_rows = neo4j.run(
+        # One round trip for nodes + links (previously two sequential scans):
+        # every kept node's outgoing edges ride along, and links touching a
+        # node outside the kept set (or a tombstoned node) are dropped in
+        # Python exactly as before.
+        rows = neo4j.run(
             f"""
-            MATCH (a)-[r]->(b)
-            {link_where}
-            RETURN a AS source, labels(a) AS a_label, type(r) AS rel,
-                   b AS target, labels(b) AS b_label
+            MATCH (n) WHERE {' AND '.join(node_conditions)}
+            OPTIONAL MATCH (n)-[r]->(m)
+            RETURN n AS node, labels(n) AS labels,
+                   type(r) AS rel, m AS target, labels(m) AS target_labels
             """,
             keep_ids=keep_ids or [],
         )
@@ -311,11 +310,13 @@ def _render_graph(limit: int) -> dict:
 
     nodes = []
     ids_by_key: dict[tuple[str, str], str] = {}
-    for row in node_rows:
+    for row in rows:
         props = dict(row["node"].items())
         label = row["labels"][0]
         key = _node_key(label, props)
         node_id = f"{label}:{key}"
+        if (label, key) in ids_by_key:
+            continue
         ids_by_key[(label, key)] = node_id
         nodes.append(
             {
@@ -329,9 +330,11 @@ def _render_graph(limit: int) -> dict:
         )
 
     links = []
-    for row in link_rows:
-        a_label, b_label = row["a_label"][0], row["b_label"][0]
-        a_key = _node_key(a_label, dict(row["source"].items()))
+    for row in rows:
+        if row["rel"] is None or row["target"] is None:
+            continue
+        a_label, b_label = row["labels"][0], row["target_labels"][0]
+        a_key = _node_key(a_label, dict(row["node"].items()))
         b_key = _node_key(b_label, dict(row["target"].items()))
         source = ids_by_key.get((a_label, a_key))
         target = ids_by_key.get((b_label, b_key))
@@ -341,7 +344,7 @@ def _render_graph(limit: int) -> dict:
                     "source": source,
                     "target": target,
                     "type": row["rel"],
-                    "tweet_url": (row["source"] or {}).get("tweet_url"),
+                    "tweet_url": (row["node"] or {}).get("tweet_url"),
                 }
             )
 

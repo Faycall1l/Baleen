@@ -679,10 +679,10 @@ def test_graph_response_is_cached_within_ttl(monkeypatch):
             assert c.get("/api/graph?limit=20").status_code == 200
             assert c.get("/api/graph?limit=500").status_code == 200
         # Each rebuild is count + keep_ids + (null-event_time pad, since the
-        # mock's keep_ids are empty) + node fetch + link fetch = 5 Cypher
+        # mock's keep_ids are empty) + combined node/link fetch = 4 Cypher
         # round-trips: limit=20 rebuilt once (2nd call cached), limit=500 once
-        # = 10 runs total, not 15.
-        assert neo.runs == 10
+        # = 8 runs total, not 12.
+        assert neo.runs == 8
 
 
 def test_graph_cache_disabled_when_ttl_zero(monkeypatch):
@@ -700,7 +700,7 @@ def test_graph_cache_disabled_when_ttl_zero(monkeypatch):
     with _client() as c:
         assert c.get("/api/graph?limit=20").status_code == 200
         assert c.get("/api/graph?limit=20").status_code == 200
-    assert neo.runs == 10  # two full rebuilds, nothing cached
+    assert neo.runs == 8  # two full rebuilds, nothing cached
 
 
 def test_alerts_error_is_json_500(monkeypatch):
