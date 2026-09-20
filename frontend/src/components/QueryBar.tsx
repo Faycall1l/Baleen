@@ -1,64 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { askQuestion } from '../api';
 import type { QueryResponse } from '../types';
 
 interface Props {
   onResult: (result: QueryResponse | null) => void;
+  onError: (message: string | null) => void;
+  onFocusAsk?: () => void;
+  externalAsk?: { text: string; nonce: number } | null;
 }
 
-const EXAMPLES = [
-  'Which tickers did congressional traders buy most recently?',
-  'Which sectors does the House Financial Services Committee oversee?',
-  'Show unusual options flow by sector.',
-];
-
-export default function QueryBar({ onResult }: Props) {
+export default function QueryBar({ onResult, onError, onFocusAsk, externalAsk }: Props) {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const seenNonce = useRef<number | null>(null);
 
   async function submit(q?: string) {
     const text = (q ?? question).trim();
     if (!text || busy) return;
     setQuestion(text);
     setBusy(true);
-    setError(null);
+    onError(null);
     try {
       onResult(await askQuestion(text));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      onError(err instanceof Error ? err.message : String(err));
       onResult(null);
     } finally {
       setBusy(false);
     }
   }
 
+  // Example questions (from the answer panel) submit through the same path.
+  useEffect(() => {
+    if (externalAsk && externalAsk.nonce !== seenNonce.current) {
+      seenNonce.current = externalAsk.nonce;
+      submit(externalAsk.text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalAsk]);
+
   return (
-    <>
-      <div className="query-bar">
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder="Ask the graph… e.g. which sectors has Cassidy traded?"
-        />
-        <button onClick={() => submit()} disabled={busy || !question.trim()}>
-          {busy ? '…' : 'Ask'}
-        </button>
-      </div>
-      <div className="query-examples">
-        {EXAMPLES.map((ex) => (
-          <button key={ex} className="query-example" onClick={() => submit(ex)} disabled={busy}>
-            {ex}
-          </button>
-        ))}
-      </div>
-      {error && (
-        <div className="query-result">
-          <div className="error">{error}</div>
-        </div>
-      )}
-    </>
+    <div className="query-bar">
+      <input
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        onFocus={onFocusAsk}
+        placeholder="Ask the graph… e.g. which sectors has Cassidy traded?"
+      />
+      <button onClick={() => submit()} disabled={busy || !question.trim()}>
+        {busy ? '…' : 'Ask'}
+      </button>
+    </div>
   );
 }

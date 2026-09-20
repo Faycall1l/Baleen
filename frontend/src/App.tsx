@@ -2,80 +2,38 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
 import AlertsPanel from './components/AlertsPanel';
+import AnswerPanel from './components/AnswerPanel';
 import GraphView from './components/GraphView';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
 import ReportsPanel from './components/ReportsPanel';
 import SignalsPanel from './components/SignalsPanel';
-import { theme } from './theme';
 import type { Alert, GraphData, GraphNode, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 
-function QueryResultView({ result }: { result: QueryResponse }) {
-  return (
-    <div className="query-result">
-      <div className="answer">
-        {result.has_data ? result.answer : 'No matching data in the graph yet.'}
-      </div>
-      <div className="meta">
-        {result.allowed ? (
-          <>
-            <div>Generated Cypher:</div>
-            <pre>{result.cypher}</pre>
-            {result.sources.length > 0 && (
-              <div>
-                Sources:{' '}
-                {result.sources.map((s, i) => (
-                  <a key={i} href={s} target="_blank" rel="noreferrer">
-                    [{i + 1}]
-                  </a>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="error">
-              Request blocked: {result.violations.join('; ')}
-            </div>
-            <pre>{result.cypher}</pre>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function HealthPill({ health }: { health: Health | null }) {
+function HealthDot({ health }: { health: Health | null }) {
   if (!health) {
-    return (
-      <span className="health-pill offline" title="Backend unreachable">
-        offline
-      </span>
-    );
+    return <span className="health-dot offline" title="Backend unreachable" />;
   }
   const down = Object.entries(health.checks)
     .filter(([, c]) => c.status !== 'ok')
     .map(([name]) => name);
-  const title =
-    down.length > 0
-      ? `degraded: ${down.join(', ')} down`
-      : 'all systems ok';
-  return (
-    <span
-      className={`health-pill ${health.status === 'ok' ? 'ok' : 'degraded'}`}
-      title={title}
-    >
-      {health.status}
-    </span>
-  );
+  const title = down.length > 0 ? `degraded: ${down.join(', ')} down` : 'all systems ok';
+  const cls = health.status === 'ok' ? 'ok' : 'degraded';
+  return <span className={`health-dot ${cls}`} title={title} />;
 }
+
+type Drawer = 'alerts' | 'reports' | 'leaders' | 'signals' | null;
 
 export default function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [answerOpen, setAnswerOpen] = useState(false);
+  const [askSeed, setAskSeed] = useState<{ text: string; nonce: number } | null>(null);
+  const [drawer, setDrawer] = useState<Drawer>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsError, setAlertsError] = useState<string | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -93,6 +51,18 @@ export default function App() {
   alertsRef.current = alerts;
 
   const graphAbortRef = useRef<AbortController | null>(null);
+  // Guards the selection-clear race: a background click landing within a
+  // beat of picking a node is treated as part of the same gesture.
+  const lastPickRef = useRef(0);
+
+  const handleSelect = useCallback((n: GraphNode | null) => {
+    if (n) {
+      lastPickRef.current = Date.now();
+      setSelected(n);
+    } else if (Date.now() - lastPickRef.current > 300) {
+      setSelected(null);
+    }
+  }, []);
 
   const loadGraph = useCallback(() => {
     // Slow renders must never pile up: a new poll cancels the previous
@@ -104,9 +74,8 @@ export default function App() {
     setGraphError(null);
     fetchGraph(150, ctrl.signal)
       .then((data) => {
-        // Only swap the graph when something actually changed; keeping the same
-        // data reference stops react-force-graph from re-laying-out the view on
-        // every poll.
+        // Only swap the graph when something actually changed; keeping the
+        // same data reference avoids needless re-renders on every poll.
         const sig = JSON.stringify({
           n: data.node_count,
           l: data.link_count,
@@ -158,14 +127,8 @@ export default function App() {
       .catch((err) => setSignalsError(err.message));
   }, []);
 
-  const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const graphSigRef = useRef<string | null>(null);
-
-  const refresh = useCallback(() => {
-    setRefreshing(true);
-    Promise.all([loadGraph(), loadAlerts(), loadReports(), loadLeaders(), loadSignals()]).finally(() => setRefreshing(false));
-  }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals]);
 
   useEffect(() => {
     loadGraph();
@@ -173,7 +136,7 @@ export default function App() {
     loadReports();
     loadLeaders();
     loadSignals();
-    // Poll so newly-ingested events appear live without a manual Refresh.
+    // Poll so newly-ingested events appear live.
     const id = setInterval(() => {
       loadGraph();
       loadAlerts();
@@ -241,61 +204,122 @@ export default function App() {
     };
   }, []);
 
+  const briefs = reports.filter((r) => r.kind === 'brief');
+  const reportCount = briefs.length + (digest ? 1 : 0);
+  const signalsCount = signals
+    ? signals.momentum.length +
+      signals.clusters.length +
+      signals.options_meter.length +
+      signals.suspicious.length +
+      signals.uncovered.length
+    : 0;
+
+  const rail = (
+    <nav className="rail" aria-label="Panels">
+      {(
+        [
+          { key: 'alerts', label: 'Alerts', count: alerts.length },
+          { key: 'reports', label: 'Reports', count: reportCount },
+          { key: 'leaders', label: 'Board', count: leaders.length },
+          { key: 'signals', label: 'Signals', count: signalsCount },
+        ] as { key: Exclude<Drawer, null>; label: string; count: number }[]
+      ).map(({ key, label, count }) => (
+        <button
+          key={key}
+          className={`rail-btn${drawer === key ? ' active' : ''}`}
+          onClick={() => setDrawer(drawer === key ? null : key)}
+          title={label}
+        >
+          <span className="rail-label">{label}</span>
+          {count > 0 && <span className="rail-badge">{count}</span>}
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
     <div className="app">
-      <header className="app-header">
+      <header className="commandbar">
         <div className="brand">
-          <img src="/baleen.svg" alt="Baleen logo" width={28} height={28} />
-          <h1 style={{ color: theme.accent }}>Baleen</h1>
-          <span className="tagline">watch Congress trade · ask anything</span>
+          <img src="/baleen.svg" alt="Baleen logo" width={26} height={26} />
+          <h1>Baleen</h1>
         </div>
-        <QueryBar onResult={setQueryResult} />
-        <span className="graph-stats">
-          {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
-          {graph?.truncated && graph.event_count
-            ? ` · showing most recent of ${graph.event_count} events`
-            : ''}
-        </span>
-        <HealthPill health={health} />
-        <button onClick={refresh} disabled={refreshing}>
-          {refreshing ? '…' : 'Refresh'}
-        </button>
+        <div className="ask-wrap">
+          <QueryBar
+            onResult={(res) => {
+              setQueryResult(res);
+              setAnswerOpen(true);
+            }}
+            onError={setQueryError}
+            onFocusAsk={() => setAnswerOpen(true)}
+            externalAsk={askSeed}
+          />
+          {answerOpen && (
+            <AnswerPanel
+              result={queryResult}
+              error={queryError}
+              onClose={() => setAnswerOpen(false)}
+              onExample={(q) => setAskSeed({ text: q, nonce: Date.now() })}
+            />
+          )}
+        </div>
+        <HealthDot health={health} />
       </header>
 
       <div className="app-body">
-        <aside className="panel panel-sidebar">
-          {queryResult ? (
-            <QueryResultView result={queryResult} />
-          ) : (
-            <div className="empty-hint">
-              Ask a question about the graph in plain English — the agent turns
-              it into a validated Cypher query and explains the answer.
-            </div>
-          )}
-          <AlertsPanel alerts={alerts} error={alertsError} />
-          <ReportsPanel digest={digest} reports={reports} error={reportsError} />
-          <LeaderboardPanel leaders={leaders} error={leadersError} />
-          <SignalsPanel signals={signals} error={signalsError} />
-        </aside>
-
+        {rail}
         <main className="graph-area">
           <GraphView
             data={graph}
             error={graphError}
             selectedId={selected?.id ?? null}
-            onSelect={(n) => setSelected(n)}
+            onSelect={handleSelect}
           />
-        </main>
-
-        <aside className="panel panel-detail">
-          {selected ? (
-            <NodeDetail node={selected} onClose={() => setSelected(null)} />
-          ) : (
-            <div className="empty-hint">
-              Select a node to inspect it and open its source tweet.
+          {drawer === 'alerts' && (
+            <div className="drawer">
+              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
+                ×
+              </button>
+              <AlertsPanel alerts={alerts} error={alertsError} />
             </div>
           )}
-        </aside>
+          {drawer === 'reports' && (
+            <div className="drawer">
+              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
+                ×
+              </button>
+              <ReportsPanel digest={digest} reports={reports} error={reportsError} />
+            </div>
+          )}
+          {drawer === 'leaders' && (
+            <div className="drawer">
+              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
+                ×
+              </button>
+              <LeaderboardPanel leaders={leaders} error={leadersError} />
+            </div>
+          )}
+          {drawer === 'signals' && (
+            <div className="drawer">
+              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
+                ×
+              </button>
+              <SignalsPanel signals={signals} error={signalsError} />
+            </div>
+          )}
+          <div className="graph-status">
+            {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
+            {graph?.truncated && graph.event_count
+              ? ` · recent ${graph.node_count} of ${graph.event_count} events`
+              : ''}
+          </div>
+        </main>
+
+        {selected && (
+          <aside className="panel panel-detail">
+            <NodeDetail node={selected} onClose={() => setSelected(null)} />
+          </aside>
+        )}
       </div>
     </div>
   );
