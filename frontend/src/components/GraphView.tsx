@@ -12,10 +12,9 @@ interface Props {
   onSelect: (node: GraphNode | null) => void;
 }
 
-// Budgets that keep the canvas interactive as the graph grows. Past them,
-// decoration (particles, far-zoom labels) switches off instead of melting
-// the browser; the data itself is untouched.
-const LINK_PARTICLE_BUDGET = 200;
+// Budgets that keep the canvas interactive as the graph grows. Past the
+// label budget, far-zoom labels switch off instead of melting the browser;
+// the data itself is untouched.
 const LABEL_NODE_BUDGET = 800;
 const LABEL_ZOOM = 1.4;
 
@@ -198,9 +197,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       backgroundColor={theme.bg}
       linkColor={() => '#3d3d45'}
       linkWidth={1.2}
-      linkDirectionalParticles={data.links.length > LINK_PARTICLE_BUDGET ? 0 : 1}
-      linkDirectionalParticleWidth={2}
-      linkDirectionalParticleColor={() => theme.accent}
+      linkDirectionalParticles={0}
       linkLabel={(l) => (l as { type: string }).type}
       nodeRelSize={5}
       cooldownTime={2500}
