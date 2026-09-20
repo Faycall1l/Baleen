@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import ForceGraph2D from 'react-force-graph-2d';
 
@@ -143,6 +143,17 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   // False until the first settle completes; afterwards newcomers arrive
   // pre-pinned and nothing ever moves again.
   const frozenRef = useRef(false);
+  const fgRef = useRef<any>(null);
+
+  // Glide the camera to the selected node (zoom untouched): on a large
+  // frozen map this is what makes selection feel connected to the view.
+  useEffect(() => {
+    if (!selectedId) return;
+    const n = nodeCache.current.get(selectedId);
+    if (n?.x !== undefined && n?.y !== undefined) {
+      fgRef.current?.centerAt?.(n.x, n.y, 600);
+    }
+  }, [selectedId]);
 
   const forceData = useMemo(() => {
     if (!data) return null;
@@ -206,6 +217,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         ))}
       </div>
       <ForceGraph2D
+      ref={fgRef}
       graphData={forceData}
       backgroundColor={theme.bg}
       linkDirectionalParticles={0}
