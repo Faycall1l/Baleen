@@ -137,6 +137,81 @@ a:hover {
   inset: 0;
 }
 
+.graph-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.graph-search {
+  position: relative;
+}
+
+.graph-search input {
+  width: 220px;
+  background: rgba(35, 35, 40, 0.92);
+  border: 1px solid #33333a;
+  border-radius: 6px;
+  color: #d6d6dd;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.graph-search input:focus {
+  outline: none;
+  border-color: #e0a458;
+}
+
+.graph-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 260px;
+  background: #232328;
+  border: 1px solid #33333a;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.graph-search-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #d6d6dd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-search-results button:hover {
+  background: #2b2b31;
+  border: none;
+}
+
+.graph-search-label {
+  color: #9b9ba5;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 6px;
+}
+
+.graph-fit-btn {
+  padding: 7px 12px;
+  font-size: 13px;
+  background: rgba(35, 35, 40, 0.92);
+}
+
 .graph-legend {
   position: absolute;
   left: 12px;
