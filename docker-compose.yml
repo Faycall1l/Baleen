@@ -54,7 +54,7 @@ services:
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j-test
     cpus: ${NEO4J_TEST_CPUS:-1.0}
-    mem_limit: ${NEO4J_TEST_MEM:-768m}
+    mem_limit: ${NEO4J_TEST_MEM:-1g}
     environment:
       NEO4J_AUTH: ${NEO4J_TEST_USER:-${NEO4J_USER:-neo4j}}/${NEO4J_TEST_PASSWORD:-${NEO4J_PASSWORD:-baleen_dev_pass}}
       NEO4J_server_memory_heap_max__size: 512M
