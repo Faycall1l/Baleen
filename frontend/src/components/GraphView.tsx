@@ -180,6 +180,23 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return set;
   }, [selectedId, data]);
 
+  // Degree per node: hubs render larger so the important nodes read at a
+  // glance on a frozen map. Capped so mega-hubs don't eat the canvas.
+  const degree = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!data) return m;
+    for (const l of data.links) {
+      m.set(l.source, (m.get(l.source) ?? 0) + 1);
+      m.set(l.target, (m.get(l.target) ?? 0) + 1);
+    }
+    return m;
+  }, [data]);
+
+  const nodeSize = (id: string, label: string): number => {
+    const base = label === 'Event' ? 4.5 : 6.5;
+    return base * (1 + Math.min(degree.get(id) ?? 0, 16) * 0.06);
+  };
+
   if (error) {
     return (
       <div className="empty-hint">
@@ -258,7 +275,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         const label = node.label as string;
         const title = node.title as string;
         const color = theme.nodeColors[label as keyof typeof theme.nodeColors] ?? theme.accent;
-        const size = label === 'Event' ? 4.5 : 6.5;
+        const size = nodeSize(node.id as string, label);
         const dimmed = !!highlight && !highlight.has(node.id as string);
 
         ctx.globalAlpha = dimmed ? 0.12 : 1;
@@ -294,7 +311,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       nodePointerAreaPaint={(node, color, ctx) => {
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(node.x!, node.y!, 8, 0, 2 * Math.PI);
+        ctx.arc(node.x!, node.y!, Math.max(8, nodeSize(node.id as string, node.label as string) + 2), 0, 2 * Math.PI);
         ctx.fill();
       }}
       onNodeClick={(node) => {
