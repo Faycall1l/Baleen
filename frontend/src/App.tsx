@@ -92,9 +92,17 @@ export default function App() {
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
 
+  const graphAbortRef = useRef<AbortController | null>(null);
+
   const loadGraph = useCallback(() => {
+    // Slow renders must never pile up: a new poll cancels the previous
+    // in-flight fetch (aborts are swallowed, not surfaced as errors).
+    graphAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    graphAbortRef.current = ctrl;
+    const timer = setTimeout(() => ctrl.abort(), 60_000);
     setGraphError(null);
-    fetchGraph()
+    fetchGraph(150, ctrl.signal)
       .then((data) => {
         // Only swap the graph when something actually changed; keeping the same
         // data reference stops react-force-graph from re-laying-out the view on
@@ -111,7 +119,11 @@ export default function App() {
           setGraph(data);
         }
       })
-      .catch((err) => setGraphError(err.message));
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setGraphError(err.message);
+      })
+      .finally(() => clearTimeout(timer));
   }, []);
 
   const loadAlerts = useCallback(() => {
