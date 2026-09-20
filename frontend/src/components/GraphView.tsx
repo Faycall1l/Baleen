@@ -1,3 +1,5 @@
+import { useMemo, useRef } from 'react';
+
 import ForceGraph2D from 'react-force-graph-2d';
 
 import type { GraphData, GraphNode } from '../types';
@@ -17,20 +19,115 @@ const LINK_PARTICLE_BUDGET = 200;
 const LABEL_NODE_BUDGET = 800;
 const LABEL_ZOOM = 1.4;
 
-// react-force-graph-2d mutates links' source/target into node objects after
-// loading; keep the export data immutable by passing a shallow copy.
-function toForceData(data: GraphData) {
-  return {
-    nodes: data.nodes.map((n) => ({ id: n.id, label: n.label, title: n.title })),
-    links: data.links.map((l) => ({
-      source: l.source,
-      target: l.target,
-      type: l.type,
-    })),
-  };
+// Small deterministic hash for seeding initial positions (stable across
+// polls so first paint doesn't depend on Math.random ordering).
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+interface PlacedNode {
+  id: string;
+  label: string;
+  title: string;
+  x?: number;
+  y?: number;
+}
+
+// Reconcile incoming nodes against the live objects by id. The force engine
+// stores positions/velocities ON the node objects and merges updates by
+// object identity — handing it fresh instances every poll (as we used to)
+// reads as a brand-new dataset and re-heats the whole simulation, which is
+// the "popping" on every refresh. Reused instances stay put; only genuinely
+// new nodes enter, seeded next to their already-placed neighborhood.
+function reconcileNodes(
+  incoming: GraphData['nodes'],
+  links: GraphData['links'],
+  cache: Map<string, PlacedNode>,
+): PlacedNode[] {
+  const seen = new Set<string>();
+  const placed: PlacedNode[] = [];
+  for (const n of incoming) {
+    seen.add(n.id);
+    let node = cache.get(n.id);
+    if (!node) {
+      node = { id: n.id, label: n.label, title: n.title };
+      cache.set(n.id, node);
+      placed.push(node);
+    } else {
+      node.label = n.label;
+      node.title = n.title;
+      placed.push(node);
+    }
+  }
+  for (const id of [...cache.keys()]) {
+    if (!seen.has(id)) cache.delete(id);
+  }
+  // Seed positions only for nodes the engine hasn't placed yet.
+  const fresh = placed.filter((n) => n.x === undefined || n.y === undefined);
+  if (fresh.length === 0) return placed;
+  const anchored = placed.filter((n) => n.x !== undefined && n.y !== undefined);
+  if (anchored.length === 0) {
+    // First paint: deterministic circle so the graph opens spread out
+    // instead of exploding from a point.
+    const radius = 30 * Math.sqrt(placed.length);
+    placed.forEach((n, i) => {
+      const a = (i / placed.length) * 2 * Math.PI + hashStr(n.id);
+      n.x = Math.cos(a) * radius;
+      n.y = Math.sin(a) * radius;
+    });
+    return placed;
+  }
+  const byId = new Map(anchored.map((n) => [n.id, n]));
+  const neighborPos = new Map<string, { x: number; y: number }[]>();
+  for (const l of links) {
+    const a = byId.get(l.source);
+    const b = byId.get(l.target);
+    if (a && b) continue; // both placed; nothing to seed
+    const known = a ?? b;
+    const unknown = a ? l.target : l.source;
+    if (!known || byId.has(unknown)) continue;
+    const list = neighborPos.get(unknown) ?? [];
+    list.push({ x: known.x!, y: known.y! });
+    neighborPos.set(unknown, list);
+  }
+  for (const n of fresh) {
+    const neighbors = neighborPos.get(n.id);
+    if (neighbors?.length) {
+      n.x = neighbors.reduce((s, p) => s + p.x, 0) / neighbors.length;
+      n.y = neighbors.reduce((s, p) => s + p.y, 0) / neighbors.length;
+    } else {
+      // No placed neighborhood: deterministic ring near the center.
+      const a = hashStr(n.id) * 2 * Math.PI;
+      const r = 40 + hashStr(n.id + ':r') * 80;
+      n.x = Math.cos(a) * r;
+      n.y = Math.sin(a) * r;
+    }
+  }
+  return placed;
 }
 
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
+  // Live node objects, keyed by id: the engine's positions live on these
+  // instances, so they must survive across polls (see reconcileNodes).
+  const nodeCache = useRef(new Map<string, PlacedNode>());
+
+  const forceData = useMemo(() => {
+    if (!data) return null;
+    return {
+      nodes: reconcileNodes(data.nodes, data.links, nodeCache.current),
+      links: data.links.map((l) => ({
+        source: l.source,
+        target: l.target,
+        type: l.type,
+      })),
+    };
+  }, [data]);
+
   if (error) {
     return (
       <div className="empty-hint">
@@ -39,7 +136,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     );
   }
 
-  if (!data) {
+  if (!data || !forceData) {
     return <div className="empty-hint">Loading graph…</div>;
   }
 
@@ -52,8 +149,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     );
   }
 
-  // Lazy import keeps the (large) force-graph bundle off the initial path.
-  const forceData = toForceData(data);
   const dense = data.nodes.length > LABEL_NODE_BUDGET;
 
   return (
