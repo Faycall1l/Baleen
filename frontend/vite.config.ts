@@ -12,6 +12,12 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // The health probe lives at / (not /api/); without this the health
+      // pill in the UI always reads "offline" under `npm run dev`.
+      '/health': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 });
