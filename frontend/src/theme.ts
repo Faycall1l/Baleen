@@ -17,6 +17,7 @@ export const theme = {
     Sector: '#7ab8e8',
     Politician: '#8fbf7f',
     Committee: '#c07fc0',
+    Insider: '#4db6ac',
     Event: '#d68a8a',
   },
 };
