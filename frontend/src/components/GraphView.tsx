@@ -36,18 +36,28 @@ interface PlacedNode {
   title: string;
   x?: number;
   y?: number;
+  // Pinned coordinates. Once set, the node ignores all forces: this is what
+  // keeps the map frozen between polls (see below).
+  fx?: number;
+  fy?: number;
 }
 
 // Reconcile incoming nodes against the live objects by id. The force engine
 // stores positions/velocities ON the node objects and merges updates by
-// object identity — handing it fresh instances every poll (as we used to)
-// reads as a brand-new dataset and re-heats the whole simulation, which is
-// the "popping" on every refresh. Reused instances stay put; only genuinely
-// new nodes enter, seeded next to their already-placed neighborhood.
+// object identity — handing it fresh instances every poll reads as a
+// brand-new dataset and re-heats the whole simulation (the "popping" on
+// every refresh). Reused instances keep their layout.
+//
+// Motion model: the map settles ONCE on first paint, then freezes. After the
+// engine stops, every node is pinned (fx/fy) and newcomers arrive pre-pinned
+// at calm seed spots — later polls never move anything, so the map is a
+// stable surface to explore instead of a living jelly. Dragging still works:
+// the dropped node re-pins where you leave it.
 function reconcileNodes(
   incoming: GraphData['nodes'],
   links: GraphData['links'],
   cache: Map<string, PlacedNode>,
+  frozen: boolean,
 ): PlacedNode[] {
   const seen = new Set<string>();
   const placed: PlacedNode[] = [];
@@ -107,19 +117,38 @@ function reconcileNodes(
       n.x = Math.cos(a) * r;
       n.y = Math.sin(a) * r;
     }
+    if (frozen) {
+      // The map already settled: arrive pinned so this node never moves.
+      n.fx = n.x;
+      n.fy = n.y;
+    }
   }
   return placed;
+}
+
+// Pin every node where it stands. Called when the engine stops (first
+// settle, and any later reheat) so the layout freezes in place.
+function freezeAll(cache: Map<string, PlacedNode>): void {
+  for (const n of cache.values()) {
+    if (n.x !== undefined && n.y !== undefined) {
+      n.fx = n.x;
+      n.fy = n.y;
+    }
+  }
 }
 
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   // Live node objects, keyed by id: the engine's positions live on these
   // instances, so they must survive across polls (see reconcileNodes).
   const nodeCache = useRef(new Map<string, PlacedNode>());
+  // False until the first settle completes; afterwards newcomers arrive
+  // pre-pinned and nothing ever moves again.
+  const frozenRef = useRef(false);
 
   const forceData = useMemo(() => {
     if (!data) return null;
     return {
-      nodes: reconcileNodes(data.nodes, data.links, nodeCache.current),
+      nodes: reconcileNodes(data.nodes, data.links, nodeCache.current, frozenRef.current),
       links: data.links.map((l) => ({
         source: l.source,
         target: l.target,
@@ -174,8 +203,18 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       linkDirectionalParticleColor={() => theme.accent}
       linkLabel={(l) => (l as { type: string }).type}
       nodeRelSize={5}
-      nodeLabel={(n) => `${(n as { title: string }).title} · ${(n as { label: string }).label}`}
-      cooldownTime={6000}
+      cooldownTime={2500}
+      onEngineStop={() => {
+        frozenRef.current = true;
+        freezeAll(nodeCache.current);
+      }}
+      onNodeDragEnd={(node) => {
+        // Keep the user's arrangement: re-pin where dropped instead of
+        // releasing back into the simulation.
+        const n = node as unknown as PlacedNode;
+        n.fx = n.x;
+        n.fy = n.y;
+      }}
       nodeCanvasObject={(node, ctx, globalScale) => {
         const label = node.label as string;
         const title = node.title as string;
