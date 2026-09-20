@@ -17,7 +17,9 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchGraph(limit = 500): Promise<GraphData> {
+// 150 recent events keeps the payload + canvas interactive; the header
+// stats line says when the view is truncated.
+export function fetchGraph(limit = 150): Promise<GraphData> {
   return json<GraphData>(`/api/graph?limit=${limit}`);
 }
 

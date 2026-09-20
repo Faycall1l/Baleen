@@ -270,6 +270,7 @@ export default function App() {
           <GraphView
             data={graph}
             error={graphError}
+            selectedId={selected?.id ?? null}
             onSelect={(n) => setSelected(n)}
           />
         </main>
