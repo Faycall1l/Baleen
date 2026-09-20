@@ -156,6 +156,19 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     };
   }, [data]);
 
+  // Focus set: the selected node plus its 1-hop neighborhood. Everything
+  // outside it renders dimmed so a dense graph stays readable while
+  // inspecting one corner of it. Null = no selection, full brightness.
+  const highlight = useMemo(() => {
+    if (!selectedId || !data) return null;
+    const set = new Set<string>([selectedId]);
+    for (const l of data.links) {
+      if (l.source === selectedId) set.add(l.target);
+      else if (l.target === selectedId) set.add(l.source);
+    }
+    return set;
+  }, [selectedId, data]);
+
   if (error) {
     return (
       <div className="empty-hint">
@@ -195,9 +208,26 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       <ForceGraph2D
       graphData={forceData}
       backgroundColor={theme.bg}
-      linkColor={() => '#3d3d45'}
-      linkWidth={1.2}
       linkDirectionalParticles={0}
+      linkCanvasObject={(link, ctx) => {
+        // Custom paint so links outside the focus set fade with their nodes.
+        // Endpoints arrive as id strings on the first frame and as resolved
+        // node objects afterwards; skip until coordinates exist.
+        const l = link as unknown as {
+          source: { id?: string; x?: number; y?: number } | string;
+          target: { id?: string; x?: number; y?: number } | string;
+        };
+        const s = typeof l.source === 'object' ? l.source : undefined;
+        const t = typeof l.target === 'object' ? l.target : undefined;
+        if (s?.x === undefined || s?.y === undefined || t?.x === undefined || t?.y === undefined) return;
+        const on = !highlight || (highlight.has(s.id ?? '') && highlight.has(t.id ?? ''));
+        ctx.strokeStyle = on ? '#3d3d45' : 'rgba(61,61,69,0.10)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }}
       linkLabel={(l) => (l as { type: string }).type}
       nodeRelSize={5}
       cooldownTime={2500}
@@ -217,7 +247,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         const title = node.title as string;
         const color = theme.nodeColors[label as keyof typeof theme.nodeColors] ?? theme.accent;
         const size = label === 'Event' ? 4.5 : 6.5;
+        const dimmed = !!highlight && !highlight.has(node.id as string);
 
+        ctx.globalAlpha = dimmed ? 0.12 : 1;
         ctx.beginPath();
         ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
         ctx.fillStyle = color;
@@ -233,9 +265,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
           ctx.strokeStyle = theme.accent;
           ctx.stroke();
         }
+        ctx.globalAlpha = 1;
 
         // Labels are the per-frame cost that scales worst: on dense graphs
-        // they render only once zoomed in close.
+        // they render only once zoomed in close. Dimmed nodes skip labels
+        // so the focused neighborhood reads cleanly.
+        if (dimmed) return;
         if (dense && globalScale < LABEL_ZOOM) return;
         const fontSize = 12 / globalScale;
         ctx.font = `${fontSize}px sans-serif`;
