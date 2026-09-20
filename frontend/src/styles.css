@@ -132,6 +132,11 @@ a:hover {
   inset: 0;
 }
 
+.graph-canvas {
+  position: absolute;
+  inset: 0;
+}
+
 .graph-legend {
   position: absolute;
   left: 12px;
