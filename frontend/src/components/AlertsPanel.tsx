@@ -3,6 +3,7 @@ import type { Alert } from '../types';
 interface Props {
   alerts: Alert[];
   error: string | null;
+  onAlertClick?: (alert: Alert) => void;
 }
 
 function fmtDate(iso: string): string {
@@ -33,7 +34,7 @@ const RULE_BADGE: Record<string, { label: string; color: string; background: str
   },
 };
 
-export default function AlertsPanel({ alerts, error }: Props) {
+export default function AlertsPanel({ alerts, error, onAlertClick }: Props) {
   return (
     <>
       <h2>Alerts</h2>
@@ -51,7 +52,11 @@ export default function AlertsPanel({ alerts, error }: Props) {
       {alerts.map((a) => {
         const badge = RULE_BADGE[a.rule_name];
         return (
-          <div className="alert-item" key={a.id}>
+          <div
+            className={`alert-item${onAlertClick ? ' clickable' : ''}`}
+            key={a.id}
+            onClick={onAlertClick ? () => onAlertClick(a) : undefined}
+          >
             <div className="alert-title">
               <span
                 className="alert-badge"

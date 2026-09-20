@@ -4,6 +4,7 @@ interface Props {
   digest: Report | null;
   reports: Report[];
   error: string | null;
+  onReportClick?: (report: Report) => void;
 }
 
 function fmtDate(iso: string): string {
@@ -14,7 +15,7 @@ function fmtDate(iso: string): string {
   }
 }
 
-export default function ReportsPanel({ digest, reports, error }: Props) {
+export default function ReportsPanel({ digest, reports, error, onReportClick }: Props) {
   const briefs = reports.filter((r) => r.kind === 'brief');
   return (
     <>
@@ -42,7 +43,11 @@ export default function ReportsPanel({ digest, reports, error }: Props) {
         </div>
       )}
       {briefs.map((r) => (
-        <div className="alert-item" key={r.id}>
+        <div
+          className={`alert-item${onReportClick ? ' clickable' : ''}`}
+          key={r.id}
+          onClick={onReportClick ? () => onReportClick(r) : undefined}
+        >
           <div className="alert-title">
             <span className="alert-badge">brief</span> {r.title}
           </div>

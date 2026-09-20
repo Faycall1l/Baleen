@@ -552,6 +552,14 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.alert-item.clickable {
+  cursor: pointer;
+}
+
+.alert-item.clickable:hover {
+  background: #26262c;
+}
+
 .alert-badge {
   display: inline-block;
   background: #3a2f22;
@@ -603,4 +611,25 @@ button:disabled {
   margin: 0;
   text-align: right;
   word-break: break-word;
+}
+
+.node-links {
+  padding: 4px 14px 14px;
+}
+
+.node-links-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9b9ba5;
+  margin-bottom: 6px;
+}
+
+.node-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
+  font-size: 13px;
+  padding: 6px 10px;
 }

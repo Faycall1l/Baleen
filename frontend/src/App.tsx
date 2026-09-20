@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
 import AlertsPanel from './components/AlertsPanel';
@@ -214,6 +214,118 @@ export default function App() {
       signals.uncovered.length
     : 0;
 
+  // Cross-links: resolve feed rows to graph nodes so every surface leads
+  // somewhere. Event nodes match by deterministic id; tickers and names
+  // match by key/title. All lookups are client-side over the loaded graph.
+  const findEventNode = useCallback(
+    (eventId: string): GraphNode | undefined => {
+      if (!graph || !eventId) return undefined;
+      return graph.nodes.find(
+        (n) =>
+          n.label === 'Event' &&
+          ((n.props.id as string) === eventId || n.id === `Event:${eventId}`),
+      );
+    },
+    [graph],
+  );
+
+  const findTickerNode = useCallback(
+    (ticker: string): GraphNode | undefined => {
+      if (!graph || !ticker) return undefined;
+      const t = ticker.toUpperCase();
+      return graph.nodes.find(
+        (n) => n.label === 'Ticker' && (n.key === t || n.title === t),
+      );
+    },
+    [graph],
+  );
+
+  const findNameNode = useCallback(
+    (name: string): GraphNode | undefined => {
+      if (!graph || !name) return undefined;
+      return graph.nodes.find(
+        (n) =>
+          (n.label === 'Politician' || n.label === 'Insider') && n.title === name,
+      );
+    },
+    [graph],
+  );
+
+  const reveal = useCallback(
+    (node: GraphNode | undefined) => {
+      if (!node) return;
+      setDrawer(null);
+      handleSelect(node);
+    },
+    [handleSelect],
+  );
+
+  const openAlertNode = useCallback(
+    (a: Alert) => {
+      const node =
+        findEventNode(a.event_id) ??
+        a.graph_refs.map((r) => findTickerNode(r) ?? findNameNode(r)).find(Boolean);
+      reveal(node);
+    },
+    [findEventNode, findTickerNode, findNameNode, reveal],
+  );
+
+  const openReportNode = useCallback(
+    (r: Report) => {
+      if (r.event_id) reveal(findEventNode(r.event_id));
+    },
+    [findEventNode, reveal],
+  );
+
+  const openLeaderNode = useCallback(
+    (l: LeaderboardEntry) => {
+      reveal(findTickerNode(l.ticker));
+    },
+    [findTickerNode, reveal],
+  );
+
+  // Inspector back-links: what fired on / mentions the selected node.
+  const inspectorLinks = useMemo(() => {
+    if (!selected) return [];
+    const links: { label: string; onOpen: () => void }[] = [];
+    const eventId = selected.label === 'Event' ? (selected.props.id as string) : null;
+    const names = new Set<string>([selected.title]);
+    if (eventId) {
+      const nAlerts = alerts.filter((a) => a.event_id === eventId).length;
+      if (nAlerts > 0) {
+        links.push({
+          label: `${nAlerts} alert${nAlerts > 1 ? 's' : ''}`,
+          onOpen: () => setDrawer('alerts'),
+        });
+      }
+      const nBriefs = briefs.filter((r) => r.event_id === eventId).length;
+      if (nBriefs > 0) {
+        links.push({
+          label: `${nBriefs} brief${nBriefs > 1 ? 's' : ''}`,
+          onOpen: () => setDrawer('reports'),
+        });
+      }
+    } else {
+      const inRefs = (refs: string[] | undefined) =>
+        (refs ?? []).some((r) => names.has(r));
+      const nAlerts = alerts.filter((a) => inRefs(a.graph_refs)).length;
+      if (nAlerts > 0) {
+        links.push({
+          label: `${nAlerts} alert${nAlerts > 1 ? 's' : ''}`,
+          onOpen: () => setDrawer('alerts'),
+        });
+      }
+      const nReports = reports.filter((r) => inRefs(r.graph_refs)).length;
+      if (nReports > 0) {
+        links.push({
+          label: `${nReports} report${nReports > 1 ? 's' : ''}`,
+          onOpen: () => setDrawer('reports'),
+        });
+      }
+    }
+    return links;
+  }, [selected, alerts, briefs, reports]);
+
   const rail = (
     <nav className="rail" aria-label="Panels">
       {(
@@ -280,7 +392,7 @@ export default function App() {
               <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
                 ×
               </button>
-              <AlertsPanel alerts={alerts} error={alertsError} />
+              <AlertsPanel alerts={alerts} error={alertsError} onAlertClick={openAlertNode} />
             </div>
           )}
           {drawer === 'reports' && (
@@ -288,7 +400,7 @@ export default function App() {
               <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
                 ×
               </button>
-              <ReportsPanel digest={digest} reports={reports} error={reportsError} />
+              <ReportsPanel digest={digest} reports={reports} error={reportsError} onReportClick={openReportNode} />
             </div>
           )}
           {drawer === 'leaders' && (
@@ -296,7 +408,7 @@ export default function App() {
               <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
                 ×
               </button>
-              <LeaderboardPanel leaders={leaders} error={leadersError} />
+              <LeaderboardPanel leaders={leaders} error={leadersError} onLeaderClick={openLeaderNode} />
             </div>
           )}
           {drawer === 'signals' && (
@@ -317,7 +429,7 @@ export default function App() {
 
         {selected && (
           <aside className="panel panel-detail">
-            <NodeDetail node={selected} onClose={() => setSelected(null)} />
+            <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
           </aside>
         )}
       </div>

@@ -3,9 +3,10 @@ import type { LeaderboardEntry } from '../types';
 interface Props {
   leaders: LeaderboardEntry[];
   error: string | null;
+  onLeaderClick?: (leader: LeaderboardEntry) => void;
 }
 
-export default function LeaderboardPanel({ leaders, error }: Props) {
+export default function LeaderboardPanel({ leaders, error, onLeaderClick }: Props) {
   return (
     <>
       <h2>Leaderboard</h2>
@@ -20,7 +21,11 @@ export default function LeaderboardPanel({ leaders, error }: Props) {
         </div>
       )}
       {leaders.map((l, i) => (
-        <div className="alert-item" key={`${l.politician}-${l.ticker}-${i}`}>
+        <div
+          className={`alert-item${onLeaderClick ? ' clickable' : ''}`}
+          key={`${l.politician}-${l.ticker}-${i}`}
+          onClick={onLeaderClick ? () => onLeaderClick(l) : undefined}
+        >
           <div className="alert-title">
             <span className="alert-badge">#{i + 1}</span> {l.politician} · {l.ticker}
           </div>

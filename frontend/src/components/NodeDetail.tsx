@@ -3,6 +3,7 @@ import type { GraphNode } from '../types';
 interface Props {
   node: GraphNode;
   onClose: () => void;
+  links?: { label: string; onOpen: () => void }[];
 }
 
 function fmt(value: unknown): string {
@@ -15,7 +16,7 @@ function fmt(value: unknown): string {
 // Properties that are noise in the detail panel.
 const HIDDEN = new Set(['tweet_id', 'tweet_url', 'id', 'name', 'ticker']);
 
-export default function NodeDetail({ node, onClose }: Props) {
+export default function NodeDetail({ node, onClose, links = [] }: Props) {
   const entries = Object.entries(node.props).filter(([k]) => !HIDDEN.has(k));
 
   return (
@@ -44,6 +45,16 @@ export default function NodeDetail({ node, onClose }: Props) {
             </div>
           ))}
         </dl>
+        {links.length > 0 && (
+          <div className="node-links">
+            <div className="node-links-title">Mentioned in</div>
+            {links.map((l, i) => (
+              <button key={i} className="node-link" onClick={l.onOpen}>
+                {l.label} ↗
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
