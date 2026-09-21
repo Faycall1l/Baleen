@@ -43,6 +43,19 @@ const LARGE_GRAPH = 500;
 const DIM_NODE = '#2b2b31';
 const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
+// Invisibility WITHOUT the `hidden` flag: sigma's default programs skip
+// hidden items, but custom programs (our border/curve painters) don't even
+// read the flag — verified in the installed @sigma/node-border source.
+// Anything hidden must instead be painted transparent at ~zero size, using
+// only plain attributes every program honors (color, size, label).
+const INVISIBLE_NODE = {
+  color: 'rgba(0,0,0,0)',
+  borderColor: 'rgba(0,0,0,0)',
+  label: '',
+  size: 0.001,
+} as const;
+const INVISIBLE_EDGE = { color: 'rgba(0,0,0,0)' };
+
 // Ontology (schema) overview: the graph's labels as supernodes sized by
 // instance count (sqrt-scaled, per VOWL), connected by the relationship
 // types actually present, with human-readable property labels. Gives the
@@ -236,18 +249,32 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   const sigmaRef = useRef<Sigma | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
-  // Node being dragged, if any. Dragging is manual (sigma core pans the
-  // camera but never moves nodes itself): press moves with the pointer,
-  // camera stays put. Click detection is left entirely to sigma's native
-  // clickNode (tremor-tolerant via draggedEventsTolerance) — the manual
-  // layer never decides clicks, so it can't eat them.
-  const dragRef = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
   // Labels hidden from the instance view (legend toggles). Schema view is
   // always complete; hidden types only apply to instances.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  // Latest view state for the click handler (refs, so the once-wired sigma
+  // callbacks never go stale).
+  const viewRef = useRef<{ mode: 'instances' | 'schema'; hiddenTypes: Set<string> }>({
+    mode: 'instances',
+    hiddenTypes: new Set<string>(),
+  });
+  viewRef.current = { mode, hiddenTypes };
+
+  const isVisible = (id: string, kind: string): boolean => {
+    const { mode: m, hiddenTypes: hidden } = viewRef.current;
+    if (m === 'schema') return isSchemaId(id);
+    if (isSchemaId(id)) return false;
+    return !hidden.has(kind);
+  };
+  // Node being dragged, if any. Dragging is manual (sigma core pans the
+  // camera but never moves nodes itself): press moves with the pointer,
+  // camera stays put. Click detection is left entirely to sigma's native
+  // clickNode (tremor-tolerant via draggedEventsTolerance) — the manual
+  // layer never decides clicks, so it can't eat them.
+  const dragRef = useRef<string | null>(null);
 
   // Selection entry point: schema nodes drill into their type, instance
   // nodes select for the inspector. Never throws, never moves the camera.
@@ -274,6 +301,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       return;
     }
     const a = g.getNodeAttributes(node);
+    // Invisible nodes (filtered type, wrong mode) have ~zero hit area, but
+    // guard anyway: selecting something you can't see desyncs the inspector.
+    if (!isVisible(node, a.kind as string)) return;
     onSelectRef.current({
       id: node,
       label: a.kind,
@@ -475,11 +505,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph) return;
-    const visible = (id: string, label: string): boolean => {
-      if (mode === 'schema') return isSchemaId(id);
-      if (isSchemaId(id)) return false;
-      return !hiddenTypes.has(label);
-    };
     let focusSet: Set<string> | null = null;
     if (selectedId && graph.hasNode(selectedId)) {
       focusSet = new Set([selectedId, ...graph.neighbors(selectedId)]);
@@ -487,7 +512,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const fs = focusSet;
     sigma.setSetting('nodeReducer', (node, attrs) => {
       const kind = (attrs.kind as string) ?? '';
-      if (!visible(node, kind)) return { ...attrs, hidden: true };
+      if (!isVisible(node, kind)) return { ...attrs, ...INVISIBLE_NODE };
       if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
       if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
       // Focused neighborhood reads bigger, which also lifts it over the
@@ -500,7 +525,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       const [s, t] = graph.extremities(edge);
       const sk = (graph.getNodeAttribute(s, 'kind') as string) ?? '';
       const tk = (graph.getNodeAttribute(t, 'kind') as string) ?? '';
-      if (!visible(s, sk) || !visible(t, tk)) return { ...attrs, hidden: true };
+      if (!isVisible(s, sk) || !isVisible(t, tk)) return { ...attrs, ...INVISIBLE_EDGE };
       if (fs && !(fs.has(s) && fs.has(t))) return { ...attrs, color: DIM_EDGE };
       return attrs;
     });
