@@ -138,6 +138,14 @@ export default function App() {
     }
   }, []);
 
+  // A poll can drop the selected node (truncated window shifts, type filter
+  // hides it): release the selection instead of pointing at a ghost.
+  useEffect(() => {
+    if (selected && graph && !graph.nodes.some((n) => n.id === selected.id)) {
+      setSelected(null);
+    }
+  }, [graph, selected]);
+
   const loadGraph = useCallback(() => {
     // Slow renders must never pile up: a new poll cancels the previous
     // in-flight fetch (aborts are swallowed, not surfaced as errors).
