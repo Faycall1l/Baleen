@@ -205,6 +205,24 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
+// Event nodes arrive titled with the bare ticker ("SE"), so dozens of them
+// read identically. Compose what happened from the props instead — short
+// enough for canvas labels, distinct from the ticker nodes themselves.
+function eventTitle(props: Record<string, unknown>): string {
+  const ticker = typeof props.ticker === 'string' ? props.ticker : '';
+  const type = props.type;
+  if (type === 'options_flow') {
+    const contract = props.contract_type === 'put' ? 'put' : 'call';
+    const strike = typeof props.strike === 'number' ? ` ${props.strike}` : '';
+    return ticker ? `${ticker} ${contract}${strike}` : 'Options flow';
+  }
+  if (type === 'congress_trade' || type === 'insider_trade') {
+    const side = props.transaction_type === 'sell' ? 'sold' : 'bought';
+    return ticker ? `${ticker} ${side}` : 'Trade';
+  }
+  return 'Unparsed';
+}
+
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -288,7 +306,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         type: 'bordered',
         label: n.label,
         key: n.key,
-        title: n.title,
+        title: n.label === 'Event' ? eventTitle(n.props) : n.title,
         props: n.props,
         tweet_url: n.tweet_url,
         color,
@@ -355,6 +373,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
       });
       sigmaRef.current = fresh;
+      // Open zoomed in: the interesting structure sits near the center and
+      // a full-fit overview reads as dots. Runs before first paint, so the
+      // user never sees the wide view.
+      fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
 
       // NOTE: no clickNode handler on purpose (see the click-vs-drag note
       // above): selection goes through the captor mouseup path, which also
