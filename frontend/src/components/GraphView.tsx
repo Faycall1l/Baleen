@@ -255,7 +255,20 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const g = graphRef.current;
     if (!g || !g.hasNode(node)) return;
     if (isSchemaId(node)) {
-      setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => l !== node.slice('schema:'.length))));
+      // Drill-down keeps the type PLUS its directly related types (read off
+      // the schema edges): isolating a single type would show dots with no
+      // relationships, which is exactly as useless as it sounds.
+      const label = node.slice('schema:'.length);
+      const keep = new Set<string>([label]);
+      g.forEachEdge((e) => {
+        if (!e.startsWith('schema-rel:')) return;
+        const [s, t] = g.extremities(e);
+        const sl = g.getNodeAttribute(s, 'kind') as string;
+        const tl = g.getNodeAttribute(t, 'kind') as string;
+        if (sl === label && tl) keep.add(tl);
+        if (tl === label && sl) keep.add(sl);
+      });
+      setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => !keep.has(l))));
       setMode('instances');
       onSelectRef.current(null);
       return;
