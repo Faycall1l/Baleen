@@ -43,6 +43,98 @@ const LARGE_GRAPH = 500;
 const DIM_NODE = '#2b2b31';
 const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
+// Ontology (schema) overview: the graph's labels as supernodes sized by
+// instance count (sqrt-scaled, per VOWL), connected by the relationship
+// types actually present, with human-readable property labels. Gives the
+// "what is this data" overview first; clicking a class drills into its
+// instances. Pure frontend aggregation over the loaded payload — no backend
+// changes. Schema ids are prefixed so they can share one graphology graph
+// with the instances (hidden set decides which half renders).
+const SCHEMA_LABELS = ['Politician', 'Insider', 'Committee', 'Event', 'Ticker', 'Sector'];
+const SCHEMA_RADIUS = 260;
+
+const schemaId = (label: string): string => `schema:${label}`;
+const isSchemaId = (id: string): boolean => id.startsWith('schema:');
+const schemaEdgeKey = (s: string, rel: string, t: string): string =>
+  `schema-rel:${s}>${rel}>${t}`;
+
+function humanizeRel(rel: string): string {
+  return rel.toLowerCase().replace(/_/g, ' ');
+}
+
+type SchemaAgg = {
+  counts: Map<string, number>;
+  rels: Map<string, { source: string; rel: string; target: string; count: number }>;
+};
+
+function aggregateSchema(
+  nodes: GraphData['nodes'],
+  links: GraphData['links'],
+): SchemaAgg {
+  const counts = new Map<string, number>();
+  const labelById = new Map<string, string>();
+  for (const n of nodes) {
+    labelById.set(n.id, n.label);
+    counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
+  }
+  const rels = new Map<string, { source: string; rel: string; target: string; count: number }>();
+  for (const l of links) {
+    const s = labelById.get(l.source);
+    const t = labelById.get(l.target);
+    if (!s || !t) continue;
+    const key = schemaEdgeKey(s, l.type, t);
+    const prev = rels.get(key);
+    if (prev) prev.count += 1;
+    else rels.set(key, { source: s, rel: l.type, target: t, count: 1 });
+  }
+  return { counts, rels };
+}
+
+// Sync the schema overlay into the shared graph: one supernode per label
+// (all labels, even at zero count, so the ontology stays put across polls)
+// at fixed circle positions, plus one edge per relationship type present.
+// Supenodes never join any layout pass; only counts/sizes/labels update.
+function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
+  SCHEMA_LABELS.forEach((label, i) => {
+    const id = schemaId(label);
+    const count = agg.counts.get(label) ?? 0;
+    const color = nodeColor(label);
+    const a = (i / SCHEMA_LABELS.length) * 2 * Math.PI;
+    if (!graph.hasNode(id)) {
+      graph.addNode(id, {});
+      graph.setNodeAttribute(id, 'x', Math.cos(a) * SCHEMA_RADIUS);
+      graph.setNodeAttribute(id, 'y', Math.sin(a) * SCHEMA_RADIUS);
+    }
+    graph.replaceNodeAttributes(id, {
+      type: 'bordered',
+      label,
+      key: label,
+      title: `${label} (${count})`,
+      props: {},
+      tweet_url: null,
+      color,
+      borderColor: shade(color, 0.55),
+      size: 10 + Math.sqrt(count) * 1.5,
+      x: graph.getNodeAttribute(id, 'x'),
+      y: graph.getNodeAttribute(id, 'y'),
+    });
+  });
+  const seen = new Set<string>();
+  for (const [key, r] of agg.rels) {
+    seen.add(key);
+    if (!graph.hasEdge(key)) {
+      graph.addEdgeWithKey(key, schemaId(r.source), schemaId(r.target), {
+        type: 'curvedArrow',
+        label: humanizeRel(r.rel),
+      });
+    }
+    graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
+  }
+  graph.forEachEdge((e) => {
+    if (e.startsWith('schema-rel:') && !seen.has(e)) graph.dropEdge(e);
+  });
+}
+
 // Nodes render as filled discs with a thin darker border; arrows show edge
 // direction. Both programs are static paint — no animation involved.
 const BorderedNodeProgram = createNodeBorderProgram({
@@ -105,6 +197,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   const [hovered, setHovered] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mode, setMode] = useState<'instances' | 'schema'>('instances');
+  // Labels hidden from the instance view (legend toggles). Schema view is
+  // always complete; hidden types only apply to instances.
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
   // Merge incoming data into the persistent graph. Positions of surviving
   // nodes are never touched; only genuinely new nodes need placement.
@@ -146,21 +242,25 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
       }
     }
+    // Prune removals, but never the schema overlay (it is synced below and
+    // positioned once, outside the instance layout).
     graph.forEachEdge((e) => {
-      if (!seenEdges.has(e)) graph.dropEdge(e);
+      if (!seenEdges.has(e) && !e.startsWith('schema-rel:')) graph.dropEdge(e);
     });
     graph.forEachNode((n) => {
-      if (!seen.has(n)) graph.dropNode(n);
+      if (!seen.has(n) && !isSchemaId(n)) graph.dropNode(n);
     });
     graph.forEachNode((n) => {
+      if (isSchemaId(n)) return;
       const label = graph.getNodeAttribute(n, 'label') as string;
       graph.setNodeAttribute(n, 'size', nodeSize(label, graph.degree(n)));
     });
 
     let sigma = sigmaRef.current;
     if (!sigma) {
-      // First paint: deterministic circle, one synchronous FA2 pass, then
-      // render. Nothing animates at any point.
+      // First paint: deterministic circle, one synchronous FA2 pass over
+      // the instances only, then the schema overlay is added at fixed
+      // positions (never part of any layout), then render.
       const order = graph.order;
       const radius = 30 * Math.sqrt(Math.max(order, 1));
       let i = 0;
@@ -173,6 +273,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         iterations: order > LARGE_GRAPH ? FA2_ITERATIONS_LARGE : FA2_ITERATIONS_SMALL,
         settings: forceAtlas2.inferSettings(graph),
       });
+      syncSchemaOverlay(graph, aggregateSchema(data.nodes, data.links));
 
       const fresh = new Sigma(graph, containerRef.current, {
         allowInvalidContainer: true,
@@ -196,6 +297,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       fresh.on('clickNode', ({ node }) => {
         const g = graphRef.current;
         if (!g || !g.hasNode(node)) return;
+        if (isSchemaId(node)) {
+          drillIntoType(node.slice('schema:'.length));
+          return;
+        }
         const a = g.getNodeAttributes(node);
         onSelectRef.current({
           id: node,
@@ -264,16 +369,23 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
           graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
         }
       }
+      syncSchemaOverlay(graph, aggregateSchema(data.nodes, data.links));
       sigma.refresh();
     }
   }, [data]);
 
-  // Focus dimming: selection (or hover) keeps its 1-hop neighborhood bright;
-  // everything else fades via reducers (no custom paint code needed).
+  // Focus dimming + mode/type visibility, all through reducers (no custom
+  // paint code needed). Schema mode shows only the overlay; instances mode
+  // shows instances minus legend-hidden types.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph) return;
+    const visible = (id: string, label: string): boolean => {
+      if (mode === 'schema') return isSchemaId(id);
+      if (isSchemaId(id)) return false;
+      return !hiddenTypes.has(label);
+    };
     const focus = selectedId ?? hovered;
     let focusSet: Set<string> | null = null;
     if (focus && graph.hasNode(focus)) {
@@ -281,33 +393,61 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     }
     const fs = focusSet;
     sigma.setSetting('nodeReducer', (node, attrs) => {
+      const label = (attrs.label as string) ?? '';
+      if (!visible(node, label)) return { ...attrs, hidden: true };
       if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
       if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
       return attrs;
     });
     sigma.setSetting('edgeReducer', (edge, attrs) => {
-      if (!fs) return attrs;
       const [s, t] = graph.extremities(edge);
-      return fs.has(s) && fs.has(t) ? attrs : { ...attrs, color: DIM_EDGE };
+      const sl = (graph.getNodeAttribute(s, 'label') as string) ?? '';
+      const tl = (graph.getNodeAttribute(t, 'label') as string) ?? '';
+      if (!visible(s, sl) || !visible(t, tl)) return { ...attrs, hidden: true };
+      if (fs && !(fs.has(s) && fs.has(t))) return { ...attrs, color: DIM_EDGE };
+      return attrs;
     });
     sigma.refresh();
-  }, [selectedId, hovered]);
+  }, [selectedId, hovered, mode, hiddenTypes]);
 
-  // Glide the camera to the selected node, keeping the zoom level.
+  // Edge property labels only make sense on the schema overview; instance
+  // edges stay clean.
+  useEffect(() => {
+    const sigma = sigmaRef.current;
+    if (!sigma) return;
+    sigma.setSetting('renderEdgeLabels', mode === 'schema');
+    sigma.refresh();
+  }, [mode]);
+
+  // Refit on mode switch so each view opens framed.
+  useEffect(() => {
+    const sigma = sigmaRef.current;
+    if (!sigma) return;
+    sigma.getCamera().animatedReset({ duration: 600 });
+  }, [mode]);
+
+  // Glide the camera to the selected node, keeping the zoom level. Skips
+  // hidden nodes (e.g. type toggled off) instead of flying to a stale spot.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph || !selectedId || !graph.hasNode(selectedId)) return;
-    const camera = sigma.getCamera();
-    camera.animate(
-      {
-        x: graph.getNodeAttribute(selectedId, 'x'),
-        y: graph.getNodeAttribute(selectedId, 'y'),
-        ratio: camera.ratio,
-      },
-      { duration: 600 },
-    );
-  }, [selectedId]);
+    if (
+      mode !== 'schema' &&
+      hiddenTypes.has(graph.getNodeAttribute(selectedId, 'label') as string)
+    ) {
+      return;
+    }
+    const x = graph.getNodeAttribute(selectedId, 'x') as number;
+    const y = graph.getNodeAttribute(selectedId, 'y') as number;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    try {
+      const camera = sigma.getCamera();
+      camera.animate({ x, y, ratio: camera.ratio }, { duration: 600 });
+    } catch {
+      /* a failed glide must never break selection */
+    }
+  }, [selectedId, mode, hiddenTypes]);
 
   // Teardown: sigma owns WebGL resources that must be released.
   useEffect(() => {
@@ -329,6 +469,30 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     setQuery('');
     setSearchOpen(false);
   };
+
+  // Drill from a schema class into its instances: isolate the type and show
+  // the instance view. Clears any selection from the other mode.
+  const drillIntoType = (label: string) => {
+    setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => l !== label)));
+    setMode('instances');
+    onSelectRef.current(null);
+  };
+
+  const toggleType = (label: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!data) return counts;
+    for (const n of data.nodes) counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
+    return counts;
+  }, [data]);
 
   if (error) {
     return (
@@ -354,35 +518,60 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
-        <div className="graph-search">
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
+        <div className="graph-mode" role="tablist" aria-label="Graph view">
+          <button
+            className={mode === 'instances' ? 'active' : ''}
+            onClick={() => setMode('instances')}
+            role="tab"
+            aria-selected={mode === 'instances'}
+          >
+            Instances
+          </button>
+          <button
+            className={mode === 'schema' ? 'active' : ''}
+            onClick={() => {
+              onSelectRef.current(null);
+              setMode('schema');
             }}
-            onFocus={() => setSearchOpen(true)}
-            onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && matches.length > 0) chooseMatch(matches[0]);
-              if (e.key === 'Escape') {
-                setQuery('');
-                setSearchOpen(false);
-              }
-            }}
-            placeholder="Find a node…"
-            aria-label="Find a node"
-          />
-          {searchOpen && matches.length > 0 && (
-            <div className="graph-search-results">
-              {matches.map((m) => (
-                <button key={m.id} onMouseDown={(e) => e.preventDefault()} onClick={() => chooseMatch(m)}>
-                  <span className="graph-search-label">{m.label}</span> {m.title}
-                </button>
-              ))}
-            </div>
-          )}
+            role="tab"
+            aria-selected={mode === 'schema'}
+          >
+            Schema
+          </button>
         </div>
+        {mode === 'instances' ? (
+          <div className="graph-search">
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matches.length > 0) chooseMatch(matches[0]);
+                if (e.key === 'Escape') {
+                  setQuery('');
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="Find a node…"
+              aria-label="Find a node"
+            />
+            {searchOpen && matches.length > 0 && (
+              <div className="graph-search-results">
+                {matches.map((m) => (
+                  <button key={m.id} onMouseDown={(e) => e.preventDefault()} onClick={() => chooseMatch(m)}>
+                    <span className="graph-search-label">{m.label}</span> {m.title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="graph-hint">Click a type to inspect its instances</div>
+        )}
         <button
           className="graph-fit-btn"
           onClick={() => sigmaRef.current?.getCamera().animatedReset({ duration: 600 })}
@@ -392,15 +581,24 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         </button>
       </div>
       <div className="graph-legend">
-        {(Object.keys(theme.nodeColors) as (keyof typeof theme.nodeColors)[]).map((label) => (
-          <span key={label} className="graph-legend-item">
+        {SCHEMA_LABELS.map((label) => {
+          const hidden = mode === 'instances' && hiddenTypes.has(label);
+          const count = typeCounts.get(label) ?? 0;
+          return (
             <span
-              className="graph-legend-dot"
-              style={{ background: theme.nodeColors[label] }}
-            />
-            {label}
-          </span>
-        ))}
+              key={label}
+              className={`graph-legend-item${hidden ? ' off' : ''}${mode === 'instances' ? ' clickable' : ''}`}
+              onClick={mode === 'instances' ? () => toggleType(label) : undefined}
+              title={mode === 'instances' ? `Toggle ${label} nodes` : `${count} in view`}
+            >
+              <span
+                className="graph-legend-dot"
+                style={{ background: theme.nodeColors[label as keyof typeof theme.nodeColors] }}
+              />
+              {label} · {count}
+            </span>
+          );
+        })}
       </div>
       <div ref={containerRef} className="graph-canvas" />
     </div>
