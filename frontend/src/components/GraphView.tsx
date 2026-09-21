@@ -91,13 +91,19 @@ function aggregateSchema(
 }
 
 // Sync the schema overlay into the shared graph: one supernode per label
-// (all labels, even at zero count, so the ontology stays put across polls)
-// at fixed circle positions, plus one edge per relationship type present.
+// WITH instances, at fixed circle positions, plus one edge per relationship
+// type present. Zero-count labels render nothing at all — an empty type
+// occupying the map at full saturation reads as false importance (and can
+// only ever be connectionless); the legend still lists it with (0).
 // Supenodes never join any layout pass; only counts/sizes/labels update.
 function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
   SCHEMA_LABELS.forEach((label, i) => {
     const id = schemaId(label);
     const count = agg.counts.get(label) ?? 0;
+    if (count === 0) {
+      if (graph.hasNode(id)) graph.dropNode(id);
+      return;
+    }
     const color = nodeColor(label);
     const a = (i / SCHEMA_LABELS.length) * 2 * Math.PI;
     if (!graph.hasNode(id)) {
