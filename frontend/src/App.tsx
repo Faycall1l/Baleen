@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
 import AlertsPanel from './components/AlertsPanel';
 import AnswerPanel from './components/AnswerPanel';
+import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import NodeDetail from './components/NodeDetail';
@@ -454,12 +455,14 @@ export default function App() {
       <div className="app-body">
         {rail}
         <main className="graph-area">
-          <GraphView
-            data={graph}
-            error={graphError}
-            selectedId={selected?.id ?? null}
-            onSelect={handleSelect}
-          />
+          <GraphErrorBoundary>
+            <GraphView
+              data={graph}
+              error={graphError}
+              selectedId={selected?.id ?? null}
+              onSelect={handleSelect}
+            />
+          </GraphErrorBoundary>
           {drawer === 'alerts' && (
             <div className="drawer">
               <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">

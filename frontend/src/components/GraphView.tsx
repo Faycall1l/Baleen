@@ -531,8 +531,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     sigma.getCamera().animatedReset({ duration: 600 });
   }, [mode]);
 
-  // Glide the camera to the selected node, keeping the zoom level. Skips
-  // hidden nodes (e.g. type toggled off) instead of flying to a stale spot.
+  // Place the camera on the selected node, keeping the zoom level. Instant
+  // setState, not animate: no async animation machinery in the click path
+  // means no overlapping/racing camera states to debug. Skips hidden nodes
+  // (e.g. type toggled off) instead of flying to a stale spot.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
@@ -548,9 +550,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     try {
       const camera = sigma.getCamera();
-      camera.animate({ x, y, ratio: camera.ratio }, { duration: 600 });
+      camera.setState({ x, y, angle: camera.angle, ratio: camera.ratio });
     } catch {
-      /* a failed glide must never break selection */
+      /* a failed placement must never break selection */
     }
   }, [selectedId, mode, hiddenTypes]);
 
