@@ -346,7 +346,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         added.push(n.id);
       }
       const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-      graph.replaceNodeAttributes(n.id, {
+      graph.mergeNodeAttributes(n.id, {
         type: 'bordered',
         kind: n.label,
         label: display,
