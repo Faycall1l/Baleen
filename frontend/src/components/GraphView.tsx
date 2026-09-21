@@ -105,11 +105,24 @@ function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
       graph.setNodeAttribute(id, 'x', Math.cos(a) * SCHEMA_RADIUS);
       graph.setNodeAttribute(id, 'y', Math.sin(a) * SCHEMA_RADIUS);
     }
+    // Top instances by degree so the type reads as content
+    // ("Politician (20): Warren, Waters"), not just a tag.
+    const tops: { title: string; deg: number }[] = [];
+    graph.forEachNode((n, attrs) => {
+      if (isSchemaId(n) || attrs.label !== label) return;
+      tops.push({ title: attrs.title as string, deg: graph.degree(n) });
+    });
+    tops.sort((x, y) => y.deg - x.deg);
+    const names = tops
+      .slice(0, 2)
+      .map((t) => truncate(t.title, 15))
+      .join(', ');
+    const title = count > 0 && names ? `${label} (${count}): ${names}` : `${label} (${count})`;
     graph.replaceNodeAttributes(id, {
       type: 'bordered',
       label,
       key: label,
-      title: `${label} (${count})`,
+      title,
       props: {},
       tweet_url: null,
       color,
@@ -186,6 +199,10 @@ function hashStr(s: string): number {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0) / 4294967295;
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
