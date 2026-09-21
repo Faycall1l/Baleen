@@ -236,6 +236,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   const sigmaRef = useRef<Sigma | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  // Node being dragged, if any. Dragging is manual (sigma core pans the
+  // camera but never moves nodes itself): press moves with the pointer,
+  // camera stays put. Click detection is left entirely to sigma's native
+  // clickNode (tremor-tolerant via draggedEventsTolerance) — the manual
+  // layer never decides clicks, so it can't eat them.
+  const dragRef = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
@@ -264,6 +270,17 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       tweet_url: a.tweet_url ?? null,
     });
   };
+
+  // Backstop: releasing outside the canvas still ends any drag and frees
+  // the camera, otherwise pan/zoom stay dead until the next gesture.
+  useEffect(() => {
+    const backstop = () => {
+      dragRef.current = null;
+      sigmaRef.current?.getCamera().enable();
+    };
+    window.addEventListener('mouseup', backstop);
+    return () => window.removeEventListener('mouseup', backstop);
+  }, []);
 
   // Merge incoming data into the persistent graph. Positions of surviving
   // nodes are never touched; only genuinely new nodes need placement.
@@ -367,11 +384,30 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
 
       // Native click selection (sigma suppresses clicks that turn into drags
-      // past draggedEventsTolerance, raised above for hand tremor). Node
-      // dragging is native too — no custom gesture layer fighting the
-      // captor's own click/drag bookkeeping.
+      // past draggedEventsTolerance, raised above for hand tremor).
       fresh.on('clickNode', ({ node }) => selectNodeByKey(node));
       fresh.on('clickStage', () => onSelectRef.current(null));
+      // Manual node dragging (sigma core pans the camera but never moves
+      // nodes itself): the pressed node follows the pointer, camera stays
+      // put. Click detection stays entirely native — this layer only moves
+      // coordinates, never decides or suppresses clicks.
+      fresh.on('downNode', (e) => {
+        dragRef.current = e.node;
+        fresh.getCamera().disable();
+      });
+      fresh.getMouseCaptor().on('mousemove', (e) => {
+        const dragged = dragRef.current;
+        const g = graphRef.current;
+        if (!dragged || !g || !g.hasNode(dragged)) return;
+        const pos = fresh.viewportToGraph(e);
+        g.setNodeAttribute(dragged, 'x', pos.x);
+        g.setNodeAttribute(dragged, 'y', pos.y);
+        e.preventSigmaDefault();
+      });
+      fresh.getMouseCaptor().on('mouseup', () => {
+        dragRef.current = null;
+        fresh.getCamera().enable();
+      });
     } else {
       // Later polls: place newcomers at their placed neighborhood centroid
       // (deterministic ring fallback), leave everything else exactly alone.
