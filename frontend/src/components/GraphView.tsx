@@ -109,7 +109,7 @@ function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
     // ("Politician (20): Warren, Waters"), not just a tag.
     const tops: { title: string; deg: number }[] = [];
     graph.forEachNode((n, attrs) => {
-      if (isSchemaId(n) || attrs.label !== label) return;
+      if (isSchemaId(n) || attrs.kind !== label) return;
       tops.push({ title: attrs.title as string, deg: graph.degree(n) });
     });
     tops.sort((x, y) => y.deg - x.deg);
@@ -120,7 +120,8 @@ function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
     const title = count > 0 && names ? `${label} (${count}): ${names}` : `${label} (${count})`;
     graph.replaceNodeAttributes(id, {
       type: 'bordered',
-      label,
+      kind: label,
+      label: title,
       key: label,
       title,
       props: {},
@@ -263,9 +264,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const a = g.getNodeAttributes(node);
     onSelectRef.current({
       id: node,
-      label: a.label,
+      label: a.kind,
       key: a.key,
-      title: a.title,
+      title: a.label,
       props: a.props,
       tweet_url: a.tweet_url ?? null,
     });
@@ -302,11 +303,13 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         graph.addNode(n.id, {});
         added.push(n.id);
       }
+      const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
       graph.replaceNodeAttributes(n.id, {
         type: 'bordered',
-        label: n.label,
+        kind: n.label,
+        label: display,
         key: n.key,
-        title: n.label === 'Event' ? eventTitle(n.props) : n.title,
+        title: display,
         props: n.props,
         tweet_url: n.tweet_url,
         color,
@@ -332,8 +335,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     });
     graph.forEachNode((n) => {
       if (isSchemaId(n)) return;
-      const label = graph.getNodeAttribute(n, 'label') as string;
-      graph.setNodeAttribute(n, 'size', nodeSize(label, graph.degree(n)));
+      const kind = graph.getNodeAttribute(n, 'kind') as string;
+      graph.setNodeAttribute(n, 'size', nodeSize(kind, graph.degree(n)));
     });
 
     let sigma = sigmaRef.current;
@@ -442,7 +445,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         }
       }
       syncSchemaOverlay(graph, aggregateSchema(data.nodes, data.links));
-      sigma.refresh();
+      try {
+        sigma.refresh();
+      } catch {
+        /* a failed paint must never take down the view; next poll refreshes */
+      }
     }
   }, [data]);
 
@@ -466,8 +473,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     }
     const fs = focusSet;
     sigma.setSetting('nodeReducer', (node, attrs) => {
-      const label = (attrs.label as string) ?? '';
-      if (!visible(node, label)) return { ...attrs, hidden: true };
+      const kind = (attrs.kind as string) ?? '';
+      if (!visible(node, kind)) return { ...attrs, hidden: true };
       if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
       if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
       // Focused neighborhood reads bigger, which also lifts it over the
@@ -478,13 +485,17 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     });
     sigma.setSetting('edgeReducer', (edge, attrs) => {
       const [s, t] = graph.extremities(edge);
-      const sl = (graph.getNodeAttribute(s, 'label') as string) ?? '';
-      const tl = (graph.getNodeAttribute(t, 'label') as string) ?? '';
-      if (!visible(s, sl) || !visible(t, tl)) return { ...attrs, hidden: true };
+      const sk = (graph.getNodeAttribute(s, 'kind') as string) ?? '';
+      const tk = (graph.getNodeAttribute(t, 'kind') as string) ?? '';
+      if (!visible(s, sk) || !visible(t, tk)) return { ...attrs, hidden: true };
       if (fs && !(fs.has(s) && fs.has(t))) return { ...attrs, color: DIM_EDGE };
       return attrs;
     });
-    sigma.refresh();
+    try {
+      sigma.refresh();
+    } catch {
+      /* selection dimming must never blank the canvas */
+    }
   }, [selectedId, mode, hiddenTypes]);
 
   // Edge property labels only make sense on the schema overview; instance
@@ -492,8 +503,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   useEffect(() => {
     const sigma = sigmaRef.current;
     if (!sigma) return;
-    sigma.setSetting('renderEdgeLabels', mode === 'schema');
-    sigma.refresh();
+    try {
+      sigma.setSetting('renderEdgeLabels', mode === 'schema');
+      sigma.refresh();
+    } catch {
+      /* label toggle must never blank the canvas */
+    }
   }, [mode]);
 
   // Refit on mode switch so each view opens framed.
@@ -511,7 +526,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     if (!sigma || !graph || !selectedId || !graph.hasNode(selectedId)) return;
     if (
       mode !== 'schema' &&
-      hiddenTypes.has(graph.getNodeAttribute(selectedId, 'label') as string)
+      hiddenTypes.has(graph.getNodeAttribute(selectedId, 'kind') as string)
     ) {
       return;
     }
