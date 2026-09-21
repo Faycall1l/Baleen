@@ -211,13 +211,58 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   const sigmaRef = useRef<Sigma | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
-  const [hovered, setHovered] = useState<string | null>(null);
+  // Drag gesture state, shared between the sigma handlers below and the
+  // window mouseup backstop (a release outside the canvas must still free
+  // the camera).
+  const dragRef = useRef<{ node: string | null; dist: number; last: { x: number; y: number } | null }>({
+    node: null,
+    dist: 0,
+    last: null,
+  });
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
   // Labels hidden from the instance view (legend toggles). Schema view is
   // always complete; hidden types only apply to instances.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+
+  // Below this many px of pointer travel the gesture is a click (real clicks
+  // always micro-move); beyond it, a drag. Sigma's own clickNode is unreliable
+  // here because any move poisons it, so selection goes through mouseup.
+  const CLICK_DRAG_PX = 5;
+
+  // Selection entry point: schema nodes drill into their type, instance
+  // nodes select for the inspector. Never throws, never moves the camera.
+  const selectNodeByKey = (node: string) => {
+    const g = graphRef.current;
+    if (!g || !g.hasNode(node)) return;
+    if (isSchemaId(node)) {
+      setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => l !== node.slice('schema:'.length))));
+      setMode('instances');
+      onSelectRef.current(null);
+      return;
+    }
+    const a = g.getNodeAttributes(node);
+    onSelectRef.current({
+      id: node,
+      label: a.label,
+      key: a.key,
+      title: a.title,
+      props: a.props,
+      tweet_url: a.tweet_url ?? null,
+    });
+  };
+
+  // Backstop: releasing outside the canvas still ends any drag and frees
+  // the camera, otherwise pan/zoom stay dead until the next gesture.
+  useEffect(() => {
+    const backstop = () => {
+      dragRef.current = { node: null, dist: 0, last: null };
+      sigmaRef.current?.getCamera().enable();
+    };
+    window.addEventListener('mouseup', backstop);
+    return () => window.removeEventListener('mouseup', backstop);
+  }, []);
 
   // Merge incoming data into the persistent graph. Positions of surviving
   // nodes are never touched; only genuinely new nodes need placement.
@@ -311,45 +356,33 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       });
       sigmaRef.current = fresh;
 
-      fresh.on('clickNode', ({ node }) => {
-        const g = graphRef.current;
-        if (!g || !g.hasNode(node)) return;
-        if (isSchemaId(node)) {
-          drillIntoType(node.slice('schema:'.length));
-          return;
-        }
-        const a = g.getNodeAttributes(node);
-        onSelectRef.current({
-          id: node,
-          label: a.label,
-          key: a.key,
-          title: a.title,
-          props: a.props,
-          tweet_url: a.tweet_url ?? null,
-        });
-      });
+      // NOTE: no clickNode handler on purpose (see the click-vs-drag note
+      // above): selection goes through the captor mouseup path, which also
+      // covers schema drill-down via selectNodeByKey.
       fresh.on('clickStage', () => onSelectRef.current(null));
-      fresh.on('enterNode', ({ node }) => setHovered(node));
-      fresh.on('leaveNode', () => setHovered(null));
 
-      let dragged: string | null = null;
       fresh.on('downNode', (e) => {
-        dragged = e.node;
+        dragRef.current = { node: e.node, dist: 0, last: null };
         fresh.getCamera().disable();
       });
       fresh.getMouseCaptor().on('mousemove', (e) => {
+        const d = dragRef.current;
         const g = graphRef.current;
-        if (!dragged || !g || !g.hasNode(dragged)) return;
+        if (!d.node || !g || !g.hasNode(d.node)) return;
+        if (d.last) d.dist += Math.hypot(e.x - d.last.x, e.y - d.last.y);
+        d.last = { x: e.x, y: e.y };
+        if (d.dist < CLICK_DRAG_PX) return;
         const pos = fresh.viewportToGraph(e);
-        g.setNodeAttribute(dragged, 'x', pos.x);
-        g.setNodeAttribute(dragged, 'y', pos.y);
+        g.setNodeAttribute(d.node, 'x', pos.x);
+        g.setNodeAttribute(d.node, 'y', pos.y);
         e.preventSigmaDefault();
       });
-      const endDrag = () => {
-        dragged = null;
+      fresh.getMouseCaptor().on('mouseup', () => {
+        const d = dragRef.current;
+        dragRef.current = { node: null, dist: 0, last: null };
         fresh.getCamera().enable();
-      };
-      fresh.getMouseCaptor().on('mouseup', endDrag);
+        if (d.node && d.dist < CLICK_DRAG_PX) selectNodeByKey(d.node);
+      });
     } else {
       // Later polls: place newcomers at their placed neighborhood centroid
       // (deterministic ring fallback), leave everything else exactly alone.
@@ -393,7 +426,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
 
   // Focus dimming + mode/type visibility, all through reducers (no custom
   // paint code needed). Schema mode shows only the overlay; instances mode
-  // shows instances minus legend-hidden types.
+  // shows instances minus legend-hidden types. Dimming follows selection
+  // ONLY — hover-driven dimming used to strobe on every mouse move across
+  // dense nodes, so hover is limited to the native label affordance.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
@@ -403,10 +438,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       if (isSchemaId(id)) return false;
       return !hiddenTypes.has(label);
     };
-    const focus = selectedId ?? hovered;
     let focusSet: Set<string> | null = null;
-    if (focus && graph.hasNode(focus)) {
-      focusSet = new Set([focus, ...graph.neighbors(focus)]);
+    if (selectedId && graph.hasNode(selectedId)) {
+      focusSet = new Set([selectedId, ...graph.neighbors(selectedId)]);
     }
     const fs = focusSet;
     sigma.setSetting('nodeReducer', (node, attrs) => {
@@ -429,7 +463,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       return attrs;
     });
     sigma.refresh();
-  }, [selectedId, hovered, mode, hiddenTypes]);
+  }, [selectedId, mode, hiddenTypes]);
 
   // Edge property labels only make sense on the schema overview; instance
   // edges stay clean.
@@ -489,14 +523,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     onSelect(m);
     setQuery('');
     setSearchOpen(false);
-  };
-
-  // Drill from a schema class into its instances: isolate the type and show
-  // the instance view. Clears any selection from the other mode.
-  const drillIntoType = (label: string) => {
-    setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => l !== label)));
-    setMode('instances');
-    onSelectRef.current(null);
   };
 
   const toggleType = (label: string) => {
