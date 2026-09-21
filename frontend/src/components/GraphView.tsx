@@ -278,12 +278,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       const fresh = new Sigma(graph, containerRef.current, {
         allowInvalidContainer: true,
         renderLabels: true,
-        labelSize: 12,
+        labelSize: 13,
         labelWeight: '500',
         labelColor: { color: theme.textDim },
         labelFont: 'system-ui, sans-serif',
-        labelRenderedSizeThreshold: 8,
-        labelDensity: 0.06,
+        labelRenderedSizeThreshold: 5,
+        labelDensity: 0.12,
         defaultDrawNodeLabel: drawLabelWithHalo,
         defaultNodeColor: theme.accent,
         defaultEdgeColor: '#3d3d45',
@@ -397,6 +397,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       if (!visible(node, label)) return { ...attrs, hidden: true };
       if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
       if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
+      // Focused neighborhood reads bigger, which also lifts it over the
+      // label-size threshold: selecting a node guarantees its neighborhood
+      // is labeled, not just brightened.
+      if (fs && fs.has(node)) return { ...attrs, size: (attrs.size || 3) * 1.25 };
       return attrs;
     });
     sigma.setSetting('edgeReducer', (edge, attrs) => {
