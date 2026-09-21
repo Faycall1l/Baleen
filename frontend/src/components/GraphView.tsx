@@ -371,8 +371,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         labelWeight: '500',
         labelColor: { color: theme.textDim },
         labelFont: 'system-ui, sans-serif',
-        labelRenderedSizeThreshold: 5,
-        labelDensity: 0.12,
+        labelRenderedSizeThreshold: 8,
+        labelDensity: 0.08,
         defaultDrawNodeLabel: drawLabelWithHalo,
         defaultNodeColor: theme.accent,
         defaultEdgeColor: '#3d3d45',
@@ -584,16 +584,14 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return counts;
   }, [data]);
 
-  if (error) {
-    return (
+  if (!data) {
+    return error ? (
       <div className="empty-hint">
         <div className="error">{error}</div>
       </div>
+    ) : (
+      <div className="empty-hint">Loading graph…</div>
     );
-  }
-
-  if (!data) {
-    return <div className="empty-hint">Loading graph…</div>;
   }
 
   if (data.nodes.length === 0) {
@@ -605,6 +603,10 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     );
   }
 
+  // NOTE: a failed poll must NEVER unmount the canvas below. Unmounting
+  // kills the sigma instance; the next success then remounts with a full
+  // force-layout replay — under a flaky backend that reads as an endless
+  // big bang. Errors render as an overlay badge over the last-good graph.
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
@@ -691,6 +693,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         })}
       </div>
       <div ref={containerRef} className="graph-canvas" />
+      {error && (
+        <div className="graph-error" title={error}>
+          Refresh failed — showing last good data
+        </div>
+      )}
     </div>
   );
 }
