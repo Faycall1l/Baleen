@@ -236,25 +236,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   const sigmaRef = useRef<Sigma | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
-  // Drag gesture state, shared between the sigma handlers below and the
-  // window mouseup backstop (a release outside the canvas must still free
-  // the camera).
-  const dragRef = useRef<{ node: string | null; dist: number; last: { x: number; y: number } | null }>({
-    node: null,
-    dist: 0,
-    last: null,
-  });
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
   // Labels hidden from the instance view (legend toggles). Schema view is
   // always complete; hidden types only apply to instances.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
-
-  // Below this many px of pointer travel the gesture is a click (real clicks
-  // always micro-move); beyond it, a drag. Sigma's own clickNode is unreliable
-  // here because any move poisons it, so selection goes through mouseup.
-  const CLICK_DRAG_PX = 5;
 
   // Selection entry point: schema nodes drill into their type, instance
   // nodes select for the inspector. Never throws, never moves the camera.
@@ -277,17 +264,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       tweet_url: a.tweet_url ?? null,
     });
   };
-
-  // Backstop: releasing outside the canvas still ends any drag and frees
-  // the camera, otherwise pan/zoom stay dead until the next gesture.
-  useEffect(() => {
-    const backstop = () => {
-      dragRef.current = { node: null, dist: 0, last: null };
-      sigmaRef.current?.getCamera().enable();
-    };
-    window.addEventListener('mouseup', backstop);
-    return () => window.removeEventListener('mouseup', backstop);
-  }, []);
 
   // Merge incoming data into the persistent graph. Positions of surviving
   // nodes are never touched; only genuinely new nodes need placement.
@@ -378,6 +354,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         defaultEdgeColor: '#3d3d45',
         minCameraRatio: 0.05,
         maxCameraRatio: 20,
+        // Generous click-vs-drag tolerance: hand tremor emits well over the
+        // default 3 mousemove events, which silently ate real clicks.
+        draggedEventsTolerance: 14,
         nodeProgramClasses: { bordered: BorderedNodeProgram },
         edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
       });
@@ -387,33 +366,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       // user never sees the wide view.
       fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
 
-      // NOTE: no clickNode handler on purpose (see the click-vs-drag note
-      // above): selection goes through the captor mouseup path, which also
-      // covers schema drill-down via selectNodeByKey.
+      // Native click selection (sigma suppresses clicks that turn into drags
+      // past draggedEventsTolerance, raised above for hand tremor). Node
+      // dragging is native too — no custom gesture layer fighting the
+      // captor's own click/drag bookkeeping.
+      fresh.on('clickNode', ({ node }) => selectNodeByKey(node));
       fresh.on('clickStage', () => onSelectRef.current(null));
-
-      fresh.on('downNode', (e) => {
-        dragRef.current = { node: e.node, dist: 0, last: null };
-        fresh.getCamera().disable();
-      });
-      fresh.getMouseCaptor().on('mousemove', (e) => {
-        const d = dragRef.current;
-        const g = graphRef.current;
-        if (!d.node || !g || !g.hasNode(d.node)) return;
-        if (d.last) d.dist += Math.hypot(e.x - d.last.x, e.y - d.last.y);
-        d.last = { x: e.x, y: e.y };
-        if (d.dist < CLICK_DRAG_PX) return;
-        const pos = fresh.viewportToGraph(e);
-        g.setNodeAttribute(d.node, 'x', pos.x);
-        g.setNodeAttribute(d.node, 'y', pos.y);
-        e.preventSigmaDefault();
-      });
-      fresh.getMouseCaptor().on('mouseup', () => {
-        const d = dragRef.current;
-        dragRef.current = { node: null, dist: 0, last: null };
-        fresh.getCamera().enable();
-        if (d.node && d.dist < CLICK_DRAG_PX) selectNodeByKey(d.node);
-      });
     } else {
       // Later polls: place newcomers at their placed neighborhood centroid
       // (deterministic ring fallback), leave everything else exactly alone.
