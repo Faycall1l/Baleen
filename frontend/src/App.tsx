@@ -49,8 +49,82 @@ export default function App() {
   reportsRef.current = reports;
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
 
   const graphAbortRef = useRef<AbortController | null>(null);
+  // Poll counter: every 10th poll refetches full as the resync (deltas can
+  // miss node deletions and tombstone merges, which only a full snapshot
+  // heals). The backend applies the same idea via its cache bypass.
+  const pollCountRef = useRef(0);
+
+  // Newest event_time across the loaded snapshot: the delta cursor for the
+  // next poll. Events carry ISO strings; unparseable values are ignored.
+  const graphCursor = (g: GraphData | null): string | null => {
+    if (!g) return null;
+    let best: string | null = null;
+    for (const n of g.nodes) {
+      if (n.label !== 'Event') continue;
+      const t = n.props.event_time;
+      if (typeof t !== 'string' || t === '') continue;
+      if (best === null || t > best) best = t;
+    }
+    return best;
+  };
+
+  const applyGraphPayload = useCallback((payload: GraphData, isDelta: boolean) => {
+    if (isDelta) {
+      if (payload.nodes.length === 0 && payload.links.length === 0) return;
+      setGraph((prev) => {
+        if (!prev) return payload;
+        const nodes = new Map(prev.nodes.map((n) => [n.id, n]));
+        for (const n of payload.nodes) nodes.set(n.id, n);
+        const seen = new Set(prev.links.map((x) => `${x.source}>${x.target}:${x.type}`));
+        const links = [...prev.links];
+        for (const x of payload.links) {
+          const k = `${x.source}>${x.target}:${x.type}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            links.push(x);
+          }
+        }
+        const merged: GraphData = {
+          ...payload,
+          nodes: [...nodes.values()],
+          links,
+          node_count: nodes.size,
+          link_count: links.length,
+          // Totals describe the snapshot, not the delta.
+          event_count: prev.event_count,
+          truncated: prev.truncated,
+        };
+        const sig = JSON.stringify({
+          n: merged.node_count,
+          l: merged.link_count,
+          e: merged.event_count,
+          nodes: merged.nodes.map((n) => n.id).sort(),
+          links: merged.links.map((x) => `${x.source}>${x.target}:${x.type}`).sort(),
+        });
+        if (sig !== graphSigRef.current) {
+          graphSigRef.current = sig;
+          return merged;
+        }
+        return prev;
+      });
+      return;
+    }
+    const sig = JSON.stringify({
+      n: payload.node_count,
+      l: payload.link_count,
+      e: payload.event_count,
+      nodes: payload.nodes.map((n) => n.id).sort(),
+      links: payload.links.map((x) => `${x.source}>${x.target}:${x.type}`).sort(),
+    });
+    if (sig !== graphSigRef.current) {
+      graphSigRef.current = sig;
+      setGraph(payload);
+    }
+  }, []);
   // Guards the selection-clear race: a background click landing within a
   // beat of picking a node is treated as part of the same gesture.
   const lastPickRef = useRef(0);
@@ -67,33 +141,24 @@ export default function App() {
   const loadGraph = useCallback(() => {
     // Slow renders must never pile up: a new poll cancels the previous
     // in-flight fetch (aborts are swallowed, not surfaced as errors).
+    // Steady-state polls ask for a delta off the newest event_time (cheap
+    // index-bounded query); every 10th poll refetches full as the resync.
     graphAbortRef.current?.abort();
     const ctrl = new AbortController();
     graphAbortRef.current = ctrl;
     const timer = setTimeout(() => ctrl.abort(), 60_000);
     setGraphError(null);
-    fetchGraph(150, ctrl.signal)
-      .then((data) => {
-        // Only swap the graph when something actually changed; keeping the
-        // same data reference avoids needless re-renders on every poll.
-        const sig = JSON.stringify({
-          n: data.node_count,
-          l: data.link_count,
-          e: data.event_count,
-          nodes: data.nodes.map((n) => n.id).sort(),
-          links: data.links.map((x) => `${x.source}>${x.target}:${x.type}`).sort(),
-        });
-        if (sig !== graphSigRef.current) {
-          graphSigRef.current = sig;
-          setGraph(data);
-        }
-      })
+    pollCountRef.current += 1;
+    const cursor = graphCursor(graphRef.current);
+    const full = pollCountRef.current % 10 === 1 || cursor === null;
+    fetchGraph(150, ctrl.signal, full ? undefined : cursor ?? undefined)
+      .then((data) => applyGraphPayload(data, !full))
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setGraphError(err.message);
       })
       .finally(() => clearTimeout(timer));
-  }, []);
+  }, [applyGraphPayload]);
 
   const loadAlerts = useCallback(() => {
     setAlertsError(null);

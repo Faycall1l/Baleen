@@ -18,9 +18,14 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 // 150 recent events keeps the payload + canvas interactive; the header
-// stats line says when the view is truncated.
-export function fetchGraph(limit = 150, signal?: AbortSignal): Promise<GraphData> {
-  return json<GraphData>(`/api/graph?limit=${limit}`, signal ? { signal } : undefined);
+// stats line says when the view is truncated. Pass `since` (ISO) for a
+// delta: only newer events, merged client-side into the snapshot.
+export function fetchGraph(limit = 150, signal?: AbortSignal, since?: string): Promise<GraphData> {
+  const url =
+    since != null && since !== ''
+      ? `/api/graph?limit=${limit}&since=${encodeURIComponent(since)}`
+      : `/api/graph?limit=${limit}`;
+  return json<GraphData>(url, signal ? { signal } : undefined);
 }
 
 export function askQuestion(question: string): Promise<QueryResponse> {

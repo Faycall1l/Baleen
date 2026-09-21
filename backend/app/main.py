@@ -17,6 +17,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 
 from app.alerts.rules import AlertRules
@@ -79,6 +80,7 @@ def _build_scheduler(settings: Settings) -> BaleenScheduler:
 
 
 app = FastAPI(title="Baleen API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(routes.router)
 
 

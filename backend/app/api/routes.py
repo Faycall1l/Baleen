@@ -211,7 +211,10 @@ def _json_safe(value):
 
 
 @router.get("/graph", dependencies=[Depends(require_api_key)])
-def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
+def graph(
+    limit: int = Query(default=500, ge=0, le=5000),
+    since: str | None = Query(default=None),
+) -> dict:
     """Serialize a subgraph for the force-directed UI.
 
     With ``limit`` > 0, only the ``limit`` most-recent events and their direct
@@ -221,54 +224,98 @@ def graph(limit: int = Query(default=500, ge=0, le=5000)) -> dict:
     can tell a partial view from a full one. ``limit`` is capped at 5000
     (#16) so a single request cannot force an unbounded materialization.
 
+    With ``since`` (ISO timestamp), only events at/after that time (plus
+    their neighborhoods) are returned, flagged with ``delta: true`` — the
+    incremental-sync pattern for polling: the UI merges deltas into its
+    snapshot and refetches full every Nth poll as the resync. An unparseable
+    ``since`` falls back to a full render. Deltas skip the total-events
+    count and the cache (both pointless for a moving window).
+
     The payload is cached for ``graph_cache_ttl_seconds`` to keep UI polling
     cheap (``event_count``/``truncated`` tolerate a few seconds of staleness).
     """
+    from datetime import datetime, timezone
+
+    since_dt = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+            if since_dt.tzinfo is None:
+                since_dt = since_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            since_dt = None
+
     ttl = get_settings().graph_cache_ttl_seconds
-    if ttl > 0:
+    if ttl > 0 and since_dt is None:
         with _graph_cache_lock:
             hit = _graph_cache.get(limit)
         if hit and hit[0] > time.monotonic():
             return hit[1]
 
-    payload = _render_graph(limit)
+    payload = _render_graph(limit, since_dt)
 
-    if ttl > 0:
+    if ttl > 0 and since_dt is None:
         with _graph_cache_lock:
             _graph_cache[limit] = (time.monotonic() + ttl, payload)
     return payload
 
 
-def _render_graph(limit: int) -> dict:
+def _render_graph(limit: int, since_dt=None) -> dict:
+    from datetime import datetime
+
     neo4j = _get_neo4j()
+    delta = since_dt is not None
     try:
-        total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
+        # The total-events count is a full label scan; deltas skip it (the UI
+        # keeps the last full total) so steady-state polls stay index-bound.
+        total = (
+            None
+            if delta
+            else neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
+        )
         keep_ids: list[str] | None = None
-        if limit > 0:
+        if limit > 0 or delta:
             # Two-pass approach: the COALESCE wrapper in the original query
             # prevented Neo4j from using the range index on ``event_time``,
             # forcing a full label scan + sort.  Splitting into two index-
             # friendly paths (non-null event_time → ORDER BY + LIMIT; null
             # event_time → LIMIT only) lets the planner use the B-tree index
-            # for the sorted path.
-            rows = neo4j.run(
-                """
-                MATCH (e:Event)
-                WHERE e.event_time IS NOT NULL
-                WITH e ORDER BY e.event_time DESC
-                LIMIT $limit
-                OPTIONAL MATCH (e)--(n)
-                WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
-                UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
-                RETURN DISTINCT elementId(kept) AS internal_id
-                """,
-                limit=limit,
-            )
+            # for the sorted path. Deltas filter the same indexed path by the
+            # cursor instead of sorting the whole graph.
+            if delta:
+                assert since_dt is not None
+                rows = neo4j.run(
+                    """
+                    MATCH (e:Event)
+                    WHERE e.event_time IS NOT NULL
+                      AND e.event_time >= datetime($since)
+                    OPTIONAL MATCH (e)--(n)
+                    WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
+                    UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
+                    RETURN DISTINCT elementId(kept) AS internal_id
+                    """,
+                    since=since_dt.isoformat(),
+                )
+            else:
+                rows = neo4j.run(
+                    """
+                    MATCH (e:Event)
+                    WHERE e.event_time IS NOT NULL
+                    WITH e ORDER BY e.event_time DESC
+                    LIMIT $limit
+                    OPTIONAL MATCH (e)--(n)
+                    WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
+                    UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
+                    RETURN DISTINCT elementId(kept) AS internal_id
+                    """,
+                    limit=limit,
+                )
             keep_ids: list[str] = [row["internal_id"] for row in rows]
             # Pad with events that have no event_time (old / unparsed) if the
-            # indexed path returned fewer than ``limit`` events.
+            # indexed path returned fewer than ``limit`` events. Full renders
+            # only — deltas are strictly "what's new", never backfill.
             remaining = limit - len(keep_ids)
-            if remaining > 0:
+            if remaining > 0 and not delta:
                 old_rows = neo4j.run(
                     """
                     MATCH (e:Event)
@@ -354,7 +401,8 @@ def _render_graph(limit: int) -> dict:
         "node_count": len(nodes),
         "link_count": len(links),
         "event_count": total,
-        "truncated": keep_ids is not None and total > limit,
+        "truncated": keep_ids is not None and total is not None and total > limit,
+        "delta": delta,
     }
 
 

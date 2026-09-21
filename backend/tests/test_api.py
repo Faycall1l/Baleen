@@ -703,6 +703,97 @@ def test_graph_cache_disabled_when_ttl_zero(monkeypatch):
     assert neo.runs == 8  # two full rebuilds, nothing cached
 
 
+def test_graph_delta_skips_count_cache_and_pad(monkeypatch):
+    """A delta (?since=) must not run the total-events count, must bypass the
+    cache, and must not pad with null-event_time events: 2 round-trips."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    neo = _CountingNeo4j()
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: neo)
+
+    with monkeypatch.context() as m:
+        m.setattr(routes, "_graph_cache", {})
+
+        with _client() as c:
+            first = c.get("/api/graph?limit=20&since=2026-01-01T00%3A00%3A00%2B00%3A00")
+            assert first.status_code == 200
+            body = first.json()
+            assert body["delta"] is True
+            assert body["event_count"] is None
+            second = c.get("/api/graph?limit=20&since=2026-01-01T00%3A00%3A00%2B00%3A00")
+            assert second.status_code == 200
+        # keep-pass + combined fetch per delta, nothing cached, no count.
+        assert neo.runs == 4
+
+
+def test_graph_delta_garbage_since_falls_back_to_full(monkeypatch):
+    """An unparseable ?since= must render full, not 422."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    neo = _CountingNeo4j()
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: neo)
+
+    with _client() as c:
+        res = c.get("/api/graph?limit=20&since=not-a-date")
+        assert res.status_code == 200
+        assert res.json().get("delta") is not True
+
+
+def test_graph_delta_returns_only_newer_events(postgres_store, neo4j_store):
+    """Live: events before the cursor stay out of the delta payload."""
+    from datetime import datetime, timezone
+
+    from app.graph.writer import GraphWriter
+    from app.models.events import CongressTradeEvent
+
+    def _evt(tweet_id: str, pid: str, ticker: str, when: datetime) -> CongressTradeEvent:
+        return CongressTradeEvent(
+            tweet_id=tweet_id,
+            tweet_url=f"https://x.com/congress_trades/status/{tweet_id}",
+            confidence=0.95,
+            politician_name="Delta Dan",
+            politician_id=pid,
+            chamber="senate",
+            party="D",
+            committee_ids=[],
+            ticker=ticker,
+            transaction_type="buy",
+            amount_range="$1 - $2",
+            transaction_date=when.date(),
+            event_time=when,
+        )
+
+    writer = GraphWriter(neo4j_store)
+    old_id = writer.write_event(
+        _evt("g-delta-old", "D900", "ZZD1", datetime(2026, 1, 10, tzinfo=timezone.utc))
+    )
+    new_id = writer.write_event(
+        _evt("g-delta-new", "D901", "ZZD2", datetime(2026, 3, 10, tzinfo=timezone.utc))
+    )
+    try:
+        with _client() as c:
+            body = c.get("/api/graph?limit=100&since=2026-02-01T00%3A00%3A00%2B00%3A00").json()
+        assert body["delta"] is True
+        ids = {n["id"] for n in body["nodes"]}
+        assert f"Event:{new_id}" in ids
+        assert f"Event:{old_id}" not in ids
+    finally:
+        neo4j_store.run(
+            "MATCH (e:Event) WHERE e.id IN $ids DETACH DELETE e",
+            ids=[old_id, new_id],
+        )
+        neo4j_store.run(
+            "MATCH (p:Politician) WHERE p.id IN $ids DETACH DELETE p",
+            ids=["D900", "D901"],
+        )
+        neo4j_store.run(
+            "MATCH (t:Ticker) WHERE t.ticker IN $ids DETACH DELETE t",
+            ids=["ZZD1", "ZZD2"],
+        )
+
+
 def test_alerts_error_is_json_500(monkeypatch):
     _boom_app(monkeypatch)
     with _client() as c:
