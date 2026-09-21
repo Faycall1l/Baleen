@@ -26,10 +26,10 @@ interface Props {
 // itself runs no simulation at all. The map is static by construction: no
 // popping, no flicker. Pan/zoom/drag still work; drag rewrites coordinates.
 //
-// Visual model (network-readability rules): curved directed edges declutter
-// crossings; labels carry a halo and render for important nodes first;
-// sizes follow sqrt(degree) in a ~3x band; edges sit behind nodes at low
-// opacity via dimming.
+// Visibility model: what you see is what EXISTS in the graphology graph.
+// Modes and legend filters add/drop nodes (banking positions), never paint
+// tricks — custom WebGL programs don't reliably honor sigma's `hidden`
+// flag, so hiding-by-paint is not used anywhere. Reducers only dim.
 //
 // Exploration model (Shneiderman, condensed): search to find, click to focus
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
@@ -43,26 +43,16 @@ const LARGE_GRAPH = 500;
 const DIM_NODE = '#2b2b31';
 const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
-// Invisibility WITHOUT the `hidden` flag: sigma's default programs skip
-// hidden items, but custom programs (our border/curve painters) don't even
-// read the flag — verified in the installed @sigma/node-border source.
-// Anything hidden must instead be painted transparent at ~zero size, using
-// only plain attributes every program honors (color, size, label).
-const INVISIBLE_NODE = {
-  color: 'rgba(0,0,0,0)',
-  borderColor: 'rgba(0,0,0,0)',
-  label: '',
-  size: 0.001,
-} as const;
-const INVISIBLE_EDGE = { color: 'rgba(0,0,0,0)' };
+// Banked positions survive node removal so re-shown nodes return to their
+// old spot instead of being re-seeded. Bounded FIFO.
+const POS_CACHE_CAP = 2000;
 
 // Ontology (schema) overview: the graph's labels as supernodes sized by
 // instance count (sqrt-scaled, per VOWL), connected by the relationship
 // types actually present, with human-readable property labels. Gives the
 // "what is this data" overview first; clicking a class drills into its
 // instances. Pure frontend aggregation over the loaded payload — no backend
-// changes. Schema ids are prefixed so they can share one graphology graph
-// with the instances (hidden set decides which half renders).
+// changes.
 const SCHEMA_LABELS = ['Politician', 'Insider', 'Committee', 'Event', 'Ticker', 'Sector'];
 const SCHEMA_RADIUS = 260;
 
@@ -73,99 +63,6 @@ const schemaEdgeKey = (s: string, rel: string, t: string): string =>
 
 function humanizeRel(rel: string): string {
   return rel.toLowerCase().replace(/_/g, ' ');
-}
-
-type SchemaAgg = {
-  counts: Map<string, number>;
-  rels: Map<string, { source: string; rel: string; target: string; count: number }>;
-};
-
-function aggregateSchema(
-  nodes: GraphData['nodes'],
-  links: GraphData['links'],
-): SchemaAgg {
-  const counts = new Map<string, number>();
-  const labelById = new Map<string, string>();
-  for (const n of nodes) {
-    labelById.set(n.id, n.label);
-    counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
-  }
-  const rels = new Map<string, { source: string; rel: string; target: string; count: number }>();
-  for (const l of links) {
-    const s = labelById.get(l.source);
-    const t = labelById.get(l.target);
-    if (!s || !t) continue;
-    const key = schemaEdgeKey(s, l.type, t);
-    const prev = rels.get(key);
-    if (prev) prev.count += 1;
-    else rels.set(key, { source: s, rel: l.type, target: t, count: 1 });
-  }
-  return { counts, rels };
-}
-
-// Sync the schema overlay into the shared graph: one supernode per label
-// WITH instances, at fixed circle positions, plus one edge per relationship
-// type present. Zero-count labels render nothing at all — an empty type
-// occupying the map at full saturation reads as false importance (and can
-// only ever be connectionless); the legend still lists it with (0).
-// Supenodes never join any layout pass; only counts/sizes/labels update.
-function syncSchemaOverlay(graph: Graph, agg: SchemaAgg): void {
-  SCHEMA_LABELS.forEach((label, i) => {
-    const id = schemaId(label);
-    const count = agg.counts.get(label) ?? 0;
-    if (count === 0) {
-      if (graph.hasNode(id)) graph.dropNode(id);
-      return;
-    }
-    const color = nodeColor(label);
-    const a = (i / SCHEMA_LABELS.length) * 2 * Math.PI;
-    if (!graph.hasNode(id)) {
-      graph.addNode(id, {});
-      graph.setNodeAttribute(id, 'x', Math.cos(a) * SCHEMA_RADIUS);
-      graph.setNodeAttribute(id, 'y', Math.sin(a) * SCHEMA_RADIUS);
-    }
-    // Top instances by degree so the type reads as content
-    // ("Politician (20): Warren, Waters"), not just a tag.
-    const tops: { title: string; deg: number }[] = [];
-    graph.forEachNode((n, attrs) => {
-      if (isSchemaId(n) || attrs.kind !== label) return;
-      tops.push({ title: attrs.title as string, deg: graph.degree(n) });
-    });
-    tops.sort((x, y) => y.deg - x.deg);
-    const names = tops
-      .slice(0, 2)
-      .map((t) => truncate(t.title, 15))
-      .join(', ');
-    const title = count > 0 && names ? `${label} (${count}): ${names}` : `${label} (${count})`;
-    graph.replaceNodeAttributes(id, {
-      type: 'bordered',
-      kind: label,
-      label: title,
-      key: label,
-      title,
-      props: {},
-      tweet_url: null,
-      color,
-      borderColor: shade(color, 0.55),
-      size: 10 + Math.sqrt(count) * 1.5,
-      x: graph.getNodeAttribute(id, 'x'),
-      y: graph.getNodeAttribute(id, 'y'),
-    });
-  });
-  const seen = new Set<string>();
-  for (const [key, r] of agg.rels) {
-    seen.add(key);
-    if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, schemaId(r.source), schemaId(r.target), {
-        type: 'curvedArrow',
-        label: humanizeRel(r.rel),
-      });
-    }
-    graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
-  }
-  graph.forEachEdge((e) => {
-    if (e.startsWith('schema-rel:') && !seen.has(e)) graph.dropEdge(e);
-  });
 }
 
 // Nodes render as filled discs with a thin darker border; arrows show edge
@@ -189,27 +86,8 @@ function shade(hex: string, factor: number): string {
 }
 
 function nodeSize(label: string, degree: number): number {
-  // Literature range ~3x from leaf to hub, sqrt-scaled so mega-hubs don't
-  // eat the canvas; events stay small regardless of degree.
   if (label === 'Event') return 1.6 + Math.min(Math.sqrt(degree) * 0.8, 2.4);
   return 2.2 + Math.min(Math.sqrt(degree) * 1.2, 5);
-}
-
-// Default label painter plus a 1-2px background halo so text lifts off
-// edges and nodes on the dark canvas. Same geometry as sigma's default.
-function drawLabelWithHalo(
-  context: CanvasRenderingContext2D,
-  data: { x: number; y: number; size: number; label?: string | null; color: string },
-  settings: { labelSize: number; labelFont: string; labelWeight: string },
-): void {
-  if (!data.label) return;
-  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
-  context.font = `${weight} ${size}px ${font}`;
-  context.lineWidth = 3;
-  context.strokeStyle = theme.bg;
-  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
-  context.fillStyle = theme.text;
-  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
 }
 
 function hashStr(s: string): number {
@@ -243,10 +121,261 @@ function eventTitle(props: Record<string, unknown>): string {
   return 'Unparsed';
 }
 
+function drawLabelWithHalo(
+  context: CanvasRenderingContext2D,
+  data: { x: number; y: number; size: number; label?: string | null; color: string },
+  settings: { labelSize: number; labelFont: string; labelWeight: string },
+): void {
+  if (!data.label) return;
+  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
+  context.font = `${weight} ${size}px ${font}`;
+  context.lineWidth = 3;
+  context.strokeStyle = theme.bg;
+  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
+  context.fillStyle = theme.text;
+  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
+}
+
+type SchemaAgg = {
+  counts: Map<string, number>;
+  rels: Map<string, { source: string; rel: string; target: string; count: number }>;
+};
+
+function aggregateSchema(
+  nodes: GraphData['nodes'],
+  links: GraphData['links'],
+): SchemaAgg {
+  const counts = new Map<string, number>();
+  const labelById = new Map<string, string>();
+  for (const n of nodes) {
+    labelById.set(n.id, n.label);
+    counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
+  }
+  const rels = new Map<string, { source: string; rel: string; target: string; count: number }>();
+  for (const l of links) {
+    const s = labelById.get(l.source);
+    const t = labelById.get(l.target);
+    if (!s || !t) continue;
+    const key = schemaEdgeKey(s, l.type, t);
+    const prev = rels.get(key);
+    if (prev) prev.count += 1;
+    else rels.set(key, { source: s, rel: l.type, target: t, count: 1 });
+  }
+  return { counts, rels };
+}
+
+function bankPos(
+  posCache: Map<string, { x: number; y: number }>,
+  graph: Graph,
+  id: string,
+): void {
+  const x = graph.getNodeAttribute(id, 'x') as number;
+  const y = graph.getNodeAttribute(id, 'y') as number;
+  if (Number.isFinite(x) && Number.isFinite(y)) {
+    posCache.delete(id);
+    posCache.set(id, { x, y });
+    while (posCache.size > POS_CACHE_CAP) {
+      const oldest = posCache.keys().next();
+      if (oldest.done) break;
+      posCache.delete(oldest.value);
+    }
+  }
+}
+
+// Single owner of graph membership, attrs, edges, and positions. Computes
+// the wanted id set from the mode/filter, drops anything else (banking
+// positions for a possible return), adds what's missing (attrs + restored
+// or seeded positions), and syncs edges. Positions of surviving nodes are
+// never touched. When initialLayout is set, present instances are spread on
+// a deterministic circle instead (first-paint input for the FA2 pass).
+// Single owner of graph membership AND per-item visuals. Computes the wanted
+// id set from the mode/filter, drops anything else (banking positions),
+// (re-)adds what's missing with full attrs, syncs edges, and seeds positions
+// for nodes that have none (banked restore, else neighbor centroid, else
+// deterministic ring). Surviving nodes are never moved or relaid out.
+function applyVisibility(
+  graph: Graph,
+  data: GraphData,
+  mode: 'instances' | 'schema',
+  hiddenTypes: Set<string>,
+  posCache: Map<string, { x: number; y: number }>,
+): void {
+  const byId = new Map(data.nodes.map((n) => [n.id, n]));
+  const degree = new Map<string, number>();
+  for (const l of data.links) {
+    degree.set(l.source, (degree.get(l.source) ?? 0) + 1);
+    degree.set(l.target, (degree.get(l.target) ?? 0) + 1);
+  }
+  const agg = aggregateSchema(data.nodes, data.links);
+
+  const want = new Set<string>();
+  if (mode === 'instances') {
+    for (const n of data.nodes) if (!hiddenTypes.has(n.label)) want.add(n.id);
+  } else {
+    for (const [label, count] of agg.counts) if (count > 0) want.add(schemaId(label));
+  }
+
+  const drop: string[] = [];
+  graph.forEachNode((id) => {
+    if (!want.has(id)) drop.push(id);
+  });
+  for (const id of drop) {
+    bankPos(posCache, graph, id);
+    graph.dropNode(id);
+  }
+
+  for (const id of want) {
+    if (graph.hasNode(id)) {
+      // Refresh attrs of survivors (titles/counts/colors can change).
+      if (isSchemaId(id)) {
+        const label = id.slice('schema:'.length);
+        const count = agg.counts.get(label) ?? 0;
+        const color = nodeColor(label);
+        graph.mergeNodeAttributes(id, {
+          title: schemaTitle(label, count, byId, degree),
+          color,
+          borderColor: shade(color, 0.55),
+          size: 10 + Math.sqrt(count) * 1.5,
+        });
+      } else {
+        const n = byId.get(id);
+        if (!n) continue;
+        const color = nodeColor(n.label);
+        const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
+        graph.mergeNodeAttributes(id, {
+          type: 'bordered',
+          kind: n.label,
+          label: display,
+          key: n.key,
+          title: display,
+          props: n.props,
+          tweet_url: n.tweet_url,
+          color,
+          borderColor: shade(color, 0.55),
+          size: nodeSize(n.label, degree.get(id) ?? 0),
+        });
+      }
+      continue;
+    }
+    if (isSchemaId(id)) {
+      const label = id.slice('schema:'.length);
+      const count = agg.counts.get(label) ?? 0;
+      const color = nodeColor(label);
+      const idx = Math.max(SCHEMA_LABELS.indexOf(label), 0);
+      const a = (idx / SCHEMA_LABELS.length) * 2 * Math.PI;
+      graph.addNode(id, {});
+      graph.mergeNodeAttributes(id, {
+        type: 'bordered',
+        kind: label,
+        label: schemaTitle(label, count, byId, degree),
+        key: label,
+        title: schemaTitle(label, count, byId, degree),
+        props: {},
+        tweet_url: null,
+        color,
+        borderColor: shade(color, 0.55),
+        size: 10 + Math.sqrt(count) * 1.5,
+        x: Math.cos(a) * SCHEMA_RADIUS,
+        y: Math.sin(a) * SCHEMA_RADIUS,
+      });
+      continue;
+    }
+    const n = byId.get(id);
+    if (!n) continue;
+    const color = nodeColor(n.label);
+    const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
+    graph.addNode(id, {});
+    graph.mergeNodeAttributes(id, {
+      type: 'bordered',
+      kind: n.label,
+      label: display,
+      key: n.key,
+      title: display,
+      props: n.props,
+      tweet_url: n.tweet_url,
+      color,
+      borderColor: shade(color, 0.55),
+      size: nodeSize(n.label, degree.get(id) ?? 0),
+    });
+    // Position: banked restore, else centroid of placed neighbors, else ring.
+    const saved = posCache.get(id);
+    if (saved) {
+      graph.setNodeAttribute(id, 'x', saved.x);
+      graph.setNodeAttribute(id, 'y', saved.y);
+    } else {
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const nb of graph.neighbors(id)) {
+        const x = graph.getNodeAttribute(nb, 'x') as number;
+        const y = graph.getNodeAttribute(nb, 'y') as number;
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          xs.push(x);
+          ys.push(y);
+        }
+      }
+      if (xs.length > 0) {
+        graph.setNodeAttribute(id, 'x', xs.reduce((s, v) => s + v, 0) / xs.length);
+        graph.setNodeAttribute(id, 'y', ys.reduce((s, v) => s + v, 0) / ys.length);
+      } else {
+        const a = hashStr(id) * 2 * Math.PI;
+        const r = 40 + hashStr(id + ':r') * 80;
+        graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
+        graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
+      }
+    }
+  }
+
+  // Edges: payload links between present nodes, schema rels between present
+  // supernodes; drop everything stale.
+  const payloadEdgeKeys = new Set<string>();
+  for (const l of data.links) {
+    if (!graph.hasNode(l.source) || !graph.hasNode(l.target)) continue;
+    const key = `${l.source}>${l.target}:${l.type}`;
+    payloadEdgeKeys.add(key);
+    if (!graph.hasEdge(key)) {
+      graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
+    }
+  }
+  for (const [key, r] of agg.rels) {
+    const s = schemaId(r.source);
+    const t = schemaId(r.target);
+    if (!graph.hasNode(s) || !graph.hasNode(t)) continue;
+    if (!graph.hasEdge(key)) {
+      graph.addEdgeWithKey(key, s, t, { type: 'curvedArrow', label: humanizeRel(r.rel) });
+    }
+    graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
+  }
+  graph.forEachEdge((e) => {
+    if (!payloadEdgeKeys.has(e) && !agg.rels.has(e)) graph.dropEdge(e);
+  });
+}
+
+function schemaTitle(
+  label: string,
+  count: number,
+  byId: Map<string, GraphData['nodes'][number]>,
+  degree: Map<string, number>,
+): string {
+  if (count === 0) return `${label} (0)`;
+  const tops = [...byId.values()]
+    .filter((n) => n.label === label)
+    .map((n) => ({
+      t: n.label === 'Event' ? eventTitle(n.props) : n.title,
+      d: degree.get(n.id) ?? 0,
+    }))
+    .sort((x, y) => y.d - x.d)
+    .slice(0, 2)
+    .map((t) => truncate(t.t, 15));
+  return tops.length ? `${label} (${count}): ${tops.join(', ')}` : `${label} (${count})`;
+}
+
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const sigmaRef = useRef<Sigma | null>(null);
+  const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const [query, setQuery] = useState('');
@@ -255,29 +384,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   // Labels hidden from the instance view (legend toggles). Schema view is
   // always complete; hidden types only apply to instances.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
-  // Latest view state for the click handler (refs, so the once-wired sigma
-  // callbacks never go stale).
-  const viewRef = useRef<{ mode: 'instances' | 'schema'; hiddenTypes: Set<string> }>({
-    mode: 'instances',
-    hiddenTypes: new Set<string>(),
-  });
-  viewRef.current = { mode, hiddenTypes };
-
-  const isVisible = (id: string, kind: string): boolean => {
-    const { mode: m, hiddenTypes: hidden } = viewRef.current;
-    if (m === 'schema') return isSchemaId(id);
-    if (isSchemaId(id)) return false;
-    return !hidden.has(kind);
-  };
-  // Node being dragged, if any. Dragging is manual (sigma core pans the
-  // camera but never moves nodes itself): press moves with the pointer,
-  // camera stays put. Click detection is left entirely to sigma's native
-  // clickNode (tremor-tolerant via draggedEventsTolerance) — the manual
-  // layer never decides clicks, so it can't eat them.
-  const dragRef = useRef<string | null>(null);
 
   // Selection entry point: schema nodes drill into their type, instance
-  // nodes select for the inspector. Never throws, never moves the camera.
+  // nodes select for the inspector. Dropped (invisible) nodes can never be
+  // selected because hit-testing only sees rendered nodes — and the guard
+  // below makes that structural, not assumed.
   const selectNodeByKey = (node: string) => {
     const g = graphRef.current;
     if (!g || !g.hasNode(node)) return;
@@ -301,9 +412,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       return;
     }
     const a = g.getNodeAttributes(node);
-    // Invisible nodes (filtered type, wrong mode) have ~zero hit area, but
-    // guard anyway: selecting something you can't see desyncs the inspector.
-    if (!isVisible(node, a.kind as string)) return;
     onSelectRef.current({
       id: node,
       label: a.kind,
@@ -325,8 +433,16 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return () => window.removeEventListener('mouseup', backstop);
   }, []);
 
-  // Merge incoming data into the persistent graph. Positions of surviving
-  // nodes are never touched; only genuinely new nodes need placement.
+  // Node being dragged, if any. Dragging is manual (sigma core pans the
+  // camera but never moves nodes itself): press moves with the pointer,
+  // camera stays put. Click detection stays entirely native — this layer
+  // only moves coordinates, never decides or suppresses clicks.
+  const dragRef = useRef<string | null>(null);
+
+  // Data flow per poll: applyVisibility syncs membership, attrs, edges and
+  // positions; first paint adds one FA2 pass over the rendered set, then
+  // sigma is created exactly once. Positions of surviving nodes are never
+  // touched at any step, and no layout ever re-runs afterwards.
   useEffect(() => {
     if (!containerRef.current || !data || data.nodes.length === 0) return;
 
@@ -336,56 +452,12 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       graphRef.current = graph;
     }
 
-    const seen = new Set<string>();
-    const added: string[] = [];
-    for (const n of data.nodes) {
-      seen.add(n.id);
-      const color = nodeColor(n.label);
-      if (!graph.hasNode(n.id)) {
-        graph.addNode(n.id, {});
-        added.push(n.id);
-      }
-      const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-      graph.mergeNodeAttributes(n.id, {
-        type: 'bordered',
-        kind: n.label,
-        label: display,
-        key: n.key,
-        title: display,
-        props: n.props,
-        tweet_url: n.tweet_url,
-        color,
-        borderColor: shade(color, 0.55),
-      });
-    }
-    const seenEdges = new Set<string>();
-    for (const l of data.links) {
-      if (!graph.hasNode(l.source) || !graph.hasNode(l.target)) continue;
-      const key = `${l.source}>${l.target}:${l.type}`;
-      seenEdges.add(key);
-      if (!graph.hasEdge(key)) {
-        graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
-      }
-    }
-    // Prune removals, but never the schema overlay (it is synced below and
-    // positioned once, outside the instance layout).
-    graph.forEachEdge((e) => {
-      if (!seenEdges.has(e) && !e.startsWith('schema-rel:')) graph.dropEdge(e);
-    });
-    graph.forEachNode((n) => {
-      if (!seen.has(n) && !isSchemaId(n)) graph.dropNode(n);
-    });
-    graph.forEachNode((n) => {
-      if (isSchemaId(n)) return;
-      const kind = graph.getNodeAttribute(n, 'kind') as string;
-      graph.setNodeAttribute(n, 'size', nodeSize(kind, graph.degree(n)));
-    });
+    applyVisibility(graph, data, mode, hiddenTypes, posCacheRef.current);
 
     let sigma = sigmaRef.current;
     if (!sigma) {
-      // First paint: deterministic circle, one synchronous FA2 pass over
-      // the instances only, then the schema overlay is added at fixed
-      // positions (never part of any layout), then render.
+      // First paint: one synchronous FA2 pass over the rendered set (initial
+      // mode is always instances), then render. Nothing animates at any point.
       const order = graph.order;
       const radius = 30 * Math.sqrt(Math.max(order, 1));
       let i = 0;
@@ -398,7 +470,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         iterations: order > LARGE_GRAPH ? FA2_ITERATIONS_LARGE : FA2_ITERATIONS_SMALL,
         settings: forceAtlas2.inferSettings(graph),
       });
-      syncSchemaOverlay(graph, aggregateSchema(data.nodes, data.links));
 
       const fresh = new Sigma(graph, containerRef.current, {
         allowInvalidContainer: true,
@@ -452,42 +523,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         fresh.getCamera().enable();
       });
     } else {
-      // Later polls: place newcomers at their placed neighborhood centroid
-      // (deterministic ring fallback), leave everything else exactly alone.
-      const placed = new Map<string, { x: number; y: number }>();
-      graph.forEachNode((n) => {
-        if (!added.includes(n)) {
-          placed.set(n, {
-            x: graph.getNodeAttribute(n, 'x'),
-            y: graph.getNodeAttribute(n, 'y'),
-          });
-        }
-      });
-      const neighborPos = new Map<string, { x: number; y: number }[]>();
-      graph.forEachEdge((_e, _attrs, s, t) => {
-        const pa = placed.get(s);
-        const pb = placed.get(t);
-        if ((pa && pb) || (!pa && !pb)) return;
-        const unknown = pa ? t : s;
-        const known = (pa ?? pb)!;
-        if (placed.has(unknown)) return;
-        const list = neighborPos.get(unknown) ?? [];
-        list.push(known);
-        neighborPos.set(unknown, list);
-      });
-      for (const id of added) {
-        const neighbors = neighborPos.get(id);
-        if (neighbors?.length) {
-          graph.setNodeAttribute(id, 'x', neighbors.reduce((sum, p) => sum + p.x, 0) / neighbors.length);
-          graph.setNodeAttribute(id, 'y', neighbors.reduce((sum, p) => sum + p.y, 0) / neighbors.length);
-        } else {
-          const a = hashStr(id) * 2 * Math.PI;
-          const r = 40 + hashStr(id + ':r') * 80;
-          graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
-          graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
-        }
-      }
-      syncSchemaOverlay(graph, aggregateSchema(data.nodes, data.links));
       try {
         sigma.refresh();
       } catch {
@@ -496,11 +531,41 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     }
   }, [data]);
 
-  // Focus dimming + mode/type visibility, all through reducers (no custom
-  // paint code needed). Schema mode shows only the overlay; instances mode
-  // shows instances minus legend-hidden types. Dimming follows selection
-  // ONLY — hover-driven dimming used to strobe on every mouse move across
-  // dense nodes, so hover is limited to the native label affordance.
+  // Mode/filter changes re-run membership without touching data (positions
+  // of survivors are preserved by the bank/restore inside applyVisibility).
+  useEffect(() => {
+    const graph = graphRef.current;
+    const sigma = sigmaRef.current;
+    const latest = dataRef.current;
+    if (!graph || !sigma || !latest) return;
+    applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
+    try {
+      sigma.refresh();
+    } catch {
+      /* visibility flip must never blank the canvas */
+    }
+  }, [mode, hiddenTypes]);
+
+  const toggleType = (label: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!data) return counts;
+    for (const n of data.nodes) counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
+    return counts;
+  }, [data]);
+
+  // Focus dimming through reducers (color/label only — the only per-item
+  // channels the custom programs are proven to honor). Dimming follows
+  // selection ONLY — hover-driven dimming used to strobe on every mouse
+  // move across dense nodes, so hover is limited to the native label.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
@@ -511,8 +576,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     }
     const fs = focusSet;
     sigma.setSetting('nodeReducer', (node, attrs) => {
-      const kind = (attrs.kind as string) ?? '';
-      if (!isVisible(node, kind)) return { ...attrs, ...INVISIBLE_NODE };
       if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
       if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
       // Focused neighborhood reads bigger, which also lifts it over the
@@ -522,19 +585,16 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       return attrs;
     });
     sigma.setSetting('edgeReducer', (edge, attrs) => {
+      if (!fs) return attrs;
       const [s, t] = graph.extremities(edge);
-      const sk = (graph.getNodeAttribute(s, 'kind') as string) ?? '';
-      const tk = (graph.getNodeAttribute(t, 'kind') as string) ?? '';
-      if (!isVisible(s, sk) || !isVisible(t, tk)) return { ...attrs, ...INVISIBLE_EDGE };
-      if (fs && !(fs.has(s) && fs.has(t))) return { ...attrs, color: DIM_EDGE };
-      return attrs;
+      return fs.has(s) && fs.has(t) ? attrs : { ...attrs, color: DIM_EDGE };
     });
     try {
       sigma.refresh();
     } catch {
       /* selection dimming must never blank the canvas */
     }
-  }, [selectedId, mode, hiddenTypes]);
+  }, [selectedId]);
 
   // Edge property labels only make sense on the schema overview; instance
   // edges stay clean.
@@ -557,19 +617,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   }, [mode]);
 
   // Place the camera on the selected node, keeping the zoom level. Instant
-  // setState, not animate: no async animation machinery in the click path
-  // means no overlapping/racing camera states to debug. Skips hidden nodes
-  // (e.g. type toggled off) instead of flying to a stale spot.
+  // setState, not animate: no async animation machinery in the click path.
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph || !selectedId || !graph.hasNode(selectedId)) return;
-    if (
-      mode !== 'schema' &&
-      hiddenTypes.has(graph.getNodeAttribute(selectedId, 'kind') as string)
-    ) {
-      return;
-    }
     const x = graph.getNodeAttribute(selectedId, 'x') as number;
     const y = graph.getNodeAttribute(selectedId, 'y') as number;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -579,7 +631,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     } catch {
       /* a failed placement must never break selection */
     }
-  }, [selectedId, mode, hiddenTypes]);
+  }, [selectedId]);
 
   // Teardown: sigma owns WebGL resources that must be released.
   useEffect(() => {
@@ -597,35 +649,22 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   }, [query, data]);
 
   const chooseMatch = (m: GraphNode) => {
+    if (mode === 'schema') setMode('instances');
+    const kind = data?.nodes.find((n) => n.id === m.id)?.label;
+    if (kind && mode === 'instances' && hiddenTypes.has(kind)) {
+      setHiddenTypes((prev) => {
+        const next = new Set(prev);
+        next.delete(kind);
+        return next;
+      });
+    }
     onSelect(m);
     setQuery('');
     setSearchOpen(false);
   };
 
-  const toggleType = (label: string) => {
-    setHiddenTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  };
-
-  const typeCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    if (!data) return counts;
-    for (const n of data.nodes) counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
-    return counts;
-  }, [data]);
-
   if (!data) {
-    return error ? (
-      <div className="empty-hint">
-        <div className="error">{error}</div>
-      </div>
-    ) : (
-      <div className="empty-hint">Loading graph…</div>
-    );
+    return <div className="empty-hint">Loading graph…</div>;
   }
 
   if (data.nodes.length === 0) {
@@ -637,10 +676,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     );
   }
 
-  // NOTE: a failed poll must NEVER unmount the canvas below. Unmounting
-  // kills the sigma instance; the next success then remounts with a full
-  // force-layout replay — under a flaky backend that reads as an endless
-  // big bang. Errors render as an overlay badge over the last-good graph.
+  // NOTE: fetch errors overlay the last-good canvas (see below) instead of
+  // replacing it: unmounting on error then remounting on recovery replayed
+  // the full layout each time, which read as an endless big bang.
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
