@@ -66,6 +66,19 @@ export function applyVisibility(
   }
   const agg = aggregateSchema(data.nodes, data.links);
 
+  // Payload adjacency for centroid placement (graph edges sync below, so
+  // graph.neighbors would see nothing yet — and throws on missing nodes).
+  const linkAdj = new Map<string, string[]>();
+  const linkAdjAdd = (a: string, b: string) => {
+    const list = linkAdj.get(a) ?? [];
+    list.push(b);
+    linkAdj.set(a, list);
+  };
+  for (const l of data.links) {
+    linkAdjAdd(l.source, l.target);
+    linkAdjAdd(l.target, l.source);
+  }
+
   const want = new Set<string>();
   if (mode === 'instances') {
     for (const n of data.nodes) if (!hiddenTypes.has(n.label)) want.add(n.id);
@@ -115,14 +128,18 @@ export function applyVisibility(
       }
       continue;
     }
+    // New nodes are created WITH coordinates in the same call: sigma
+    // validates synchronously on graphology mutation events, so a node
+    // must never exist even transiently without a finite position.
     if (isSchemaId(id)) {
       const label = id.slice('schema:'.length);
       const count = agg.counts.get(label) ?? 0;
       const color = nodeColor(label);
       const idx = Math.max(SCHEMA_LABELS.indexOf(label), 0);
       const a = (idx / SCHEMA_LABELS.length) * 2 * Math.PI;
-      graph.addNode(id, {});
-      graph.mergeNodeAttributes(id, {
+      const x = Math.cos(a) * SCHEMA_RADIUS;
+      const y = Math.sin(a) * SCHEMA_RADIUS;
+      graph.addNode(id, {
         type: 'bordered',
         kind: label,
         label: schemaTitle(label, count, byId, degree),
@@ -133,8 +150,8 @@ export function applyVisibility(
         color,
         borderColor: shade(color, 0.55),
         size: 10 + Math.sqrt(count) * 1.5,
-        x: Math.cos(a) * SCHEMA_RADIUS,
-        y: Math.sin(a) * SCHEMA_RADIUS,
+        x,
+        y,
       });
       continue;
     }
@@ -142,8 +159,39 @@ export function applyVisibility(
     if (!n) continue;
     const color = nodeColor(n.label);
     const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-    graph.addNode(id, {});
-    graph.mergeNodeAttributes(id, {
+    const saved = posCache.get(id);
+    let px: number;
+    let py: number;
+    if (saved) {
+      px = saved.x;
+      py = saved.y;
+    } else {
+      // Centroid over payload neighbors that already have finite spots.
+      // (Graph edges sync below, so neighbor lookups here use the payload
+      // adjacency instead of graph.neighbors — which throws on missing
+      // nodes and would see no edges yet anyway.)
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const nb of linkAdj.get(id) ?? []) {
+        if (!graph.hasNode(nb)) continue;
+        const x = graph.getNodeAttribute(nb, 'x') as number;
+        const y = graph.getNodeAttribute(nb, 'y') as number;
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          xs.push(x);
+          ys.push(y);
+        }
+      }
+      if (xs.length > 0) {
+        px = xs.reduce((s, v) => s + v, 0) / xs.length;
+        py = ys.reduce((s, v) => s + v, 0) / ys.length;
+      } else {
+        const a = hashStr(id) * 2 * Math.PI;
+        const r = 40 + hashStr(id + ':r') * 80;
+        px = Math.cos(a) * r;
+        py = Math.sin(a) * r;
+      }
+    }
+    graph.addNode(id, {
       type: 'bordered',
       kind: n.label,
       label: display,
@@ -154,33 +202,9 @@ export function applyVisibility(
       color,
       borderColor: shade(color, 0.55),
       size: nodeSize(n.label, degree.get(id) ?? 0),
+      x: px,
+      y: py,
     });
-    // Position: banked restore, else centroid of placed neighbors, else ring.
-    const saved = posCache.get(id);
-    if (saved) {
-      graph.setNodeAttribute(id, 'x', saved.x);
-      graph.setNodeAttribute(id, 'y', saved.y);
-    } else {
-      const xs: number[] = [];
-      const ys: number[] = [];
-      for (const nb of graph.neighbors(id)) {
-        const x = graph.getNodeAttribute(nb, 'x') as number;
-        const y = graph.getNodeAttribute(nb, 'y') as number;
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          xs.push(x);
-          ys.push(y);
-        }
-      }
-      if (xs.length > 0) {
-        graph.setNodeAttribute(id, 'x', xs.reduce((s, v) => s + v, 0) / xs.length);
-        graph.setNodeAttribute(id, 'y', ys.reduce((s, v) => s + v, 0) / ys.length);
-      } else {
-        const a = hashStr(id) * 2 * Math.PI;
-        const r = 40 + hashStr(id + ':r') * 80;
-        graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
-        graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
-      }
-    }
   }
 
   // Edges: payload links between present nodes, schema rels between present
