@@ -12,6 +12,7 @@ import { hashStr } from '../graph/geometry';
 import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
 import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
+import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 
 // Nodes render as filled discs with a thin darker border; arrows show edge
@@ -471,26 +472,13 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         onChooseMatch={chooseMatch}
         onFit={handleFit}
       />
-      <div className="graph-legend">
-        {SCHEMA_LABELS.map((label) => {
-          const hidden = mode === 'instances' && hiddenTypes.has(label);
-          const count = typeCounts.get(label) ?? 0;
-          return (
-            <span
-              key={label}
-              className={`graph-legend-item${hidden ? ' off' : ''}${mode === 'instances' ? ' clickable' : ''}`}
-              onClick={mode === 'instances' ? () => toggleType(label) : undefined}
-              title={mode === 'instances' ? `Toggle ${label} nodes` : `${count} in view`}
-            >
-              <span
-                className="graph-legend-dot"
-                style={{ background: theme.nodeColors[label as keyof typeof theme.nodeColors] }}
-              />
-              {label} · {count}
-            </span>
-          );
-        })}
-      </div>
+      <GraphLegend
+        labels={SCHEMA_LABELS}
+        counts={typeCounts}
+        hiddenTypes={hiddenTypes}
+        interactive={mode === 'instances'}
+        onToggleType={toggleType}
+      />
       <div ref={containerRef} className="graph-canvas" />
       {error && (
         <div className="graph-error" title={error}>
