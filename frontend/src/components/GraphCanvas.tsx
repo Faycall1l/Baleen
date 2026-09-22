@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { fitView } from '../graph/camera';
+import { fitView, panBy, screenToWorld, zoomAt } from '../graph/camera';
 import { computeInitialLayout, placeMissing } from '../graph/layout';
+import { hitNodeAt } from '../graph/hit';
 import type { Camera } from '../graph/types';
 import { buildViewModel, schemaSlots, SCHEMA_LABELS } from '../graph/view';
 import { paint } from '../graph/renderer';
@@ -24,8 +25,20 @@ export default function GraphCanvas({ data, error, selectedId, onSelect }: Props
   const [size, setSize] = useState({ w: 0, h: 0, dpr: 1 });
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [hovered, setHovered] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  // One explicit gesture at a time: press position, accumulated travel,
+  // and what was pressed. Anything under CLICK_PX on release is a click.
+  const gestureRef = useRef<{
+    kind: 'node' | 'pan' | null;
+    id?: string;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    dist: number;
+  }>({ kind: null, startX: 0, startY: 0, lastX: 0, lastY: 0, dist: 0 });
 
   // Merge positions: survivors keep theirs, newcomers get placed, removals
   // drop out. First paint runs one FA2 pass and centers the camera.
@@ -74,8 +87,8 @@ export default function GraphCanvas({ data, error, selectedId, onSelect }: Props
 
   const viewModel = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
-    return buildViewModel(data, { mode, hiddenTypes, selectedId, positions: allPositions });
-  }, [data, mode, hiddenTypes, selectedId, allPositions]);
+    return buildViewModel(data, { mode, hiddenTypes, selectedId, hoveredId: hovered, positions: allPositions });
+  }, [data, mode, hiddenTypes, selectedId, hovered, allPositions]);
 
   // Container sizing (DPR-aware).
   useEffect(() => {
@@ -102,6 +115,97 @@ export default function GraphCanvas({ data, error, selectedId, onSelect }: Props
     if (!ctx) return;
     paint(ctx, viewModel, cam, size);
   }, [viewModel, cam, size]);
+
+  // Pointer state machine: exactly one gesture at a time, decided by travel
+  // distance. Below CLICK_PX a release is a click (node -> select, empty ->
+  // clear); beyond it a node drags or the camera pans. Hover only flips the
+  // cursor and the focus dimming — one static repaint, never a loop.
+  const CLICK_PX = 5;
+
+  const eventPos = (e: React.MouseEvent): { x: number; y: number } | null => {
+    const el = canvasRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const hitAt = (sx: number, sy: number): string | null => {
+    const w = screenToWorld({ x: sx, y: sy }, cam, { w: size.w, h: size.h });
+    return hitNodeAt(
+      viewModel.nodes.map((n) => ({ id: n.id, x: n.x, y: n.y, r: n.size })),
+      w.x,
+      w.y,
+    );
+  };
+
+  const onCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const p = eventPos(e);
+    if (!p) return;
+    const hit = hitAt(p.x, p.y);
+    gestureRef.current =
+      hit !== null
+        ? { kind: 'node', id: hit, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y, dist: 0 }
+        : { kind: 'pan', startX: p.x, startY: p.y, lastX: p.x, lastY: p.y, dist: 0 };
+  };
+
+  const onCanvasMouseMove = (e: React.MouseEvent) => {
+    const p = eventPos(e);
+    if (!p) return;
+    const g = gestureRef.current;
+    if (g.kind === null) {
+      const hit = hitAt(p.x, p.y);
+      setHovered((prev) => (prev === hit ? prev : hit));
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = hit !== null ? 'pointer' : 'grab';
+      return;
+    }
+    g.dist += Math.hypot(p.x - g.lastX, p.y - g.lastY);
+    if (g.dist < CLICK_PX) return;
+    if (g.kind === 'node' && g.id !== undefined) {
+      const w = screenToWorld(p, cam, { w: size.w, h: size.h });
+      setPositions((prev) => {
+        const next = new Map(prev);
+        next.set(g.id as string, { x: w.x, y: w.y });
+        return next;
+      });
+    } else if (g.kind === 'pan') {
+      const dx = p.x - g.lastX;
+      const dy = p.y - g.lastY;
+      setCam((c) => panBy(c, dx, dy));
+    }
+    g.lastX = p.x;
+    g.lastY = p.y;
+  };
+
+  const endGesture = () => {
+    const g = gestureRef.current;
+    gestureRef.current = { kind: null, startX: 0, startY: 0, lastX: 0, lastY: 0, dist: 0 };
+    const canvas = canvasRef.current;
+    if (canvas) canvas.style.cursor = 'grab';
+    if (g.kind === null || g.dist >= CLICK_PX) return;
+    if (g.kind === 'node' && g.id !== undefined) {
+      const found = data?.nodes.find((n) => n.id === g.id);
+      if (found) onSelect(found);
+    } else {
+      onSelect(null);
+    }
+  };
+
+  // Wheel zoom is native (non-passive) so the page never scrolls mid-gesture.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      setCam((c) => zoomAt(c, { w: rect.width, h: rect.height }, sx, sy, e.deltaY < 0 ? 1.2 : 1 / 1.2));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [size.w, size.h]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -242,7 +346,21 @@ export default function GraphCanvas({ data, error, selectedId, onSelect }: Props
         })}
       </div>
       <div ref={containerRef} className="graph-canvas">
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
+          onMouseDown={onCanvasMouseDown}
+          onMouseMove={onCanvasMouseMove}
+          onMouseUp={endGesture}
+          onMouseLeave={() => {
+            setHovered(null);
+            gestureRef.current = { kind: null, startX: 0, startY: 0, lastX: 0, lastY: 0, dist: 0 };
+          }}
+          onDoubleClick={() => {
+            const pts = [...allPositions.values()];
+            if (pts.length > 0) setCam(fitView(pts, { w: size.w, h: size.h }));
+          }}
+        />
       </div>
       {error && (
         <div className="graph-error" title={error}>
