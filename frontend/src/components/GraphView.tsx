@@ -213,13 +213,16 @@ function bankPos(
 // (re-)adds what's missing with full attrs, syncs edges, and seeds positions
 // for nodes that have none (banked restore, else neighbor centroid, else
 // deterministic ring). Surviving nodes are never moved or relaid out.
+// Returns membership stats for diagnostics. Ends with a guarantee pass: any
+// node still lacking finite coordinates gets a deterministic ring spot, so
+// no caller can ever hand sigma a positionless node.
 function applyVisibility(
   graph: Graph,
   data: GraphData,
   mode: 'instances' | 'schema',
   hiddenTypes: Set<string>,
   posCache: Map<string, { x: number; y: number }>,
-): void {
+): { want: number; order: number; dataNodes: number } {
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const degree = new Map<string, number>();
   for (const l of data.links) {
@@ -368,6 +371,24 @@ function applyVisibility(
   graph.forEachEdge((e) => {
     if (!payloadEdgeKeys.has(e) && !agg.rels.has(e)) graph.dropEdge(e);
   });
+
+  // Guarantee pass: any node still lacking finite coordinates gets a
+  // deterministic ring spot. No caller can hand sigma a positionless node,
+  // regardless of which path above created it.
+  for (const id of want) {
+    if (!graph.hasNode(id)) continue;
+    const x = graph.getNodeAttribute(id, 'x');
+    const y = graph.getNodeAttribute(id, 'y');
+    if (typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)) {
+      continue;
+    }
+    const a = hashStr(id) * 2 * Math.PI;
+    const r = 40 + hashStr(id + ':r') * 80;
+    graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
+    graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
+  }
+
+  return { want: want.size, order: graph.order, dataNodes: data.nodes.length };
 }
 
 function schemaTitle(
@@ -575,9 +596,23 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const graph = graphRef.current;
     const sigma = sigmaRef.current;
     const latest = dataRef.current;
+    reportUx('fx-vis-enter', `mode=${mode} hasGraph=${!!graph} hasSigma=${!!sigma} hasData=${!!latest}`);
     if (!graph || !sigma || !latest) return;
-    applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
-    reportUx('view', `mode=${mode} hidden=[${[...hiddenTypes].join(',')}] order=${graph.order}`);
+    try {
+      const stats = applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
+      reportUx('view-ok', `mode=${mode} want=${stats.want} order=${stats.order} dataNodes=${stats.dataNodes}`);
+    } catch (e) {
+      reportUx('view-throw', String(e).slice(0, 300));
+    }
+    const bad: string[] = [];
+    graph.forEachNode((id) => {
+      const x = graph.getNodeAttribute(id, 'x');
+      const y = graph.getNodeAttribute(id, 'y');
+      if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
+        bad.push(id);
+      }
+    });
+    reportUx('view', `mode=${mode} hidden=[${[...hiddenTypes].join(',')}] order=${graph.order} bad=${bad.length} ${bad.slice(0, 5).join(',')}`);
     try {
       sigma.refresh();
     } catch {
@@ -652,6 +687,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   useEffect(() => {
     const sigma = sigmaRef.current;
     if (!sigma) return;
+    reportUx('fx-fit', `mode=${mode}`);
     sigma.getCamera().animatedReset({ duration: 600 });
   }, [mode]);
 
