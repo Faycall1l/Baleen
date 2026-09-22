@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { EdgeCurvedArrowProgram } from '@sigma/edge-curve';
-import { createNodeBorderProgram } from '@sigma/node-border';
 import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
-import Sigma from 'sigma';
 
-import { theme } from '../theme';
 import type { GraphData, GraphNode } from '../types';
 import { hashStr } from '../graph/geometry';
 import type { GraphMode } from '../graph/types';
@@ -14,30 +10,7 @@ import { applyVisibility } from '../graph/visibility';
 import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
-
-// Nodes render as filled discs with a thin darker border; arrows show edge
-// direction. Both programs are static paint — no animation involved.
-const BorderedNodeProgram = createNodeBorderProgram({
-  borders: [
-    { size: { value: 0.16, mode: 'relative' }, color: { attribute: 'borderColor' } },
-    { size: { fill: true }, color: { attribute: 'color' } },
-  ],
-});
-
-function drawLabelWithHalo(
-  context: CanvasRenderingContext2D,
-  data: { x: number; y: number; size: number; label?: string | null; color: string },
-  settings: { labelSize: number; labelFont: string; labelWeight: string },
-): void {
-  if (!data.label) return;
-  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
-  context.font = `${weight} ${size}px ${font}`;
-  context.lineWidth = 3;
-  context.strokeStyle = theme.bg;
-  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
-  context.fillStyle = theme.text;
-  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
-}
+import { useSigmaInstance } from '../hooks/useSigmaInstance';
 import { reportUx } from '../api';
 
 // Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
@@ -109,7 +82,6 @@ const DIM_EDGE = 'rgba(61,61,69,0.15)';
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
-  const sigmaRef = useRef<Sigma | null>(null);
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -159,16 +131,21 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     });
   };
 
-  // Backstop: releasing outside the canvas still ends any drag and frees
-  // the camera, otherwise pan/zoom stay dead until the next gesture.
-  useEffect(() => {
-    const backstop = () => {
-      dragRef.current = null;
-      sigmaRef.current?.getCamera().enable();
-    };
-    window.addEventListener('mouseup', backstop);
-    return () => window.removeEventListener('mouseup', backstop);
-  }, []);
+  const { sigmaRef, ensureSigma } = useSigmaInstance(
+    containerRef,
+    () => graphRef.current,
+    {
+      onNodeClick: (id) => selectNodeByKey(id),
+      onStageClick: () => onSelectRef.current(null),
+      onNodeDragged: (id, x, y) => {
+        const g = graphRef.current;
+        if (g && g.hasNode(id)) {
+          g.setNodeAttribute(id, 'x', x);
+          g.setNodeAttribute(id, 'y', y);
+        }
+      },
+    },
+  );
 
   // Forward uncaught page errors to the backend log (deduped there) — the
   // only way to see browser failures without opening devtools.
@@ -179,12 +156,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     window.addEventListener('error', onError);
     return () => window.removeEventListener('error', onError);
   }, []);
-
-  // Node being dragged, if any. Dragging is manual (sigma core pans the
-  // camera but never moves nodes itself): press moves with the pointer,
-  // camera stays put. Click detection stays entirely native — this layer
-  // only moves coordinates, never decides or suppresses clicks.
-  const dragRef = useRef<string | null>(null);
 
   // Data flow per poll: applyVisibility syncs membership, attrs, edges and
   // positions; first paint adds one FA2 pass over the rendered set, then
@@ -203,8 +174,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const repaired = sanitizePositions(graph);
     if (repaired > 0) reportUx('nan-repair', `repaired=${repaired} order=${graph.order}`);
 
-    let sigma = sigmaRef.current;
-    if (!sigma) {
+    const existing = sigmaRef.current;
+    if (!existing) {
       // First paint: one synchronous FA2 pass over the rendered set (initial
       // mode is always instances), then render. Nothing animates at any point.
       const order = graph.order;
@@ -222,64 +193,15 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       const fa2nan = sanitizePositions(graph);
       reportUx('layout-done', `order=${order} nan=${fa2nan}`);
 
-      const fresh = new Sigma(graph, containerRef.current, {
-        allowInvalidContainer: true,
-        renderLabels: true,
-        labelSize: 13,
-        labelWeight: '500',
-        labelColor: { color: theme.textDim },
-        labelFont: 'system-ui, sans-serif',
-        labelRenderedSizeThreshold: 8,
-        labelDensity: 0.08,
-        defaultDrawNodeLabel: drawLabelWithHalo,
-        defaultNodeColor: theme.accent,
-        defaultEdgeColor: '#3d3d45',
-        minCameraRatio: 0.05,
-        maxCameraRatio: 20,
-        // Generous click-vs-drag tolerance: hand tremor emits well over the
-        // default 3 mousemove events, which silently ate real clicks.
-        draggedEventsTolerance: 14,
-        nodeProgramClasses: { bordered: BorderedNodeProgram },
-        edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
-      });
-      sigmaRef.current = fresh;
+      const sigma = ensureSigma();
+      if (!sigma) return;
       // Open zoomed in: the interesting structure sits near the center and
       // a full-fit overview reads as dots. Runs before first paint, so the
       // user never sees the wide view.
-      fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
-
-      // Native click selection (sigma suppresses clicks that turn into drags
-      // past draggedEventsTolerance, raised above for hand tremor).
-      fresh.on('clickNode', ({ node }) => {
-        const cam = fresh.getCamera();
-        reportUx('node-click', `${node} cam=${cam.x.toFixed(0)},${cam.y.toFixed(0)},${cam.ratio.toFixed(2)}`);
-        selectNodeByKey(node);
-      });
-      fresh.on('clickStage', () => onSelectRef.current(null));
-      // Manual node dragging (sigma core pans the camera but never moves
-      // nodes itself): the pressed node follows the pointer, camera stays
-      // put. Click detection stays entirely native — this layer only moves
-      // coordinates, never decides or suppresses clicks.
-      fresh.on('downNode', (e) => {
-        dragRef.current = e.node;
-        fresh.getCamera().disable();
-      });
-      fresh.getMouseCaptor().on('mousemove', (e) => {
-        const dragged = dragRef.current;
-        const g = graphRef.current;
-        if (!dragged || !g || !g.hasNode(dragged)) return;
-        const pos = fresh.viewportToGraph(e);
-        g.setNodeAttribute(dragged, 'x', pos.x);
-        g.setNodeAttribute(dragged, 'y', pos.y);
-        e.preventSigmaDefault();
-      });
-      fresh.getMouseCaptor().on('mouseup', () => {
-        dragRef.current = null;
-        fresh.getCamera().enable();
-      });
+      sigma.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
     } else {
       try {
-        sigma.refresh();
+        existing.refresh();
       } catch {
         /* a failed paint must never take down the view; next poll refreshes */
       }
@@ -403,15 +325,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
       /* a failed placement must never break selection */
     }
   }, [selectedId]);
-
-  // Teardown: sigma owns WebGL resources that must be released.
-  useEffect(() => {
-    return () => {
-      sigmaRef.current?.kill();
-      sigmaRef.current = null;
-      graphRef.current = null;
-    };
-  }, []);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
