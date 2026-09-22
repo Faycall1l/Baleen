@@ -8,6 +8,26 @@ import Sigma from 'sigma';
 
 import { theme } from '../theme';
 import type { GraphData, GraphNode } from '../types';
+import { reportUx } from '../api';
+
+// Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
+// blank the whole canvas) and reset offenders to a deterministic ring.
+// Returns the repaired count for diagnostics.
+function sanitizePositions(graph: Graph): number {
+  let repaired = 0;
+  graph.forEachNode((id) => {
+    const x = graph.getNodeAttribute(id, 'x') as number;
+    const y = graph.getNodeAttribute(id, 'y') as number;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const a = hashStr(id) * 2 * Math.PI;
+      const r = 40 + hashStr(id + ':r') * 80;
+      graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
+      graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
+      repaired += 1;
+    }
+  });
+  return repaired;
+}
 
 interface Props {
   data: GraphData | null;
@@ -433,6 +453,16 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return () => window.removeEventListener('mouseup', backstop);
   }, []);
 
+  // Forward uncaught page errors to the backend log (deduped there) — the
+  // only way to see browser failures without opening devtools.
+  useEffect(() => {
+    const onError = (e: ErrorEvent) => {
+      reportUx('window-error', `${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno ?? '?'}`);
+    };
+    window.addEventListener('error', onError);
+    return () => window.removeEventListener('error', onError);
+  }, []);
+
   // Node being dragged, if any. Dragging is manual (sigma core pans the
   // camera but never moves nodes itself): press moves with the pointer,
   // camera stays put. Click detection stays entirely native — this layer
@@ -453,6 +483,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     }
 
     applyVisibility(graph, data, mode, hiddenTypes, posCacheRef.current);
+    const repaired = sanitizePositions(graph);
+    if (repaired > 0) reportUx('nan-repair', `repaired=${repaired} order=${graph.order}`);
 
     let sigma = sigmaRef.current;
     if (!sigma) {
@@ -470,6 +502,8 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         iterations: order > LARGE_GRAPH ? FA2_ITERATIONS_LARGE : FA2_ITERATIONS_SMALL,
         settings: forceAtlas2.inferSettings(graph),
       });
+      const fa2nan = sanitizePositions(graph);
+      reportUx('layout-done', `order=${order} nan=${fa2nan}`);
 
       const fresh = new Sigma(graph, containerRef.current, {
         allowInvalidContainer: true,
@@ -499,7 +533,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
 
       // Native click selection (sigma suppresses clicks that turn into drags
       // past draggedEventsTolerance, raised above for hand tremor).
-      fresh.on('clickNode', ({ node }) => selectNodeByKey(node));
+      fresh.on('clickNode', ({ node }) => {
+        const cam = fresh.getCamera();
+        reportUx('node-click', `${node} cam=${cam.x.toFixed(0)},${cam.y.toFixed(0)},${cam.ratio.toFixed(2)}`);
+        selectNodeByKey(node);
+      });
       fresh.on('clickStage', () => onSelectRef.current(null));
       // Manual node dragging (sigma core pans the camera but never moves
       // nodes itself): the pressed node follows the pointer, camera stays
@@ -539,6 +577,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     const latest = dataRef.current;
     if (!graph || !sigma || !latest) return;
     applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
+    reportUx('view', `mode=${mode} hidden=[${[...hiddenTypes].join(',')}] order=${graph.order}`);
     try {
       sigma.refresh();
     } catch {
