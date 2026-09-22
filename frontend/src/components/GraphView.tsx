@@ -1,37 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import Graph from 'graphology';
-import forceAtlas2 from 'graphology-layout-forceatlas2';
 
 import type { GraphData, GraphNode } from '../types';
-import { hashStr } from '../graph/geometry';
 import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
 import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
+import { useGraphSync } from '../hooks/useGraphSync';
 import { useSigmaInstance } from '../hooks/useSigmaInstance';
 import { reportUx } from '../api';
 
 // Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
 // blank the whole canvas) and reset offenders to a deterministic ring.
 // Returns the repaired count for diagnostics.
-function sanitizePositions(graph: Graph): number {
-  let repaired = 0;
-  graph.forEachNode((id) => {
-    const x = graph.getNodeAttribute(id, 'x') as number;
-    const y = graph.getNodeAttribute(id, 'y') as number;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      const a = hashStr(id) * 2 * Math.PI;
-      const r = 40 + hashStr(id + ':r') * 80;
-      graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
-      graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
-      repaired += 1;
-    }
-  });
-  return repaired;
-}
-
 interface Props {
   data: GraphData | null;
   error: string | null;
@@ -58,10 +41,6 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-
-const FA2_ITERATIONS_SMALL = 250;
-const FA2_ITERATIONS_LARGE = 100;
-const LARGE_GRAPH = 500;
 
 const DIM_NODE = '#2b2b31';
 const DIM_EDGE = 'rgba(61,61,69,0.15)';
@@ -161,52 +140,15 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   // positions; first paint adds one FA2 pass over the rendered set, then
   // sigma is created exactly once. Positions of surviving nodes are never
   // touched at any step, and no layout ever re-runs afterwards.
-  useEffect(() => {
-    if (!containerRef.current || !data || data.nodes.length === 0) return;
-
-    let graph = graphRef.current;
-    if (!graph) {
-      graph = new Graph({ type: 'directed', allowSelfLoops: true });
-      graphRef.current = graph;
-    }
-
-    applyVisibility(graph, data, mode, hiddenTypes, posCacheRef.current);
-    const repaired = sanitizePositions(graph);
-    if (repaired > 0) reportUx('nan-repair', `repaired=${repaired} order=${graph.order}`);
-
-    const existing = sigmaRef.current;
-    if (!existing) {
-      // First paint: one synchronous FA2 pass over the rendered set (initial
-      // mode is always instances), then render. Nothing animates at any point.
-      const order = graph.order;
-      const radius = 30 * Math.sqrt(Math.max(order, 1));
-      let i = 0;
-      graph.forEachNode((n) => {
-        const a = (i++ / order) * 2 * Math.PI;
-        graph.setNodeAttribute(n, 'x', Math.cos(a) * radius);
-        graph.setNodeAttribute(n, 'y', Math.sin(a) * radius);
-      });
-      forceAtlas2.assign(graph, {
-        iterations: order > LARGE_GRAPH ? FA2_ITERATIONS_LARGE : FA2_ITERATIONS_SMALL,
-        settings: forceAtlas2.inferSettings(graph),
-      });
-      const fa2nan = sanitizePositions(graph);
-      reportUx('layout-done', `order=${order} nan=${fa2nan}`);
-
-      const sigma = ensureSigma();
-      if (!sigma) return;
-      // Open zoomed in: the interesting structure sits near the center and
-      // a full-fit overview reads as dots. Runs before first paint, so the
-      // user never sees the wide view.
-      sigma.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
-    } else {
-      try {
-        existing.refresh();
-      } catch {
-        /* a failed paint must never take down the view; next poll refreshes */
-      }
-    }
-  }, [data]);
+  useGraphSync({
+    containerRef,
+    graphRef,
+    posCacheRef,
+    data,
+    mode,
+    hiddenTypes,
+    ensureSigma,
+  });
 
   // Mode/filter changes re-run membership without touching data (positions
   // of survivors are preserved by the bank/restore inside applyVisibility).
