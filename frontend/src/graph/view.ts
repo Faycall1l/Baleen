@@ -123,6 +123,7 @@ export interface ViewOptions {
   mode: GraphMode;
   hiddenTypes: Set<string>;
   selectedId: string | null;
+  hoveredId?: string | null;
   positions: Map<string, { x: number; y: number }>;
 }
 
@@ -133,7 +134,7 @@ export interface ViewOptions {
  * place), so the painter cannot disagree about visibility.
  */
 export function buildViewModel(data: GraphData, opts: ViewOptions): ViewModel {
-  const { mode, hiddenTypes, selectedId, positions } = opts;
+  const { mode, hiddenTypes, selectedId, hoveredId, positions } = opts;
   const byId = new Map(data.nodes.map((n) => [n.id, n]));
   const degree = new Map<string, number>();
   for (const l of data.links) {
@@ -246,10 +247,12 @@ export function buildViewModel(data: GraphData, opts: ViewOptions): ViewModel {
     });
   }
 
-  // Focus: selection (or nothing) keeps its 1-hop neighborhood bright.
+  // Focus: selection (or hover) keeps its 1-hop neighborhood bright. Only
+  // the selected node gets the size boost; hovered focus just dims the rest.
+  const focusId = selectedId ?? hoveredId ?? null;
   let focus: Set<string> | null = null;
-  if (selectedId && wanted.has(selectedId)) {
-    focus = new Set([selectedId, ...(adjacency.get(selectedId) ?? [])]);
+  if (focusId && wanted.has(focusId)) {
+    focus = new Set([focusId, ...(adjacency.get(focusId) ?? [])]);
   }
   if (focus) {
     for (const n of nodes) {
@@ -258,7 +261,7 @@ export function buildViewModel(data: GraphData, opts: ViewOptions): ViewModel {
         n.dimmed = true;
         n.color = DIM_NODE;
         n.label = '';
-      } else {
+      } else if (focusId && n.id !== focusId) {
         n.size *= 1.25;
       }
     }
