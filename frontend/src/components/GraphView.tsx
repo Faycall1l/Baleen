@@ -8,6 +8,7 @@ import { applyVisibility } from '../graph/visibility';
 import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
+import { useGraphCamera } from '../hooks/useGraphCamera';
 import { useGraphSync } from '../hooks/useGraphSync';
 import { useSigmaInstance } from '../hooks/useSigmaInstance';
 import { reportUx } from '../api';
@@ -41,9 +42,6 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-
-const DIM_NODE = '#2b2b31';
-const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
 // Banked positions survive node removal so re-shown nodes return to their
 // old spot instead of being re-seeded. Bounded FIFO.
@@ -196,77 +194,9 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return counts;
   }, [data]);
 
-  // Focus dimming through reducers (color/label only — the only per-item
-  // channels the custom programs are proven to honor). Dimming follows
-  // selection ONLY — hover-driven dimming used to strobe on every mouse
-  // move across dense nodes, so hover is limited to the native label.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    const graph = graphRef.current;
-    if (!sigma || !graph) return;
-    let focusSet: Set<string> | null = null;
-    if (selectedId && graph.hasNode(selectedId)) {
-      focusSet = new Set([selectedId, ...graph.neighbors(selectedId)]);
-    }
-    const fs = focusSet;
-    sigma.setSetting('nodeReducer', (node, attrs) => {
-      if (selectedId === node) return { ...attrs, size: (attrs.size || 3) * 1.5 };
-      if (fs && !fs.has(node)) return { ...attrs, color: DIM_NODE, label: '' };
-      // Focused neighborhood reads bigger, which also lifts it over the
-      // label-size threshold: selecting a node guarantees its neighborhood
-      // is labeled, not just brightened.
-      if (fs && fs.has(node)) return { ...attrs, size: (attrs.size || 3) * 1.25 };
-      return attrs;
-    });
-    sigma.setSetting('edgeReducer', (edge, attrs) => {
-      if (!fs) return attrs;
-      const [s, t] = graph.extremities(edge);
-      return fs.has(s) && fs.has(t) ? attrs : { ...attrs, color: DIM_EDGE };
-    });
-    try {
-      sigma.refresh();
-    } catch {
-      /* selection dimming must never blank the canvas */
-    }
-  }, [selectedId]);
-
-  // Edge property labels only make sense on the schema overview; instance
-  // edges stay clean.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    if (!sigma) return;
-    try {
-      sigma.setSetting('renderEdgeLabels', mode === 'schema');
-      sigma.refresh();
-    } catch {
-      /* label toggle must never blank the canvas */
-    }
-  }, [mode]);
-
-  // Refit on mode switch so each view opens framed.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    if (!sigma) return;
-    reportUx('fx-fit', `mode=${mode}`);
-    sigma.getCamera().animatedReset({ duration: 600 });
-  }, [mode]);
-
-  // Place the camera on the selected node, keeping the zoom level. Instant
-  // setState, not animate: no async animation machinery in the click path.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    const graph = graphRef.current;
-    if (!sigma || !graph || !selectedId || !graph.hasNode(selectedId)) return;
-    const x = graph.getNodeAttribute(selectedId, 'x') as number;
-    const y = graph.getNodeAttribute(selectedId, 'y') as number;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    try {
-      const camera = sigma.getCamera();
-      camera.setState({ x, y, angle: camera.angle, ratio: camera.ratio });
-    } catch {
-      /* a failed placement must never break selection */
-    }
-  }, [selectedId]);
+  // Camera + selection presentation lives in useGraphCamera (reducers,
+  // edge labels, refit, glide); reportUx telemetry preserved there.
+  useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTypes });
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
