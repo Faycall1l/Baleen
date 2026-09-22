@@ -4,14 +4,27 @@ import type { Alert, GraphData, Health, LeaderboardEntry, QueryResponse, Report,
 
 // Fire-and-forget client diagnostics: lifecycle milestones and caught graph
 // failures POST here so they show up in backend logs without anyone opening
-// the browser console. Never throws, never blocks rendering.
+// the browser console. Also mirrored to window.__uxLog so scripted checks
+// can read them back (the dev proxy may point at a backend without the
+// endpoint, in which case the POST 404s silently). Never throws.
 const reportedWindows = new Set<string>();
+
+declare global {
+  interface Window {
+    __uxLog?: { event: string; detail: string; t: number }[];
+  }
+}
 
 export function reportUx(event: string, detail = ''): void {
   try {
     if (event === 'window-error') {
       if (reportedWindows.has(detail)) return;
       reportedWindows.add(detail);
+    }
+    if (typeof window !== 'undefined') {
+      window.__uxLog = window.__uxLog ?? [];
+      window.__uxLog.push({ event, detail: detail.slice(0, 2000), t: Date.now() });
+      if (window.__uxLog.length > 200) window.__uxLog.splice(0, window.__uxLog.length - 200);
     }
     void fetch('/api/client-log', {
       method: 'POST',
