@@ -9,8 +9,10 @@ import Sigma from 'sigma';
 import { theme } from '../theme';
 import type { GraphData, GraphNode } from '../types';
 import { hashStr } from '../graph/geometry';
+import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
 import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
+import GraphToolbar from './GraphToolbar';
 
 // Nodes render as filled discs with a thin darker border; arrows show edge
 // direction. Both programs are static paint — no animation involved.
@@ -431,6 +433,15 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     setSearchOpen(false);
   };
 
+  const handleModeChange = (m: GraphMode) => {
+    if (m === 'schema') onSelectRef.current(null);
+    setMode(m);
+  };
+
+  const handleFit = () => {
+    sigmaRef.current?.getCamera().animatedReset({ duration: 600 });
+  };
+
   if (!data) {
     return <div className="empty-hint">Loading graph…</div>;
   }
@@ -449,69 +460,17 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   // the full layout each time, which read as an endless big bang.
   return (
     <div className="graph-wrap">
-      <div className="graph-toolbar">
-        <div className="graph-mode" role="tablist" aria-label="Graph view">
-          <button
-            className={mode === 'instances' ? 'active' : ''}
-            onClick={() => setMode('instances')}
-            role="tab"
-            aria-selected={mode === 'instances'}
-          >
-            Instances
-          </button>
-          <button
-            className={mode === 'schema' ? 'active' : ''}
-            onClick={() => {
-              onSelectRef.current(null);
-              setMode('schema');
-            }}
-            role="tab"
-            aria-selected={mode === 'schema'}
-          >
-            Schema
-          </button>
-        </div>
-        {mode === 'instances' ? (
-          <div className="graph-search">
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setSearchOpen(true);
-              }}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && matches.length > 0) chooseMatch(matches[0]);
-                if (e.key === 'Escape') {
-                  setQuery('');
-                  setSearchOpen(false);
-                }
-              }}
-              placeholder="Find a node…"
-              aria-label="Find a node"
-            />
-            {searchOpen && matches.length > 0 && (
-              <div className="graph-search-results">
-                {matches.map((m) => (
-                  <button key={m.id} onMouseDown={(e) => e.preventDefault()} onClick={() => chooseMatch(m)}>
-                    <span className="graph-search-label">{m.label}</span> {m.title}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="graph-hint">Click a type to inspect its instances</div>
-        )}
-        <button
-          className="graph-fit-btn"
-          onClick={() => sigmaRef.current?.getCamera().animatedReset({ duration: 600 })}
-          title="Fit the whole graph in view"
-        >
-          Fit
-        </button>
-      </div>
+      <GraphToolbar
+        mode={mode}
+        onModeChange={handleModeChange}
+        query={query}
+        onQueryChange={setQuery}
+        searchOpen={searchOpen}
+        onSearchOpenChange={setSearchOpen}
+        matches={matches}
+        onChooseMatch={chooseMatch}
+        onFit={handleFit}
+      />
       <div className="graph-legend">
         {SCHEMA_LABELS.map((label) => {
           const hidden = mode === 'instances' && hiddenTypes.has(label);
