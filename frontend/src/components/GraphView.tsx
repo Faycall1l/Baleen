@@ -8,6 +8,33 @@ import Sigma from 'sigma';
 
 import { theme } from '../theme';
 import type { GraphData, GraphNode } from '../types';
+import { hashStr } from '../graph/geometry';
+import { applyVisibility } from '../graph/visibility';
+import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
+
+// Nodes render as filled discs with a thin darker border; arrows show edge
+// direction. Both programs are static paint — no animation involved.
+const BorderedNodeProgram = createNodeBorderProgram({
+  borders: [
+    { size: { value: 0.16, mode: 'relative' }, color: { attribute: 'borderColor' } },
+    { size: { fill: true }, color: { attribute: 'color' } },
+  ],
+});
+
+function drawLabelWithHalo(
+  context: CanvasRenderingContext2D,
+  data: { x: number; y: number; size: number; label?: string | null; color: string },
+  settings: { labelSize: number; labelFont: string; labelWeight: string },
+): void {
+  if (!data.label) return;
+  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
+  context.font = `${weight} ${size}px ${font}`;
+  context.lineWidth = 3;
+  context.strokeStyle = theme.bg;
+  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
+  context.fillStyle = theme.text;
+  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
+}
 import { reportUx } from '../api';
 
 // Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
@@ -65,350 +92,16 @@ const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
 // Banked positions survive node removal so re-shown nodes return to their
 // old spot instead of being re-seeded. Bounded FIFO.
-const POS_CACHE_CAP = 2000;
 
-// Ontology (schema) overview: the graph's labels as supernodes sized by
-// instance count (sqrt-scaled, per VOWL), connected by the relationship
-// types actually present, with human-readable property labels. Gives the
-// "what is this data" overview first; clicking a class drills into its
-// instances. Pure frontend aggregation over the loaded payload — no backend
-// changes.
-const SCHEMA_LABELS = ['Politician', 'Insider', 'Committee', 'Event', 'Ticker', 'Sector'];
-const SCHEMA_RADIUS = 260;
 
-const schemaId = (label: string): string => `schema:${label}`;
-const isSchemaId = (id: string): boolean => id.startsWith('schema:');
-const schemaEdgeKey = (s: string, rel: string, t: string): string =>
-  `schema-rel:${s}>${rel}>${t}`;
 
-function humanizeRel(rel: string): string {
-  return rel.toLowerCase().replace(/_/g, ' ');
-}
 
-// Nodes render as filled discs with a thin darker border; arrows show edge
-// direction. Both programs are static paint — no animation involved.
-const BorderedNodeProgram = createNodeBorderProgram({
-  borders: [
-    { size: { value: 0.16, mode: 'relative' }, color: { attribute: 'borderColor' } },
-    { size: { fill: true }, color: { attribute: 'color' } },
-  ],
-});
 
-function nodeColor(label: string): string {
-  return theme.nodeColors[label as keyof typeof theme.nodeColors] ?? theme.accent;
-}
 
-function shade(hex: string, factor: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (c: number) => Math.round(c * factor);
-  const v = (mix((n >> 16) & 255) << 16) | (mix((n >> 8) & 255) << 8) | mix(n & 255);
-  return `#${v.toString(16).padStart(6, '0')}`;
-}
 
-function nodeSize(label: string, degree: number): number {
-  if (label === 'Event') return 1.6 + Math.min(Math.sqrt(degree) * 0.8, 2.4);
-  return 2.2 + Math.min(Math.sqrt(degree) * 1.2, 5);
-}
 
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) / 4294967295;
-}
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
-}
 
-// Event nodes arrive titled with the bare ticker ("SE"), so dozens of them
-// read identically. Compose what happened from the props instead — short
-// enough for canvas labels, distinct from the ticker nodes themselves.
-function eventTitle(props: Record<string, unknown>): string {
-  const ticker = typeof props.ticker === 'string' ? props.ticker : '';
-  const type = props.type;
-  if (type === 'options_flow') {
-    const contract = props.contract_type === 'put' ? 'put' : 'call';
-    const strike = typeof props.strike === 'number' ? ` ${props.strike}` : '';
-    return ticker ? `${ticker} ${contract}${strike}` : 'Options flow';
-  }
-  if (type === 'congress_trade' || type === 'insider_trade') {
-    const side = props.transaction_type === 'sell' ? 'sold' : 'bought';
-    return ticker ? `${ticker} ${side}` : 'Trade';
-  }
-  return 'Unparsed';
-}
-
-function drawLabelWithHalo(
-  context: CanvasRenderingContext2D,
-  data: { x: number; y: number; size: number; label?: string | null; color: string },
-  settings: { labelSize: number; labelFont: string; labelWeight: string },
-): void {
-  if (!data.label) return;
-  const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
-  context.font = `${weight} ${size}px ${font}`;
-  context.lineWidth = 3;
-  context.strokeStyle = theme.bg;
-  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
-  context.fillStyle = theme.text;
-  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
-}
-
-type SchemaAgg = {
-  counts: Map<string, number>;
-  rels: Map<string, { source: string; rel: string; target: string; count: number }>;
-};
-
-function aggregateSchema(
-  nodes: GraphData['nodes'],
-  links: GraphData['links'],
-): SchemaAgg {
-  const counts = new Map<string, number>();
-  const labelById = new Map<string, string>();
-  for (const n of nodes) {
-    labelById.set(n.id, n.label);
-    counts.set(n.label, (counts.get(n.label) ?? 0) + 1);
-  }
-  const rels = new Map<string, { source: string; rel: string; target: string; count: number }>();
-  for (const l of links) {
-    const s = labelById.get(l.source);
-    const t = labelById.get(l.target);
-    if (!s || !t) continue;
-    const key = schemaEdgeKey(s, l.type, t);
-    const prev = rels.get(key);
-    if (prev) prev.count += 1;
-    else rels.set(key, { source: s, rel: l.type, target: t, count: 1 });
-  }
-  return { counts, rels };
-}
-
-function bankPos(
-  posCache: Map<string, { x: number; y: number }>,
-  graph: Graph,
-  id: string,
-): void {
-  const x = graph.getNodeAttribute(id, 'x') as number;
-  const y = graph.getNodeAttribute(id, 'y') as number;
-  if (Number.isFinite(x) && Number.isFinite(y)) {
-    posCache.delete(id);
-    posCache.set(id, { x, y });
-    while (posCache.size > POS_CACHE_CAP) {
-      const oldest = posCache.keys().next();
-      if (oldest.done) break;
-      posCache.delete(oldest.value);
-    }
-  }
-}
-
-// Single owner of graph membership, attrs, edges, and positions. Computes
-// the wanted id set from the mode/filter, drops anything else (banking
-// positions for a possible return), adds what's missing (attrs + restored
-// or seeded positions), and syncs edges. Positions of surviving nodes are
-// never touched. When initialLayout is set, present instances are spread on
-// a deterministic circle instead (first-paint input for the FA2 pass).
-// Single owner of graph membership AND per-item visuals. Computes the wanted
-// id set from the mode/filter, drops anything else (banking positions),
-// (re-)adds what's missing with full attrs, syncs edges, and seeds positions
-// for nodes that have none (banked restore, else neighbor centroid, else
-// deterministic ring). Surviving nodes are never moved or relaid out.
-// Returns membership stats for diagnostics. Ends with a guarantee pass: any
-// node still lacking finite coordinates gets a deterministic ring spot, so
-// no caller can ever hand sigma a positionless node.
-function applyVisibility(
-  graph: Graph,
-  data: GraphData,
-  mode: 'instances' | 'schema',
-  hiddenTypes: Set<string>,
-  posCache: Map<string, { x: number; y: number }>,
-): { want: number; order: number; dataNodes: number } {
-  const byId = new Map(data.nodes.map((n) => [n.id, n]));
-  const degree = new Map<string, number>();
-  for (const l of data.links) {
-    degree.set(l.source, (degree.get(l.source) ?? 0) + 1);
-    degree.set(l.target, (degree.get(l.target) ?? 0) + 1);
-  }
-  const agg = aggregateSchema(data.nodes, data.links);
-
-  const want = new Set<string>();
-  if (mode === 'instances') {
-    for (const n of data.nodes) if (!hiddenTypes.has(n.label)) want.add(n.id);
-  } else {
-    for (const [label, count] of agg.counts) if (count > 0) want.add(schemaId(label));
-  }
-
-  const drop: string[] = [];
-  graph.forEachNode((id) => {
-    if (!want.has(id)) drop.push(id);
-  });
-  for (const id of drop) {
-    bankPos(posCache, graph, id);
-    graph.dropNode(id);
-  }
-
-  for (const id of want) {
-    if (graph.hasNode(id)) {
-      // Refresh attrs of survivors (titles/counts/colors can change).
-      if (isSchemaId(id)) {
-        const label = id.slice('schema:'.length);
-        const count = agg.counts.get(label) ?? 0;
-        const color = nodeColor(label);
-        graph.mergeNodeAttributes(id, {
-          title: schemaTitle(label, count, byId, degree),
-          color,
-          borderColor: shade(color, 0.55),
-          size: 10 + Math.sqrt(count) * 1.5,
-        });
-      } else {
-        const n = byId.get(id);
-        if (!n) continue;
-        const color = nodeColor(n.label);
-        const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-        graph.mergeNodeAttributes(id, {
-          type: 'bordered',
-          kind: n.label,
-          label: display,
-          key: n.key,
-          title: display,
-          props: n.props,
-          tweet_url: n.tweet_url,
-          color,
-          borderColor: shade(color, 0.55),
-          size: nodeSize(n.label, degree.get(id) ?? 0),
-        });
-      }
-      continue;
-    }
-    if (isSchemaId(id)) {
-      const label = id.slice('schema:'.length);
-      const count = agg.counts.get(label) ?? 0;
-      const color = nodeColor(label);
-      const idx = Math.max(SCHEMA_LABELS.indexOf(label), 0);
-      const a = (idx / SCHEMA_LABELS.length) * 2 * Math.PI;
-      graph.addNode(id, {});
-      graph.mergeNodeAttributes(id, {
-        type: 'bordered',
-        kind: label,
-        label: schemaTitle(label, count, byId, degree),
-        key: label,
-        title: schemaTitle(label, count, byId, degree),
-        props: {},
-        tweet_url: null,
-        color,
-        borderColor: shade(color, 0.55),
-        size: 10 + Math.sqrt(count) * 1.5,
-        x: Math.cos(a) * SCHEMA_RADIUS,
-        y: Math.sin(a) * SCHEMA_RADIUS,
-      });
-      continue;
-    }
-    const n = byId.get(id);
-    if (!n) continue;
-    const color = nodeColor(n.label);
-    const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-    graph.addNode(id, {});
-    graph.mergeNodeAttributes(id, {
-      type: 'bordered',
-      kind: n.label,
-      label: display,
-      key: n.key,
-      title: display,
-      props: n.props,
-      tweet_url: n.tweet_url,
-      color,
-      borderColor: shade(color, 0.55),
-      size: nodeSize(n.label, degree.get(id) ?? 0),
-    });
-    // Position: banked restore, else centroid of placed neighbors, else ring.
-    const saved = posCache.get(id);
-    if (saved) {
-      graph.setNodeAttribute(id, 'x', saved.x);
-      graph.setNodeAttribute(id, 'y', saved.y);
-    } else {
-      const xs: number[] = [];
-      const ys: number[] = [];
-      for (const nb of graph.neighbors(id)) {
-        const x = graph.getNodeAttribute(nb, 'x') as number;
-        const y = graph.getNodeAttribute(nb, 'y') as number;
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          xs.push(x);
-          ys.push(y);
-        }
-      }
-      if (xs.length > 0) {
-        graph.setNodeAttribute(id, 'x', xs.reduce((s, v) => s + v, 0) / xs.length);
-        graph.setNodeAttribute(id, 'y', ys.reduce((s, v) => s + v, 0) / ys.length);
-      } else {
-        const a = hashStr(id) * 2 * Math.PI;
-        const r = 40 + hashStr(id + ':r') * 80;
-        graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
-        graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
-      }
-    }
-  }
-
-  // Edges: payload links between present nodes, schema rels between present
-  // supernodes; drop everything stale.
-  const payloadEdgeKeys = new Set<string>();
-  for (const l of data.links) {
-    if (!graph.hasNode(l.source) || !graph.hasNode(l.target)) continue;
-    const key = `${l.source}>${l.target}:${l.type}`;
-    payloadEdgeKeys.add(key);
-    if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
-    }
-  }
-  for (const [key, r] of agg.rels) {
-    const s = schemaId(r.source);
-    const t = schemaId(r.target);
-    if (!graph.hasNode(s) || !graph.hasNode(t)) continue;
-    if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, s, t, { type: 'curvedArrow', label: humanizeRel(r.rel) });
-    }
-    graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
-  }
-  graph.forEachEdge((e) => {
-    if (!payloadEdgeKeys.has(e) && !agg.rels.has(e)) graph.dropEdge(e);
-  });
-
-  // Guarantee pass: any node still lacking finite coordinates gets a
-  // deterministic ring spot. No caller can hand sigma a positionless node,
-  // regardless of which path above created it.
-  for (const id of want) {
-    if (!graph.hasNode(id)) continue;
-    const x = graph.getNodeAttribute(id, 'x');
-    const y = graph.getNodeAttribute(id, 'y');
-    if (typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)) {
-      continue;
-    }
-    const a = hashStr(id) * 2 * Math.PI;
-    const r = 40 + hashStr(id + ':r') * 80;
-    graph.setNodeAttribute(id, 'x', Math.cos(a) * r);
-    graph.setNodeAttribute(id, 'y', Math.sin(a) * r);
-  }
-
-  return { want: want.size, order: graph.order, dataNodes: data.nodes.length };
-}
-
-function schemaTitle(
-  label: string,
-  count: number,
-  byId: Map<string, GraphData['nodes'][number]>,
-  degree: Map<string, number>,
-): string {
-  if (count === 0) return `${label} (0)`;
-  const tops = [...byId.values()]
-    .filter((n) => n.label === label)
-    .map((n) => ({
-      t: n.label === 'Event' ? eventTitle(n.props) : n.title,
-      d: degree.get(n.id) ?? 0,
-    }))
-    .sort((x, y) => y.d - x.d)
-    .slice(0, 2)
-    .map((t) => truncate(t.t, 15));
-  return tops.length ? `${label} (${count}): ${tops.join(', ')}` : `${label} (${count})`;
-}
 
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
