@@ -2,6 +2,27 @@
 
 import type { Alert, GraphData, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 
+// Fire-and-forget client diagnostics: lifecycle milestones and caught graph
+// failures POST here so they show up in backend logs without anyone opening
+// the browser console. Never throws, never blocks rendering.
+const reportedWindows = new Set<string>();
+
+export function reportUx(event: string, detail = ''): void {
+  try {
+    if (event === 'window-error') {
+      if (reportedWindows.has(detail)) return;
+      reportedWindows.add(detail);
+    }
+    void fetch('/api/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, detail: detail.slice(0, 2000) }),
+    }).catch(() => {});
+  } catch {
+    /* diagnostics must never break the app */
+  }
+}
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {

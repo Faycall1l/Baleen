@@ -579,6 +579,20 @@ async def stream_events(store, is_disconnected, after_report: int = 0,
         await asyncio.sleep(poll_seconds)
 
 
+class ClientLog(BaseModel):
+    event: str = Field(min_length=1, max_length=64)
+    detail: str = Field(default="", max_length=2000)
+
+
+@router.post("/client-log")
+def client_log(entry: ClientLog) -> dict:
+    """Client-side diagnostics sink: the UI posts lifecycle milestones and
+    caught graph failures here so they are visible in backend logs without
+    needing the browser console. Fire-and-forget by design."""
+    logger.warning("client %s: %s", entry.event, entry.detail[:500])
+    return {"ok": True}
+
+
 def get_alert_engine() -> AlertEngine:
     return AlertEngine(
         store=_get_store(),
