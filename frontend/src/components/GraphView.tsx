@@ -13,9 +13,6 @@ import { useGraphSync } from '../hooks/useGraphSync';
 import { useSigmaInstance } from '../hooks/useSigmaInstance';
 import { reportUx } from '../api';
 
-// Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
-// blank the whole canvas) and reset offenders to a deterministic ring.
-// Returns the repaired count for diagnostics.
 interface Props {
   data: GraphData | null;
   error: string | null;
@@ -42,20 +39,6 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-
-// Banked positions survive node removal so re-shown nodes return to their
-// old spot instead of being re-seeded. Bounded FIFO.
-
-
-
-
-
-
-
-
-
-
-
 export default function GraphView({ data, error, selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -134,10 +117,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return () => window.removeEventListener('error', onError);
   }, []);
 
-  // Data flow per poll: applyVisibility syncs membership, attrs, edges and
-  // positions; first paint adds one FA2 pass over the rendered set, then
-  // sigma is created exactly once. Positions of surviving nodes are never
-  // touched at any step, and no layout ever re-runs afterwards.
+  // Data sync + first-paint layout lives in useGraphSync.
   useGraphSync({
     containerRef,
     graphRef,
@@ -194,8 +174,6 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
     return counts;
   }, [data]);
 
-  // Camera + selection presentation lives in useGraphCamera (reducers,
-  // edge labels, refit, glide); reportUx telemetry preserved there.
   useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTypes });
 
   const matches = useMemo(() => {
