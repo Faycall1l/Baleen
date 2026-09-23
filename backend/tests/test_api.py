@@ -387,7 +387,7 @@ def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
     import asyncio
     import uuid
 
-    from app.api.routes import stream_events
+    from app.api.stream import stream_events
 
     marker = uuid.uuid4().hex[:8]
     postgres_store.insert_report(
@@ -461,7 +461,7 @@ def test_graph_limit_is_capped():
 def test_stream_polls_run_off_the_event_loop():
     import asyncio
 
-    from app.api.routes import stream_events
+    from app.api.stream import stream_events
 
     class ThreadAwareStore:
         def __init__(self):
@@ -913,7 +913,7 @@ def test_stream_breaks_cleanly_when_store_raises():
     throwing — the client just reconnects and resumes from its cursor."""
     import asyncio
 
-    from app.api.routes import stream_events
+    from app.api.stream import stream_events
 
     store = _StoreBoom()
 
@@ -929,7 +929,7 @@ def test_stream_breaks_cleanly_when_store_raises():
 def test_stream_emits_alert_and_report_rows():
     import asyncio
 
-    from app.api.routes import stream_events
+    from app.api.stream import stream_events
 
     class RowStore:
         def __init__(self):
@@ -1127,7 +1127,7 @@ def test_stream_route_wraps_events_in_sse_response(monkeypatch):
     import app.api.routes as routes
     from starlette.responses import StreamingResponse
 
-    from app.api.routes import stream
+    from app.api.stream import stream
 
     _quiet_settings(monkeypatch)
 
