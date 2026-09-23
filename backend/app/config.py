@@ -62,7 +62,6 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "baleen_dev_pass"
-    neo4j_version: int = 5
 
     # Read-only role used by the query agent (see docs/SETUP.md).
     neo4j_read_uri: str = ""
