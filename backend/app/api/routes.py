@@ -176,33 +176,11 @@ class QueryRequest(BaseModel):
     question: str = Field(min_length=1)
 
 
-def _node_key(label: str, props: dict) -> str:
-    from app.graph.schema import LABEL_KEYS
-
-    key = LABEL_KEYS.get(label, "id")
-    value = props.get(key)
-    if value is None:
-        value = props.get("id") or str(props)
-    return str(value)
-
-
-def _json_safe(value):
-    """Node props and query rows carry native temporal values after the writer
-    stores them with ``mode="python"``; serialize to ISO strings for JSON.
-
-    Duck-types on ``isoformat`` because the Neo4j driver returns its own
-    temporal classes (``neo4j.time.DateTime``/``Date``) that are *not*
-    subclasses of the stdlib ``datetime``/``date`` types. Recurses into
-    lists/dicts (``collect(...)`` projections nest values).
-    """
-    iso = getattr(value, "isoformat", None)
-    if callable(iso):
-        return iso()
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    return value
+from app.api.graph_payload import (
+    build_graph_payload,
+    json_safe as _json_safe,
+    node_key as _node_key,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -355,55 +333,7 @@ def _render_graph(limit: int, since_dt=None) -> dict:
         logger.exception("graph export failed")
         raise HTTPException(status_code=500, detail=f"graph export failed: {exc}")
 
-    nodes = []
-    ids_by_key: dict[tuple[str, str], str] = {}
-    for row in rows:
-        props = dict(row["node"].items())
-        label = row["labels"][0]
-        key = _node_key(label, props)
-        node_id = f"{label}:{key}"
-        if (label, key) in ids_by_key:
-            continue
-        ids_by_key[(label, key)] = node_id
-        nodes.append(
-            {
-                "id": node_id,
-                "label": label,
-                "key": key,
-                "title": props.get("name") or props.get("ticker") or props.get("id") or node_id,
-                "props": {k: _json_safe(v) for k, v in props.items()},
-                "tweet_url": props.get("tweet_url"),
-            }
-        )
-
-    links = []
-    for row in rows:
-        if row["rel"] is None or row["target"] is None:
-            continue
-        a_label, b_label = row["labels"][0], row["target_labels"][0]
-        a_key = _node_key(a_label, dict(row["node"].items()))
-        b_key = _node_key(b_label, dict(row["target"].items()))
-        source = ids_by_key.get((a_label, a_key))
-        target = ids_by_key.get((b_label, b_key))
-        if source and target:
-            links.append(
-                {
-                    "source": source,
-                    "target": target,
-                    "type": row["rel"],
-                    "tweet_url": (row["node"] or {}).get("tweet_url"),
-                }
-            )
-
-    return {
-        "nodes": nodes,
-        "links": links,
-        "node_count": len(nodes),
-        "link_count": len(links),
-        "event_count": total,
-        "truncated": keep_ids is not None and total is not None and total > limit,
-        "delta": delta,
-    }
+    return build_graph_payload(rows, total, limit, delta, keep_ids)
 
 
 # ---------------------------------------------------------------------------
