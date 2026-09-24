@@ -36,12 +36,6 @@ function bankPos(
   }
 }
 
-// Single owner of graph membership, attrs, edges, and positions. Computes
-// the wanted id set from the mode/filter, drops anything else (banking
-// positions for a possible return), adds what's missing (attrs + restored
-// or seeded positions), and syncs edges. Positions of surviving nodes are
-// never touched. When initialLayout is set, present instances are spread on
-// a deterministic circle instead (first-paint input for the FA2 pass).
 // Single owner of graph membership AND per-item visuals. Computes the wanted
 // id set from the mode/filter, drops anything else (banking positions),
 // (re-)adds what's missing with full attrs, syncs edges, and seeds positions
