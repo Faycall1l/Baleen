@@ -37,13 +37,21 @@ await step('load: canvas + first layout', async () => {
   await page.screenshot({ path: path.join(outdir, '01-load.png') });
 });
 
-await step('search-select: CRWD opens inspector', async () => {
-  await page.getByLabel('Find a node').fill('CRWD');
+await step('search-select opens inspector', async () => {
+  // Data-driven term: first titled node from the live payload (hardcoded
+  // tickers age out of the truncated window).
+  const term = await page.evaluate(async () => {
+    const body = await fetch('/api/graph?limit=50').then((r) => r.json());
+    const node = body.nodes.find((n) => n.title && n.title.length >= 3);
+    return node ? node.title.slice(0, Math.min(node.title.length, 12)) : null;
+  });
+  if (!term) throw new Error('no titled node in payload');
+  await page.getByLabel('Find a node').fill(term);
   await page.waitForTimeout(800);
   await page.getByLabel('Find a node').press('Enter');
   await page.locator('.node-detail').waitFor({ timeout: 10000 });
   const text = await page.locator('.node-detail').innerText();
-  if (!/CRWD/i.test(text)) throw new Error('inspector lacks CRWD');
+  if (!text.toLowerCase().includes(term.slice(0, 4).toLowerCase())) throw new Error(`inspector lacks ${term}`);
   await page.screenshot({ path: path.join(outdir, '02-selected.png') });
 });
 
@@ -64,6 +72,18 @@ await step('schema tab switches mode', async () => {
   const sel = await page.getByRole('tab', { name: 'Schema' }).getAttribute('aria-selected');
   if (sel !== 'true') throw new Error('schema tab not selected');
   await page.screenshot({ path: path.join(outdir, '03-schema.png') });
+});
+
+await step('zoom out/in keeps canvas error-free', async () => {
+  await page.getByRole('tab', { name: 'Instances' }).click();
+  await page.waitForTimeout(1500);
+  await page.mouse.move(720, 450);
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(200);
+  }
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: path.join(outdir, '04-zoomed-out.png') });
 });
 
 console.log(errors.length ? `PAGE ERRORS:\n${errors.join('\n')}` : 'no page errors');
