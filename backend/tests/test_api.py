@@ -29,6 +29,23 @@ def _clear_graph_cache():
     routes._graph_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _quiet_lifespan(monkeypatch):
+    """Every TestClient boot runs app lifespan: with stock settings that spins
+    up the real background scheduler (immediate ingest tick -> LLM calls with
+    90s timeouts) and seeds alert rules, which made test_api take 40+ minutes
+    and flake on a loaded box (E6). Default every test to scheduler/seed off;
+    tests that need the scheduler (lifespan start/stop) or secure settings
+    override via their own monkeypatch, which stacks after this fixture."""
+    from app.config import get_settings
+
+    quiet = get_settings().model_copy(
+        update={"scheduler_enabled": False, "seed_default_alerts": False}
+    )
+    monkeypatch.setattr("app.main.get_settings", lambda: quiet)
+    monkeypatch.setattr("app.api.routes.get_settings", lambda: quiet)
+
+
 def test_json_safe_serializes_native_temporal_props():
     """The writer stores temporal props natively; /api/graph must hand the JSON
     encoder plain ISO strings, including for the Neo4j driver's own temporal
