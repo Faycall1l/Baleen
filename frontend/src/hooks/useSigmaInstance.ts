@@ -86,6 +86,15 @@ export function useSigmaInstance(
       labelFont: 'system-ui, sans-serif',
       labelRenderedSizeThreshold: 8,
       labelDensity: 0.08,
+      // Label gate, exactly (E5: defaults pinned in sigma/settings:
+      // zoomToSizeRatioFunction=Math.sqrt, itemSizesReference="screen"):
+      // a label renders iff size / sqrt(ratio) >= threshold, after the
+      // LabelGrid pre-selects ceil(density / ratio^2) biggest candidates
+      // per cell. Live sizes run 1.6-7.2, so at the 1.6 open ratio the gate
+      // needs size >= 10.1: zero labels by design (clean overview). Zooming
+      // to 0.5 admits size >= 5.7 (~20 hubs); selection x1.5/x1.25 lifts
+      // the focused neighborhood over the gate. Threshold 4 would admit
+      // ~90 at fit — noisier. Keep (0.08, 8).
       defaultDrawNodeLabel: drawLabelWithHalo,
       defaultNodeColor: theme.accent,
       defaultEdgeColor: '#3d3d45',
