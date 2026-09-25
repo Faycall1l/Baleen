@@ -205,6 +205,15 @@ def graph(
     ``since`` falls back to a full render. Deltas skip the total-events
     count and the cache (both pointless for a moving window).
 
+    Deltas are deliberately NOT ``limit``-bounded (E4, see C2 numbers): a
+    capped delta could silently drop events and break merge correctness, and
+    ``truncated`` cannot signal it (``event_count`` is None for deltas). A
+    wide catch-up window can therefore exceed a capped full render (measured:
+    7d window -> 1390 nodes vs 822 for limit=500 full). This is the rare path
+    (reconnect after downtime); steady-state polls use small windows and stay
+    ~0.1s. Do NOT add a LIMIT to the delta keep-pass without also wiring a
+    truncation signal the UI resyncs on.
+
     The payload is cached for ``graph_cache_ttl_seconds`` to keep UI polling
     cheap (``event_count``/``truncated`` tolerate a few seconds of staleness).
     """
