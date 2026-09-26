@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchAlerts, fetchDigest, fetchGraph, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
 import AlertsPanel from './components/AlertsPanel';
+import AlertStack from './components/AlertStack';
 import AnswerPanel from './components/AnswerPanel';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
@@ -546,6 +547,7 @@ export default function App() {
             <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
           </aside>
         )}
+        <AlertStack alerts={alerts} onAlertClick={openAlertNode} />
       </div>
     </div>
   );
