@@ -76,6 +76,9 @@ export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTyp
 
   // Place the camera on the selected node, keeping the zoom level. Instant
   // setState, not animate: no async animation machinery in the click path.
+  // The camera lives in sigma's NORMALIZED space (see useGraphSync): convert
+  // graph coords via the public graph->viewport->framed round trip instead of
+  // feeding raw graph units (which flung the view into the void on select).
   useEffect(() => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
@@ -90,8 +93,10 @@ export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTyp
     const y = graph.getNodeAttribute(selectedId, 'y') as number;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     try {
+      const viewport = sigma.graphToViewport({ x, y });
+      const framed = sigma.viewportToFramedGraph(viewport);
       const camera = sigma.getCamera();
-      camera.setState({ x, y, angle: camera.angle, ratio: camera.ratio });
+      camera.setState({ x: framed.x, y: framed.y, angle: camera.angle, ratio: camera.ratio });
     } catch {
       /* a failed placement must never break selection */
     }

@@ -91,16 +91,37 @@ export function useGraphSync({
         settings: forceAtlas2.inferSettings(graph),
       });
       const fa2nan = sanitizePositions(graph);
+      // F1 diagnosis: report the post-layout bbox so online runs show whether
+      // an off-center first paint comes from the layout or the camera mapping.
+      try {
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        graph.forEachNode((n) => {
+          const x = graph.getNodeAttribute(n, 'x') as number;
+          const y = graph.getNodeAttribute(n, 'y') as number;
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        });
+        reportUx('layout-bbox', `bbox=[${x0.toFixed(1)},${x1.toFixed(1)}]x[${y0.toFixed(1)},${y1.toFixed(1)}]`);
+      } catch {
+        /* diagnostics must never break layout */
+      }
       reportUx('layout-done', `order=${order} nan=${fa2nan}`);
     }
 
     const sigma = ensureSigma();
     if (!sigma) return;
     if (first) {
-      // Open zoomed in: the interesting structure sits near the center and
-      // a full-fit overview reads as dots. Runs before first paint, so the
-      // user never sees the wide view.
-      sigma.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
+      // Open zoomed in on the layout center: sigma rescales graph coordinates
+      // into normalized [0,1] space (autoRescale), so the camera ALSO lives
+      // in normalized space — (0,0) is the bottom-left corner of the content
+      // (half-empty canvas), and graph-unit coords point into the void.
+      // (0.5, 0.5) is the content center by construction; 1.6 keeps the
+      // zoomed-in open (a full fit reads as dots). Verified against sigma's
+      // matrixFromCamera + animatedReset({0.5, 0.5, ratio 1}) sources.
+      sigma.getCamera().setState({ x: 0.5, y: 0.5, angle: 0, ratio: 1.6 });
     } else {
       try {
         sigma.refresh();

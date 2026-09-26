@@ -107,6 +107,18 @@ export function useSigmaInstance(
       edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
     });
     fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
+    try {
+      const el = containerRef.current;
+      const rect = el ? el.getBoundingClientRect() : null;
+      const cam = fresh.getCamera();
+      reportUx(
+        'sigma-init',
+        `container=${rect ? `${Math.round(rect.width)}x${Math.round(rect.height)}` : 'none'} ` +
+          `cam=${cam.x.toFixed(1)},${cam.y.toFixed(1)},${cam.ratio.toFixed(2)}`,
+      );
+    } catch {
+      /* telemetry must never break selection */
+    }
     fresh.on('clickNode', ({ node }) => {
       try {
         const cam = fresh.getCamera();
