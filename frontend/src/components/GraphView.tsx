@@ -25,8 +25,8 @@ interface Props {
 // ---------------------------------------------------------------------------
 // Sigma + graphology explorer.
 //
-// Motion model: the layout is computed ONCE, synchronously, on first paint
-// (deterministic circle seed + one ForceAtlas2 pass), then never again. Later
+// Motion model: the layout is deterministic radial-by-type, computed ONCE,
+// synchronously, on first paint, then never again. Later
 // polls merge into the same graphology instance — positions persist, newcomers
 // are placed at their neighborhood centroid, removals drop out — and sigma
 // itself runs no simulation at all. The map is static by construction: no

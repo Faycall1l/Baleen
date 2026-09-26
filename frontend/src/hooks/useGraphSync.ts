@@ -1,17 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 import Graph from 'graphology';
-import forceAtlas2 from 'graphology-layout-forceatlas2';
 import type Sigma from 'sigma';
 
 import { reportUx } from '../api';
 import { hashStr } from '../graph/geometry';
 import { applyVisibility } from '../graph/visibility';
+import { radialLayout } from '../graph/radial';
 import type { GraphData } from '../types';
-
-const FA2_ITERATIONS_SMALL = 250;
-const FA2_ITERATIONS_LARGE = 100;
-const LARGE_GRAPH = 500;
 
 // Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
 // blank the whole canvas) and reset offenders to a deterministic ring.
@@ -44,9 +40,9 @@ interface Args {
 
 /**
  * Syncs loaded data into the graphology graph via applyVisibility (membership,
- * attrs, edges, positions), audits coordinates, and runs one synchronous FA2
- * pass on first paint. Positions of surviving nodes are never touched, and
- * no layout ever re-runs afterwards.
+ * attrs, edges, positions), audits coordinates, and applies the deterministic
+ * radial-by-type layout on first paint (P2). Positions of surviving nodes are
+ * never touched, and no layout ever re-runs afterwards.
  */
 export function useGraphSync({
   containerRef,
@@ -58,6 +54,7 @@ export function useGraphSync({
   ensureSigma,
 }: Args): void {
   const paintedRef = useRef(false);
+  const paintedOrderRef = useRef(0);
 
   useEffect(() => {
     if (!containerRef.current || !data || data.nodes.length === 0) return;
@@ -72,43 +69,31 @@ export function useGraphSync({
     const repaired = sanitizePositions(graph);
     if (repaired > 0) reportUx('nan-repair', `repaired=${repaired} order=${graph.order}`);
 
-    const first = !paintedRef.current;
+    // Layout on first paint AND on staged upgrades (P1 boots a small window,
+    // then swaps in the full snapshot): a >30% order jump means a new window,
+    // not drift — relayout so the full graph gets real sectors instead of
+    // accreting around the small-window map. Steady-state polls hold order
+    // and never trip this, so no flicker.
+    const first = !paintedRef.current || data.nodes.length > paintedOrderRef.current * 1.3;
     if (first) {
       paintedRef.current = true;
-      // First paint: deterministic circle over the rendered set (initial mode
-      // is always instances), then one synchronous FA2 pass. Nothing animates
-      // at any point.
-      const order = graph.order;
-      const radius = 30 * Math.sqrt(Math.max(order, 1));
-      let i = 0;
+      paintedOrderRef.current = data.nodes.length;
+      // First paint: deterministic radial-by-type layout (P2) over the
+      // rendered set (initial mode is always instances). Same data always
+      // yields the same map — no random hairball. Nothing animates, and no
+      // layout ever re-runs afterwards.
+      const positions = radialLayout(data);
+      let placed = 0;
       graph.forEachNode((n) => {
-        const a = (i++ / order) * 2 * Math.PI;
-        graph.setNodeAttribute(n, 'x', Math.cos(a) * radius);
-        graph.setNodeAttribute(n, 'y', Math.sin(a) * radius);
-      });
-      forceAtlas2.assign(graph, {
-        iterations: order > LARGE_GRAPH ? FA2_ITERATIONS_LARGE : FA2_ITERATIONS_SMALL,
-        settings: forceAtlas2.inferSettings(graph),
+        const p = positions.get(n);
+        if (p) {
+          graph.setNodeAttribute(n, 'x', p.x);
+          graph.setNodeAttribute(n, 'y', p.y);
+          placed += 1;
+        }
       });
       const fa2nan = sanitizePositions(graph);
-      // F1 diagnosis: report the post-layout bbox so online runs show whether
-      // an off-center first paint comes from the layout or the camera mapping.
-      try {
-        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-        graph.forEachNode((n) => {
-          const x = graph.getNodeAttribute(n, 'x') as number;
-          const y = graph.getNodeAttribute(n, 'y') as number;
-          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-          if (x < x0) x0 = x;
-          if (x > x1) x1 = x;
-          if (y < y0) y0 = y;
-          if (y > y1) y1 = y;
-        });
-        reportUx('layout-bbox', `bbox=[${x0.toFixed(1)},${x1.toFixed(1)}]x[${y0.toFixed(1)},${y1.toFixed(1)}]`);
-      } catch {
-        /* diagnostics must never break layout */
-      }
-      reportUx('layout-done', `order=${order} nan=${fa2nan}`);
+      reportUx('layout-done', `order=${graph.order} placed=${placed} nan=${fa2nan}`);
     }
 
     const sigma = ensureSigma();
