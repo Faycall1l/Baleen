@@ -29,6 +29,10 @@ type Drawer = 'alerts' | 'reports' | 'leaders' | 'signals' | null;
 export default function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
+  // Staged first paint (P1): 'first' = nothing yet, 'partial' = quick small
+  // window painted, 'full' = full-width snapshot loaded. Drives the loading
+  // hint and the warming chip; steady-state polls leave it at 'full'.
+  const [graphStage, setGraphStage] = useState<'first' | 'partial' | 'full'>('first');
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -205,7 +209,33 @@ export default function App() {
   const graphSigRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadGraph();
+    // Staged boot: paint a quick small window first (seconds even on a slow
+    // backend), then upgrade to the full width in the background. The normal
+    // 30s poll loop below takes over afterwards; its cursor/delta logic
+    // merges onto whatever snapshot is present.
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 120_000);
+    setGraphError(null);
+    fetchGraph(25, ctrl.signal)
+      .then((data) => {
+        if (cancelled) return;
+        applyGraphPayload(data, false);
+        setGraphStage('partial');
+        return fetchGraph(150, ctrl.signal);
+      })
+      .then((data) => {
+        if (cancelled || !data) return;
+        applyGraphPayload(data, false);
+        setGraphStage('full');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        // Small-window failure: fall back to the standard full fetch path.
+        loadGraph();
+      })
+      .finally(() => clearTimeout(timer));
     loadAlerts();
     loadReports();
     loadLeaders();
@@ -218,8 +248,12 @@ export default function App() {
       loadLeaders();
       loadSignals();
     }, 30_000);
-    return () => clearInterval(id);
-  }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals]);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearInterval(id);
+    };
+  }, [loadGraph, loadAlerts, loadReports, loadLeaders, loadSignals, applyGraphPayload]);
 
   useEffect(() => {
     const checkHealth = () => fetchHealth().then(setHealth);
@@ -461,6 +495,10 @@ export default function App() {
               error={graphError}
               selectedId={selected?.id ?? null}
               onSelect={handleSelect}
+              loadingHint={
+                graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
+              }
+              warming={graphStage === 'partial'}
             />
           </GraphErrorBoundary>
           {drawer === 'alerts' && (

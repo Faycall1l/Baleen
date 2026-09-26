@@ -18,6 +18,8 @@ interface Props {
   error: string | null;
   selectedId: string | null;
   onSelect: (node: GraphNode | null) => void;
+  loadingHint?: string;
+  warming?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +41,7 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-export default function GraphView({ data, error, selectedId, onSelect }: Props) {
+export default function GraphView({ data, error, selectedId, onSelect, loadingHint, warming }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
@@ -207,7 +209,7 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
   };
 
   if (!data) {
-    return <div className="empty-hint">Loading graph…</div>;
+    return <div className="empty-hint">{loadingHint ?? 'Loading graph…'}</div>;
   }
 
   if (data.nodes.length === 0) {
@@ -243,6 +245,11 @@ export default function GraphView({ data, error, selectedId, onSelect }: Props) 
         onToggleType={toggleType}
       />
       <div ref={containerRef} className="graph-canvas" />
+      {warming && (
+        <div className="graph-error" title="Showing the quick first window; the full graph is still loading">
+          Warming up — full graph loading…
+        </div>
+      )}
       {error && (
         <div className="graph-error" title={error}>
           Refresh failed — showing last good data
