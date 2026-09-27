@@ -62,7 +62,7 @@ describe('buildViewModel instances', () => {
     // Sizes follow the documented curves (events capped small).
     const sizes = new Map(vm.nodes.map((n) => [n.id, n.size]));
     expect(sizes.get('Ticker:NVDA')).toBeCloseTo(2.2 + 1.2, 9);
-    expect(sizes.get('Event:e1')).toBeCloseTo(1.6 + Math.sqrt(2) * 0.8, 9);
+    expect(sizes.get('Event:e1')).toBeCloseTo(2.4 + Math.sqrt(2) * 1.0, 9);
     for (const n of vm.nodes) {
       expect(Number.isFinite(n.x)).toBe(true);
       expect(n.dimmed).toBe(false);

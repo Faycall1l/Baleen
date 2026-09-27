@@ -68,7 +68,7 @@ export function eventTitle(props: Record<string, unknown>): string {
 }
 
 export function nodeSize(label: string, degree: number): number {
-  if (label === 'Event') return 1.6 + Math.min(Math.sqrt(degree) * 0.8, 2.4);
+  if (label === 'Event') return 2.4 + Math.min(Math.sqrt(degree) * 1.0, 3);
   return 2.2 + Math.min(Math.sqrt(degree) * 1.2, 5);
 }
 
