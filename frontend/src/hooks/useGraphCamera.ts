@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import type Graph from 'graphology';
 import type Sigma from 'sigma';
 
-import { reportUx } from '../api';
 import { DIM_EDGE, DIM_NODE } from '../graph/view';
 
 interface Args {
@@ -70,7 +69,6 @@ export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTyp
   useEffect(() => {
     const sigma = sigmaRef.current;
     if (!sigma) return;
-    reportUx('fx-fit', `mode=${mode}`);
     sigma.getCamera().animatedReset({ duration: 600 });
   }, [mode, sigmaRef]);
 

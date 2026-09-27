@@ -11,7 +11,6 @@ import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';
 import { useGraphSync } from '../hooks/useGraphSync';
 import { useSigmaInstance } from '../hooks/useSigmaInstance';
-import { reportUx } from '../api';
 
 interface Props {
   data: GraphData | null;
@@ -109,16 +108,6 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     },
   );
 
-  // Forward uncaught page errors to the backend log (deduped there) — the
-  // only way to see browser failures without opening devtools.
-  useEffect(() => {
-    const onError = (e: ErrorEvent) => {
-      reportUx('window-error', `${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno ?? '?'}`);
-    };
-    window.addEventListener('error', onError);
-    return () => window.removeEventListener('error', onError);
-  }, []);
-
   // Data sync + first-paint layout lives in useGraphSync.
   useGraphSync({
     containerRef,
@@ -136,23 +125,12 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     const graph = graphRef.current;
     const sigma = sigmaRef.current;
     const latest = dataRef.current;
-    reportUx('fx-vis-enter', `mode=${mode} hasGraph=${!!graph} hasSigma=${!!sigma} hasData=${!!latest}`);
     if (!graph || !sigma || !latest) return;
     try {
-      const stats = applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
-      reportUx('view-ok', `mode=${mode} want=${stats.want} order=${stats.order} dataNodes=${stats.dataNodes}`);
-    } catch (e) {
-      reportUx('view-throw', String(e).slice(0, 300));
+      applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
+    } catch {
+      /* a failed membership sync must never break the view */
     }
-    const bad: string[] = [];
-    graph.forEachNode((id) => {
-      const x = graph.getNodeAttribute(id, 'x');
-      const y = graph.getNodeAttribute(id, 'y');
-      if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
-        bad.push(id);
-      }
-    });
-    reportUx('view', `mode=${mode} hidden=[${[...hiddenTypes].join(',')}] order=${graph.order} bad=${bad.length} ${bad.slice(0, 5).join(',')}`);
     try {
       sigma.refresh();
     } catch {

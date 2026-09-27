@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react';
 import Graph from 'graphology';
 import type Sigma from 'sigma';
 
-import { reportUx } from '../api';
 import { hashStr } from '../graph/geometry';
 import { applyVisibility } from '../graph/visibility';
 import { radialLayout } from '../graph/radial';
@@ -66,8 +65,7 @@ export function useGraphSync({
     }
 
     applyVisibility(graph, data, mode, hiddenTypes, posCacheRef.current);
-    const repaired = sanitizePositions(graph);
-    if (repaired > 0) reportUx('nan-repair', `repaired=${repaired} order=${graph.order}`);
+    sanitizePositions(graph);
 
     // Layout on first paint AND on staged upgrades (P1 boots a small window,
     // then swaps in the full snapshot): a >30% order jump means a new window,
@@ -83,17 +81,14 @@ export function useGraphSync({
       // yields the same map — no random hairball. Nothing animates, and no
       // layout ever re-runs afterwards.
       const positions = radialLayout(data);
-      let placed = 0;
       graph.forEachNode((n) => {
         const p = positions.get(n);
         if (p) {
           graph.setNodeAttribute(n, 'x', p.x);
           graph.setNodeAttribute(n, 'y', p.y);
-          placed += 1;
         }
       });
-      const fa2nan = sanitizePositions(graph);
-      reportUx('layout-done', `order=${graph.order} placed=${placed} nan=${fa2nan}`);
+      sanitizePositions(graph);
     }
 
     const sigma = ensureSigma();

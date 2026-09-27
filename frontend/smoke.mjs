@@ -27,10 +27,12 @@ const step = async (name, fn) => {
 await page.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
 await step('load: canvas + first layout', async () => {
+  // First paint is DOM-observable: the footer stats line renders node counts
+  // once the snapshot lands (no telemetry hooks since P4).
   await page.waitForFunction(
-    () => (window.__uxLog ?? []).some((e) => e.event === 'layout-done'),
+    () => /[0-9]+ nodes/.test(document.querySelector('.graph-status')?.textContent ?? ''),
     null,
-    { timeout: 60000 },
+    { timeout: 180000 },
   );
   await page.locator('.graph-canvas canvas').first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(2000);

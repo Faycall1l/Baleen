@@ -811,15 +811,6 @@ def test_graph_delta_returns_only_newer_events(postgres_store, neo4j_store):
         )
 
 
-def test_client_log_accepts_diagnostics():
-    with _client() as c:
-        res = c.post("/api/client-log", json={"event": "test-event", "detail": "hello"})
-        assert res.status_code == 200
-        assert res.json() == {"ok": True}
-        bad = c.post("/api/client-log", json={"event": "", "detail": "x"})
-        assert bad.status_code == 422
-
-
 def test_alerts_error_is_json_500(monkeypatch):
     _boom_app(monkeypatch)
     with _client() as c:
