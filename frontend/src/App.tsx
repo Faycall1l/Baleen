@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchAlerts, fetchDigest, fetchHealth, fetchLeaderboard, fetchReports, fetchSignals } from './api';
-import AlertsPanel from './components/AlertsPanel';
 import AlertStack from './components/AlertStack';
 import AnswerPanel from './components/AnswerPanel';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
-import LeaderboardPanel from './components/LeaderboardPanel';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
-import ReportsPanel from './components/ReportsPanel';
-import SignalsPanel from './components/SignalsPanel';
 import type { Alert, GraphNode, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 import { useGraphFeed } from './hooks/useGraphFeed';
 
@@ -26,7 +22,7 @@ function HealthDot({ health }: { health: Health | null }) {
   return <span className={`health-dot ${cls}`} title={title} />;
 }
 
-type Drawer = 'alerts' | 'reports' | 'leaders' | 'signals' | null;
+import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
@@ -370,38 +366,22 @@ export default function App() {
               warming={graphStage === 'partial'}
             />
           </GraphErrorBoundary>
-          {drawer === 'alerts' && (
-            <div className="drawer">
-              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
-                ×
-              </button>
-              <AlertsPanel alerts={alerts} error={alertsError} onAlertClick={openAlertNode} />
-            </div>
-          )}
-          {drawer === 'reports' && (
-            <div className="drawer">
-              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
-                ×
-              </button>
-              <ReportsPanel digest={digest} reports={reports} error={reportsError} onReportClick={openReportNode} />
-            </div>
-          )}
-          {drawer === 'leaders' && (
-            <div className="drawer">
-              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
-                ×
-              </button>
-              <LeaderboardPanel leaders={leaders} error={leadersError} onLeaderClick={openLeaderNode} />
-            </div>
-          )}
-          {drawer === 'signals' && (
-            <div className="drawer">
-              <button className="drawer-close" onClick={() => setDrawer(null)} aria-label="Close panel">
-                ×
-              </button>
-              <SignalsPanel signals={signals} error={signalsError} />
-            </div>
-          )}
+          <PanelDrawers
+            drawer={drawer}
+            onClose={() => setDrawer(null)}
+            alerts={alerts}
+            alertsError={alertsError}
+            onAlertClick={openAlertNode}
+            digest={digest}
+            reports={reports}
+            reportsError={reportsError}
+            onReportClick={openReportNode}
+            leaders={leaders}
+            leadersError={leadersError}
+            onLeaderClick={openLeaderNode}
+            signals={signals}
+            signalsError={signalsError}
+          />
           <div className="graph-status">
             {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
             {graph?.truncated && graph.event_count
