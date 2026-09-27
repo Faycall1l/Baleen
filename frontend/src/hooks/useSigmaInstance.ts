@@ -97,7 +97,6 @@ export function useSigmaInstance(
       // default 3 mousemove events, which silently ate real clicks.
       draggedEventsTolerance: 14,
       nodeProgramClasses: { bordered: BorderedNodeProgram },
-      edgeProgramClasses: { curvedArrow: EdgeCurvedArrowProgram },
     });
     fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
     fresh.on('clickNode', ({ node }) => {
