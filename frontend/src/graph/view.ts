@@ -11,15 +11,6 @@ export const SCHEMA_LABELS = ['Politician', 'Insider', 'Committee', 'Event', 'Ti
 export const SCHEMA_RADIUS = 260;
 
 /** Fixed circle slots for schema supernodes (stable across polls). */
-export function schemaSlots(): Map<string, { x: number; y: number }> {
-  const out = new Map<string, { x: number; y: number }>();
-  SCHEMA_LABELS.forEach((label, i) => {
-    const a = (i / SCHEMA_LABELS.length) * 2 * Math.PI;
-    out.set(schemaId(label), { x: Math.cos(a) * SCHEMA_RADIUS, y: Math.sin(a) * SCHEMA_RADIUS });
-  });
-  return out;
-}
-
 export const DIM_NODE = '#2b2b31';
 export const DIM_EDGE = 'rgba(61,61,69,0.15)';
 
