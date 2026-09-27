@@ -96,7 +96,7 @@ export function useSigmaInstance(
       // ~90 at fit — noisier. Keep (0.08, 8).
       defaultDrawNodeLabel: drawLabelWithHalo,
       defaultNodeColor: theme.accent,
-      defaultEdgeColor: '#3d3d45',
+      defaultEdgeColor: '#2b2b31', // dimmer: edges recede behind nodes
       minCameraRatio: 0.05,
       maxCameraRatio: 20,
       // Generous click-vs-drag tolerance: hand tremor emits well over the
