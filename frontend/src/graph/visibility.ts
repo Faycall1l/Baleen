@@ -10,7 +10,7 @@ import {
   SCHEMA_LABELS,
   SCHEMA_RADIUS,
   schemaId,
-} from './view';
+} from './schema';
 
 const POS_CACHE_CAP = 2000;
 
