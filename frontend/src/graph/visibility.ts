@@ -217,7 +217,7 @@ export function applyVisibility(
     const t = schemaId(r.target);
     if (!graph.hasNode(s) || !graph.hasNode(t)) continue;
     if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, s, t, { type: 'curvedArrow', label: humanizeRel(r.rel) });
+      graph.addEdgeWithKey(key, s, t, { label: humanizeRel(r.rel) });
     }
     graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
   }
