@@ -69,7 +69,7 @@ export function eventTitle(props: Record<string, unknown>): string {
 
 export function nodeSize(label: string, degree: number): number {
   if (label === 'Event') return 2.4 + Math.min(Math.sqrt(degree) * 1.0, 3);
-  return 2.2 + Math.min(Math.sqrt(degree) * 1.2, 5);
+  return 3.2 + Math.min(Math.sqrt(degree) * 1.6, 7);
 }
 
 export interface SchemaAgg {
