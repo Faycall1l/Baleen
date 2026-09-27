@@ -1,6 +1,6 @@
 import type { GraphData } from '../types';
 import { hashStr } from './geometry';
-import { SCHEMA_LABELS } from './view';
+import { SCHEMA_LABELS } from './schema';
 
 /** Radius scale shared with the old circle seed so camera framing is unchanged. */
 export function radialRadius(order: number): number {

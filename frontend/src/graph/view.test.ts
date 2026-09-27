@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { eventTitle } from './view';
+import { eventTitle } from './nodes';
 
 describe('eventTitle', () => {
   it('composes informative titles', () => {

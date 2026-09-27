@@ -5,7 +5,7 @@ import Graph from 'graphology';
 import type { GraphData, GraphNode } from '../types';
 import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
-import { isSchemaId, SCHEMA_LABELS } from '../graph/view';
+import { isSchemaId, SCHEMA_LABELS } from '../graph/schema';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';

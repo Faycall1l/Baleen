@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import type Graph from 'graphology';
 import type Sigma from 'sigma';
 
-import { DIM_EDGE, DIM_NODE } from '../graph/view';
+import { DIM_EDGE, DIM_NODE } from '../graph/schema';
 
 interface Args {
   sigmaRef: React.MutableRefObject<Sigma | null>;
