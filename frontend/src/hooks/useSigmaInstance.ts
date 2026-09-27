@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-import { EdgeCurvedArrowProgram } from '@sigma/edge-curve';
 import { createNodeBorderProgram } from '@sigma/node-border';
 import type Graph from 'graphology';
 import Sigma from 'sigma';
