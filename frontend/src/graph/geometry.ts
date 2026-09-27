@@ -1,31 +1,4 @@
-// Tiny pure geometry helpers for the canvas graph.
-
-export function clamp(v: number, lo: number, hi: number): number {
-  if (v < lo) return lo;
-  if (v > hi) return hi;
-  return v;
-}
-
-export function isFinitePoint(p: { x: number; y: number } | null | undefined): p is {
-  x: number;
-  y: number;
-} {
-  return (
-    p !== null &&
-    p !== undefined &&
-    Number.isFinite(p.x) &&
-    Number.isFinite(p.y)
-  );
-}
-
-export function centroid(points: { x: number; y: number }[]): { x: number; y: number } | null {
-  const valid = points.filter(isFinitePoint);
-  if (valid.length === 0) return null;
-  return {
-    x: valid.reduce((s, p) => s + p.x, 0) / valid.length,
-    y: valid.reduce((s, p) => s + p.y, 0) / valid.length,
-  };
-}
+// Tiny pure geometry helpers for the graph.
 
 /** Deterministic [0,1) hash for stable seeding (no Math.random in layout). */
 export function hashStr(s: string): number {
