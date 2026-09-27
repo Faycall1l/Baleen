@@ -2,18 +2,14 @@ import Graph from 'graphology';
 
 import type { GraphData } from '../types';
 import { hashStr } from './geometry';
+import { eventTitle, nodeColor, nodeSize, shade, truncate } from './nodes';
 import {
   aggregateSchema,
-  eventTitle,
   humanizeRel,
   isSchemaId,
-  nodeColor,
-  nodeSize,
   SCHEMA_LABELS,
   SCHEMA_RADIUS,
   schemaId,
-  shade,
-  truncate,
 } from './view';
 
 const POS_CACHE_CAP = 2000;
