@@ -209,7 +209,7 @@ export function applyVisibility(
     const key = `${l.source}>${l.target}:${l.type}`;
     payloadEdgeKeys.add(key);
     if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, l.source, l.target, { type: 'curvedArrow', label: l.type });
+      graph.addEdgeWithKey(key, l.source, l.target, { label: l.type, size: 1 });
     }
   }
   for (const [key, r] of agg.rels) {
