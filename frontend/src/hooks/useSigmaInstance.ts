@@ -83,7 +83,7 @@ export function useSigmaInstance(
       labelWeight: '500',
       labelColor: { color: theme.textDim },
       labelFont: 'system-ui, sans-serif',
-      labelRenderedSizeThreshold: 8,
+      labelRenderedSizeThreshold: 5,
       labelDensity: 0.08,
       // Label gate, exactly (E5: defaults pinned in sigma/settings:
       // zoomToSizeRatioFunction=Math.sqrt, itemSizesReference="screen"):
