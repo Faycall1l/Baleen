@@ -1,8 +1,8 @@
-"""Entity alias registry, the resolution review queue, and identity
-tombstones, split out of :mod:`app.db.postgres` (K2).
+"""Entity identity persistence, split out of :mod:`app.db.postgres` (K3).
 
-Mixed into ``PostgresStore``, which owns the shared SQLAlchemy engine, so every
-method here stays a thin, auditable ``text()`` call.
+Three registries share one table family: the alias registry that canonicalizes
+spelling, the human review queue for ambiguous mentions, and the identity
+tombstones (``entity_identities``) that hide merged nodes from the UI.
 """
 
 from __future__ import annotations
@@ -10,7 +10,9 @@ from __future__ import annotations
 from sqlalchemy import text
 
 
-class IdentityStoreMixin:
+class AliasRegistryMixin:
+    """the alias registry: canonical spelling per entity."""
+
     def ensure_alias(
         self,
         entity_type: str,
@@ -119,6 +121,10 @@ class IdentityStoreMixin:
                 {"entity_type": entity_type},
             ).mappings()
             return [dict(row) for row in rows]
+
+
+class ResolutionQueueMixin:
+    """the human review queue for ambiguous entity mentions."""
 
     def insert_resolution_suggestion(
         self,
@@ -249,6 +255,10 @@ class IdentityStoreMixin:
                 {"id": queue_id},
             ).mappings().first()
             return dict(row) if row is not None else None
+
+
+class IdentityTombstoneMixin:
+    """identity tombstones (``merged_into``) and remap history."""
 
     def get_identity(self, entity_type: str, candidate_id: str) -> dict | None:
         """The canonical an id has been remapped to, if any."""

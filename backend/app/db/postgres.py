@@ -15,7 +15,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from app.db.store.alerts import AlertStoreMixin
-from app.db.store.identity import IdentityStoreMixin
+from app.db.store.identity import (
+    AliasRegistryMixin,
+    IdentityTombstoneMixin,
+    ResolutionQueueMixin,
+)
 from app.db.store.leaderboard import LeaderboardStoreMixin
 from app.db.store.reports import ReportStoreMixin
 from app.db.store.tweets import TweetStoreMixin
@@ -155,7 +159,9 @@ class PostgresStore(
     TweetStoreMixin,
     AlertStoreMixin,
     ReportStoreMixin,
-    IdentityStoreMixin,
+    AliasRegistryMixin,
+    ResolutionQueueMixin,
+    IdentityTombstoneMixin,
     LeaderboardStoreMixin,
 ):
     def __init__(self, dsn: str) -> None:
