@@ -263,14 +263,14 @@ def test_edgar_user_agent_setting_exists():
 def test_parse_atom_rejects_malformed_xml():
     import pytest
 
-    from app.ingestion.edgar import parse_atom
+    from app.ingestion.edgar_parse import parse_atom
 
     with pytest.raises(ValueError, match="unparseable Atom"):
         parse_atom("<<<< not xml")
 
 
 def test_parse_atom_skips_entries_without_accession_or_link():
-    from app.ingestion.edgar import parse_atom
+    from app.ingestion.edgar_parse import parse_atom
 
     entries = parse_atom(ATOM)
     assert len(entries) == 1  # the link-less "No Link Corp" entry is dropped
@@ -281,14 +281,14 @@ def test_parse_atom_skips_entries_without_accession_or_link():
 def test_parse_ownership_rejects_malformed_xml():
     import pytest
 
-    from app.ingestion.edgar import parse_ownership
+    from app.ingestion.edgar_parse import parse_ownership
 
     with pytest.raises(ValueError, match="unparseable ownership"):
         parse_ownership("<<<< not xml")
 
 
 def test_parse_ownership_skips_owner_without_name():
-    from app.ingestion.edgar import parse_ownership
+    from app.ingestion.edgar_parse import parse_ownership
 
     xml = """<ownershipDocument><issuer><issuerCik>1</issuerCik>
     <issuerName>X Corp</issuerName><issuerTradingSymbol>XXX</issuerTradingSymbol>
@@ -300,7 +300,7 @@ def test_parse_ownership_skips_owner_without_name():
 
 
 def test_text_flag_number_and_day_helpers():
-    from app.ingestion.edgar import _flag, _number, _parse_day, _text
+    from app.ingestion.edgar_parse import _flag, _number, _parse_day, _text
     import xml.etree.ElementTree as ET
 
     assert _text(None, "x") is None
@@ -320,7 +320,7 @@ def test_text_flag_number_and_day_helpers():
 
 
 def test_owner_role_orders_multiple_flags():
-    from app.ingestion.edgar import _owner_role
+    from app.ingestion.edgar_parse import _owner_role
     import xml.etree.ElementTree as ET
 
     owner = ET.fromstring(
@@ -336,7 +336,7 @@ def test_owner_role_orders_multiple_flags():
 def test_owner_role_lists_flags_without_officer_title():
     """No officer title: the roles are joined in a fixed order (no title
     overrides), and the empty-role case returns None."""
-    from app.ingestion.edgar import _owner_role
+    from app.ingestion.edgar_parse import _owner_role
     import xml.etree.ElementTree as ET
 
     owner = ET.fromstring(
@@ -357,7 +357,7 @@ def test_owner_role_lists_flags_without_officer_title():
 def test_parse_ownership_skips_unknown_acquired_code():
     """An open-market transaction coded outside {A, D} is dropped from the
     parsed rows (the G/Gift row is already excluded by the code gate)."""
-    from app.ingestion.edgar import parse_ownership
+    from app.ingestion.edgar_parse import parse_ownership
 
     modified = OWNERSHIP_XML.replace(
         """<transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>""",
@@ -367,7 +367,7 @@ def test_parse_ownership_skips_unknown_acquired_code():
 
 
 def test_xml_href_prefers_plain_document_and_none_without_xml():
-    from app.ingestion.edgar import _xml_href
+    from app.ingestion.edgar_parse import _xml_href
 
     assert _xml_href('<a href="/Archives/x/doc4.xml">x</a>') == "https://www.sec.gov/Archives/x/doc4.xml"
     assert _xml_href('<a href="https://ok/doc4.xml">x</a>') == "https://ok/doc4.xml"
@@ -375,7 +375,7 @@ def test_xml_href_prefers_plain_document_and_none_without_xml():
 
 
 def test_fmt_amount_requires_shares_and_price():
-    from app.ingestion.edgar import _fmt_amount
+    from app.ingestion.edgar_parse import _fmt_amount
 
     assert _fmt_amount(1000, 2.5) == "$2,500.00"
     assert _fmt_amount(None, 2.5) is None
@@ -383,7 +383,7 @@ def test_fmt_amount_requires_shares_and_price():
 
 
 def test_record_requires_ticker_and_owner_name():
-    from app.ingestion.edgar import _record
+    from app.ingestion.edgar_parse import _record
 
     now = datetime.now(timezone.utc)
     owner = {"name": "Ada Lovelace", "role": ""}
