@@ -6,16 +6,6 @@
   height: 100%;
 }
 
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
-  background: #232328;
-  border-bottom: 1px solid #33333a;
-  flex: 0 0 auto;
-}
-
 .commandbar {
   display: flex;
   align-items: center;
