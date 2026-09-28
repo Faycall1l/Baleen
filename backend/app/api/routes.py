@@ -21,12 +21,14 @@ from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
 from app.query.agent import QueryAgent
+from app.api.feed_routes import router as feed_router
 from app.api.graph_routes import router as graph_router
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 # Handlers live in themed sub-modules; they resolve shared clients from this
 # module at call time so tests keep one monkeypatch surface.
+router.include_router(feed_router)
 router.include_router(graph_router)
 
 # Lazily-built shared clients (service objects are cheap to keep around).
@@ -199,66 +201,6 @@ def ask_question(request: QueryRequest) -> dict:
     payload = result.as_dict()
     payload["rows"] = _json_safe(payload["rows"])
     return payload
-
-
-# ---------------------------------------------------------------------------
-# Alerts
-# ---------------------------------------------------------------------------
-
-
-@router.get("/alerts")
-def alerts(limit: int = Query(default=20, ge=1, le=100)) -> dict:
-    try:
-        rows = _get_store().get_alerts(limit=limit)
-    except Exception as exc:
-        logger.exception("alerts fetch failed")
-        raise HTTPException(status_code=500, detail=f"alerts fetch failed: {exc}")
-    return {"alerts": rows, "count": len(rows)}
-
-
-# ---------------------------------------------------------------------------
-# Reports
-# ---------------------------------------------------------------------------
-
-
-@router.get("/reports/digest")
-def reports_digest(period: str | None = Query(default=None)) -> dict:
-    """Serve the daily digest, generating it on first request for the period."""
-    try:
-        report = get_report_engine().ensure_digest(period)
-    except Exception as exc:
-        logger.exception("digest generation failed")
-        raise HTTPException(status_code=500, detail=f"digest failed: {exc}")
-    return {"report": report}
-
-
-@router.get("/reports")
-def reports(
-    limit: int = Query(default=20, ge=1, le=100),
-    kind: str | None = Query(default=None),
-) -> dict:
-    try:
-        rows = _get_store().get_reports(limit=limit, kind=kind)
-    except Exception as exc:
-        logger.exception("reports fetch failed")
-        raise HTTPException(status_code=500, detail=f"reports fetch failed: {exc}")
-    return {"reports": rows, "count": len(rows)}
-
-
-# ---------------------------------------------------------------------------
-# Leaderboard
-# ---------------------------------------------------------------------------
-
-
-@router.get("/leaderboard")
-def leaderboard(limit: int = Query(default=20, ge=1, le=100)) -> dict:
-    """Best-performing congressional trades by return since transaction."""
-    try:
-        rows = _get_store().get_leaderboard(limit=limit)
-    except Exception as exc:
-        logger.exception("leaderboard fetch failed")
-        raise HTTPException(status_code=500, detail=f"leaderboard fetch failed: {exc}")
-    return {"leaders": rows, "count": len(rows)}
 
 
 # ---------------------------------------------------------------------------
