@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
-import AnswerPanel from './components/AnswerPanel';
+import CommandBar from './components/CommandBar';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
-import HealthDot from './components/HealthDot';
 import NodeDetail from './components/NodeDetail';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
-import QueryBar from './components/QueryBar';
-import type { QueryResponse } from './types';
 import { useFeeds } from './hooks/useFeeds';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
@@ -18,10 +15,6 @@ import { useSelection } from './hooks/useSelection';
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
-  const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
-  const [queryError, setQueryError] = useState<string | null>(null);
-  const [answerOpen, setAnswerOpen] = useState(false);
-  const [askSeed, setAskSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [drawer, setDrawer] = useState<Drawer>(null);
 
   const {
@@ -63,32 +56,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="commandbar">
-        <div className="brand">
-          <img src="/baleen.svg" alt="Baleen logo" width={26} height={26} />
-          <h1>Baleen</h1>
-        </div>
-        <div className="ask-wrap">
-          <QueryBar
-            onResult={(res) => {
-              setQueryResult(res);
-              setAnswerOpen(true);
-            }}
-            onError={setQueryError}
-            onFocusAsk={() => setAnswerOpen(true)}
-            externalAsk={askSeed}
-          />
-          {answerOpen && (
-            <AnswerPanel
-              result={queryResult}
-              error={queryError}
-              onClose={() => setAnswerOpen(false)}
-              onExample={(q) => setAskSeed({ text: q, nonce: Date.now() })}
-            />
-          )}
-        </div>
-        <HealthDot health={health} />
-      </header>
+      <CommandBar health={health} />
 
       <div className="app-body">
         <PanelRail
