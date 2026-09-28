@@ -5,18 +5,11 @@ Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` 
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 from app.ingestion.x_api import XApiSource
 from tests.ingestion.conftest import page, page_tweet
 
 
-def page(tweets, next_token=None):
-    return SimpleNamespace(
-        data=tweets,
-        includes={"users": [SimpleNamespace(id="7", username="unusual_whales")]},
-        meta={"next_token": next_token},
-    )
 
 
 def test_pagination_follows_next_token(monkeypatch):

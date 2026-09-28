@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.extraction.client import LLMClient, LLMResponse, ToolCall
+from app.extraction.client import LLMClient
 from app.extraction.extractor import EventExtractor, build_tool_definitions
-from datetime import datetime, timezone
 
-from app.ingestion.source import RawTweet
 from app.models.events import (
     CongressTradeEvent,
     OptionsFlowEvent,

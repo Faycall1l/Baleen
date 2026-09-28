@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 
-from app.ingestion.source import RawTweet
 from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
 from app.reports.engine import ReportEngine
 from app.reports.format import (

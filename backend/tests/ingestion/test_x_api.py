@@ -7,11 +7,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 import requests
 
 from app.ingestion.x_api import XApiSource
+
+if TYPE_CHECKING:
+    import tweepy
 
 
 def _rate_limited() -> "tweepy.errors.TooManyRequests":
@@ -143,7 +147,6 @@ def test_timeout_error_is_retried_then_recorded(monkeypatch):
     """A transport timeout is transient: retried with backoff, and when it
     exhausts retries it is recorded as a poll error, never raised (fetch_recent
     must never crash the scheduler tick)."""
-    import requests
 
     source = XApiSource(
         bearer_token="test",

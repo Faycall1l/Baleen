@@ -23,9 +23,7 @@ from app.ingestion.disclosures_parse import (
     _normalize_name,
     _parse_day,
     _record,
-    _side_verb,
     _slug,
-    _stable_id,
 )
 from app.ingestion.source import FetchResult, RawTweet, TweetSource
 from app.models.events import CongressTradeEvent, Event

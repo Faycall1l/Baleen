@@ -8,11 +8,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-import pytest
 
-from app.extraction.client import LLMResponse, ToolCall
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
-from app.query.agent import NO_DATA_ANSWER, QueryAgent
+from app.query.agent import QueryAgent
 from tests.query.conftest import stub_llm
 
 

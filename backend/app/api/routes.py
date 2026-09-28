@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter
+
+if TYPE_CHECKING:
+    from app.pipeline import ProcessingPipeline
+    from app.reports.engine import ReportEngine
+    from app.signals.engine import SignalsEngine
 
 from app.alerts.engine import AlertEngine
-from app.api.auth import _RateLimiter, require_api_key
+from app.api.auth import _RateLimiter, require_api_key  # noqa: F401  (re-exported)
 from app.config import Settings, get_settings
 from app.query.agent import QueryAgent
 from app.db.neo4j import Neo4jStore
@@ -112,25 +117,8 @@ from app.api.graph_payload import json_safe as _json_safe  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
-# Query agent
-# ---------------------------------------------------------------------------
-
-
-@router.post("/query", dependencies=[Depends(require_api_key)])
-def ask_question(request: QueryRequest) -> dict:
-    agent = QueryAgent(llm=_get_llm(), store=_get_neo4j())
-    try:
-        result = agent.ask(request.question)
-    except Exception as exc:
-        logger.exception("query agent failed for question %r", request.question)
-        raise HTTPException(status_code=500, detail=f"query agent failed: {exc}")
-    payload = result.as_dict()
-    payload["rows"] = _json_safe(payload["rows"])
-    return payload
-
-
-# ---------------------------------------------------------------------------
-# Live stream (Server-Sent Events) lives in app.api.stream (B3).
+# POST /api/query lives in app.api.query_routes (J4); it is registered through
+# the include_router above and owns the QueryRequest model.
 # ---------------------------------------------------------------------------
 
 

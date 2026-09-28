@@ -5,7 +5,6 @@ Part of the query suite split out of the former ``tests/test_query_agent.py`` (M
 
 from __future__ import annotations
 
-import pytest
 
 from app.extraction.client import LLMResponse, ToolCall
 from app.query.agent import NO_DATA_ANSWER, QueryAgent
@@ -15,7 +14,6 @@ from tests.query.conftest import (
     DownLLM,
     EmptyStore,
     ExecutionErrorStore,
-    QueryStubLLM,
     SequencedStubLLM,
     stub_llm,
     tool_text,
@@ -89,7 +87,6 @@ def test_agent_llm_down_during_answer_generation_uses_fallback():
 def test_agent_accepts_nameless_answer_arguments():
     """Some models emit bare {"answer", "sources"} without the tool name;
     the agent must still use them."""
-    from app.extraction.client import LLMResponse, ToolCall
 
     class NamelessAnswerLLM:
         def chat_with_tools(self, messages, tools, tool_choice="auto"):

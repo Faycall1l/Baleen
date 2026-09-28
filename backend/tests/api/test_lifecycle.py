@@ -6,7 +6,6 @@ Part of the API suite split out of the former ``tests/test_api.py`` (M1).
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tests.api.conftest import _client, _quiet_settings, _services_available
 
@@ -152,8 +151,6 @@ def test_engine_factories_wire_real_dependencies(monkeypatch):
 def test_lifespan_starts_and_stops_scheduler(monkeypatch):
     """With scheduler_enabled=True the lifespan boots and later stops a real
     (here stubbed) scheduler instance."""
-    from app.config import Settings
-
     captured = {"started": False, "stopped": False}
 
     class _Recorder:

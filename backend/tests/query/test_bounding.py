@@ -16,7 +16,6 @@ def test_bounded_rejects_empty_query():
 
 
 def test_bounded_appends_limit_when_missing():
-    from app.query.agent import QueryAgent
     from app.query.tools import MAX_RESULT_ROWS
 
     agent = QueryAgent(llm=stub_llm(), store=EmptyStore())

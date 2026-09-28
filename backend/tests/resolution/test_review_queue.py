@@ -9,7 +9,7 @@ fixtures) -- no mocks, in keeping with the research project's rigor bar.
 from __future__ import annotations
 
 from tests.resolution.conftest import (
-    resolver,
+    make_resolver,
 )
 
 
@@ -21,12 +21,12 @@ class TestReviewQueue:
         postgres_store.ensure_alias(
             "Politician", "John Johnsen", "X061", "John Johnsen", source="seed"
         )
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.suggest_merges("Politician")
         return resolver.pending_reviews()[0]["id"]
 
     def test_approve_flips_status_and_is_idempotent(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         queue_id = self._queued_pair(postgres_store)
 
         assert resolver.approve(queue_id)
@@ -35,7 +35,7 @@ class TestReviewQueue:
         assert resolver.approve(queue_id) is False
 
     def test_reject_keeps_pair_out_of_pending(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         queue_id = self._queued_pair(postgres_store)
         assert resolver.reject(queue_id)
         assert resolver.pending_reviews() == []

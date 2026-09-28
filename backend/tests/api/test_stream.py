@@ -5,15 +5,11 @@ Part of the API suite split out of the former ``tests/test_api.py`` (M1).
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
 from tests.api.conftest import (
     _StoreBoom,
-    _client,
-    _services_available,
     _quiet_settings,
 )
+
 
 def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
     """Live SSE feed: catch-up rows first (oldest first), resumable cursors,

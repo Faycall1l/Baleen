@@ -7,13 +7,9 @@ live in sibling modules.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
 
-import pytest
 
 from app.extraction.client import LLMResponse, ToolCall
-from app.models.events import CongressTradeEvent, OptionsFlowEvent
-from app.query.agent import QueryAgent
 
 
 class EmptyStore:
@@ -60,7 +56,6 @@ class SequencedStubLLM:
         self.sources = sources or ["https://x.com/unusual_whales/status/1"]
 
     def chat_with_tools(self, messages, tools, tool_choice="auto"):
-        from app.extraction.client import LLMResponse
 
         user = next((m["content"] for m in messages if m["role"] == "user"), "")
         if "Query results (ground truth" in user:

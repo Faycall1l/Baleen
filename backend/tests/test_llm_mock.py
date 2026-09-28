@@ -4,7 +4,6 @@ plus serve tool calls for the extraction stage."""
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from scripts.llm_mock import app

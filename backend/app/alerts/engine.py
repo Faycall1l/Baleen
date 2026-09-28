@@ -74,7 +74,7 @@ class AlertEngine:
         for name in rule_ids:
             try:
                 trigger = self.rules.evaluate(name, event)
-            except Exception as exc:
+            except Exception:
                 logger.exception("rule %s evaluation failed for event %s", name, event.deterministic_id)
                 continue
 
@@ -119,7 +119,7 @@ class AlertEngine:
                 summary=summary,
                 graph_refs=refs,
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("failed to persist alert for event %s", event.deterministic_id)
             return None
 

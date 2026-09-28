@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.extraction.client import LLMClient, LLMResponse, ToolCall
+from app.extraction.client import LLMClient
 from app.extraction.extractor import EventExtractor, build_tool_definitions
-from app.models.events import UnparsedEvent
 
-from tests.extraction.conftest import _tweet
 
 EXTRACTOR = EventExtractor(client=LLMClient("http://x", "k", "m"), max_tries=2)
 

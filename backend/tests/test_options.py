@@ -129,7 +129,6 @@ def test_parse_occ_rejects_impossible_expiry():
 
 
 def test_anomaly_rule_skips_low_ratio_and_unparsable_contracts():
-    from app.ingestion.options import MIN_VOLUME_RATIO
     from app.ingestion.options import _anomalies
 
     day = "2026-09-09"

@@ -16,7 +16,7 @@ so the pipeline can trust the filing's CIK over any model guess.
 from __future__ import annotations
 
 import logging
-import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 

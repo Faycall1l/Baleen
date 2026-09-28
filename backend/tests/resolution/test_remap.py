@@ -9,7 +9,7 @@ fixtures) -- no mocks, in keeping with the research project's rigor bar.
 from __future__ import annotations
 
 from tests.resolution.conftest import (
-    resolver,
+    make_resolver,
 )
 
 
@@ -21,7 +21,7 @@ class TestIdentityRemap:
         postgres_store.ensure_alias(
             "Politician", "John Johnsen", "X081", "John Johnsen", source="seed"
         )
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.suggest_merges("Politician")
         queue_id = resolver.pending_reviews()[0]["id"]
         assert resolver.approve(queue_id)
@@ -35,15 +35,15 @@ class TestIdentityRemap:
             "canonical_id": "X081",
             "confidence": 0.917,
         }
-        assert resolver(postgres_store).pending_reviews() == []
+        assert make_resolver(postgres_store).pending_reviews() == []
 
     def test_confirmed_pair_cannot_be_approved_again(self, postgres_store):
         queue_id = self._confirmed_pair(postgres_store)
-        assert resolver(postgres_store).approve(queue_id) is False
+        assert make_resolver(postgres_store).approve(queue_id) is False
 
     def test_canonical_identity_resolves_candidate_to_canonical(self, postgres_store):
         self._confirmed_pair(postgres_store)
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
 
         assert resolver.canonical_identity("Politician", "X080") == "X081"
         assert resolver.canonical_identity("Politician", "X081") == "X081"  # canonical stays put
@@ -55,19 +55,19 @@ class TestIdentityRemap:
         postgres_store.record_identity(
             "Politician", "X081", "X082", confidence=1.0, source="review"
         )
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         assert resolver.canonical_identity("Politician", "X080") == "X082"
 
     def test_malformed_cycle_degrades_gracefully(self, postgres_store):
         postgres_store.record_identity("Politician", "A000", "B000", 1.0, "review")
         postgres_store.record_identity("Politician", "B000", "A000", 1.0, "review")
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         # The loop degrades to the first repeated id instead of spinning.
         assert resolver.canonical_identity("Politician", "A000") == "A000"
 
     def test_approve_then_new_write_converges_identity(self, postgres_store):
         self._confirmed_pair(postgres_store)  # X080 -> X081
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         # Writer composition: remap the id first, then canonicalize the name.
         identity_id = resolver.canonical_identity("Politician", "X080")
         canonical = resolver.canonical_name("Politician", "John Johnson", identity_id)

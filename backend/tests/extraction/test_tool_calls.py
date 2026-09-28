@@ -122,7 +122,6 @@ def test_constrained_json_unwraps_action_envelope():
 
 
 def test_auto_mode_falls_back_to_json(monkeypatch):
-    from app.extraction.client import LLMError
 
     client = LLMClient("http://x", "k", "m", tool_mode="auto")
     def broken_tools(messages, tools, tool_choice):
@@ -149,7 +148,6 @@ def test_auto_mode_falls_back_to_json(monkeypatch):
 
 
 def test_tools_mode_does_not_fallback_to_json(monkeypatch):
-    from app.extraction.client import LLMError
 
     client = LLMClient("http://x", "k", "m", tool_mode="tools")
 

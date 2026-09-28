@@ -139,6 +139,6 @@ def _record(row: dict, now: datetime) -> RawTweet | None:
         author_id=f"congress_{chamber or 'unknown'}",
         text=text,
         created_at=created,
-        url=doc or f"https://disclosures-clerk.house.gov/FinancialDisclosure",
+        url=doc or "https://disclosures-clerk.house.gov/FinancialDisclosure",
         raw_json=meta,
     )

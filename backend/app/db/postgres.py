@@ -8,7 +8,6 @@ leaderboard) so each domain reads on its own. SQLAlchemy core with raw
 
 from __future__ import annotations
 
-import json
 import logging
 
 from sqlalchemy import create_engine, text

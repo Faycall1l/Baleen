@@ -9,17 +9,16 @@ fixtures) -- no mocks, in keeping with the research project's rigor bar.
 from __future__ import annotations
 
 import pytest
-
 from tests.resolution.conftest import (
     WARREN_ID,
     WARREN_NAME,
-    resolver,
+    make_resolver,
 )
 
 
 class TestCanonicalName:
     def test_first_encounter_registers_mention_as_seed(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         canonical = resolver.canonical_name(
             "Politician", "Joe Smith", canonical_id="X000001"
         )
@@ -30,7 +29,7 @@ class TestCanonicalName:
         }
 
     def test_seeded_canonical_id_converges_and_registers_alias(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.seed_canonical("Politician", WARREN_ID, WARREN_NAME)
 
         canonical = resolver.canonical_name(
@@ -43,7 +42,7 @@ class TestCanonicalName:
         ) == {"canonical_id": WARREN_ID, "canonical_name": WARREN_NAME}
 
     def test_mention_alias_reuse_returns_same_canonical(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.canonical_name("Politician", "Elizabeth Warren", WARREN_ID)
         alias = postgres_store.get_canonical("Politician", "Elizabeth Warren")
 
@@ -55,7 +54,7 @@ class TestCanonicalName:
     def test_conflicting_canonical_id_keeps_first_registered_and_queues_clash(
         self, postgres_store
     ):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         # Someone else claimed this exact name first.
         resolver.canonical_name("Politician", "Ben Carson", "C0010721")
 
@@ -78,14 +77,14 @@ class TestCanonicalName:
         assert pending[0]["confidence"] == 1.0
 
     def test_alias_clash_is_not_requeued_on_every_write(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.canonical_name("Politician", "Ben Carson", "C0010721")
         resolver.canonical_name("Politician", "Ben Carson", "C9999999")
         resolver.canonical_name("Politician", "Ben Carson", "C9999999")
         assert len(resolver.pending_reviews()) == 1
 
     def test_llm_alias_never_clobbers_seeded_spelling(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.seed_canonical("Politician", WARREN_ID, WARREN_NAME)
 
         resolver.canonical_name(
@@ -94,7 +93,7 @@ class TestCanonicalName:
         assert postgres_store.get_canonical_name("Politician", WARREN_ID) == WARREN_NAME
 
     def test_realtier_spelling_is_stable_across_mentions(self, postgres_store):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         first = resolver.canonical_name("Politician", "MTG", "M001202")
         second = resolver.canonical_name("Politician", "Marjorie Taylor Greene", "M001202")
         assert first == second  # node name never drifts with the mention
@@ -103,7 +102,7 @@ class TestCanonicalName:
         "mention", ["Rep. Nancy Pelosi", '"Pelosi"', "nancy pelosi (D-CA)"],
     )
     def test_no_roster_id_uses_raw_mention(self, postgres_store, mention):
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         canonical = resolver.canonical_name("Politician", mention, "P000197")
         # Registering a non-roster id: the mention becomes the spelling.
         assert canonical == mention

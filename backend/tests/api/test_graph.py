@@ -6,15 +6,12 @@ Part of the API suite split out of the former ``tests/test_api.py`` (M1).
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
 from datetime import date, datetime, timezone
 
 from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
 
 from tests.api.conftest import (
-    _Neo4jBoom,
-    _StoreBoom,
     _boom_app,
     _client,
     _quiet_settings,
@@ -101,7 +98,6 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
 def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store, future_event_time):
     """IdentityEngine tombstones the merged-away node (merged_into set); the
     /api/graph view must not surface it — only the canonical remains."""
-    from datetime import date
 
     from app.graph.identity import IdentityEngine
     from app.graph.resolution import EntityResolver
@@ -299,10 +295,8 @@ def test_graph_delta_garbage_since_falls_back_to_full(monkeypatch):
 
 def test_graph_delta_returns_only_newer_events(postgres_store, neo4j_store):
     """Live: events before the cursor stay out of the delta payload."""
-    from datetime import datetime, timezone
 
     from app.graph.writer import GraphWriter
-    from app.models.events import CongressTradeEvent
 
     def _evt(tweet_id: str, pid: str, ticker: str, when: datetime) -> CongressTradeEvent:
         return CongressTradeEvent(

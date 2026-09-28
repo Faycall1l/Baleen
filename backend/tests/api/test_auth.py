@@ -6,7 +6,6 @@ Part of the API suite split out of the former ``tests/test_api.py`` (M1).
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tests.api.conftest import _client, _services_available
 
@@ -95,7 +94,6 @@ def test_client_ip_honors_forwarded_header():
             "client": ("10.0.0.1", 12345),
         }
     )
-    from app.api.auth import client_ip
 
     assert client_ip(req) == "203.0.113.7"
 
@@ -116,9 +114,7 @@ def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
             }
         )
 
-    for spoofed in ["not-an-ip", "evil.example", "203.0.113.7 garbage", ":::" , ""]:
-        from app.api.auth import client_ip
-
+    for spoofed in ["not-an-ip", "evil.example", "203.0.113.7 garbage", ":::", ""]:
         assert client_ip(req(spoofed)) == "203.0.113.9"
     # a valid IPv6 address is accepted as a bonafide proxy-derived peer
     assert client_ip(req("2001:db8::1, 10.0.0.1")) == "2001:db8::1"
@@ -127,6 +123,7 @@ def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
 def test_rate_limiter_prunes_stale_keys_on_sweep(monkeypatch):
     """The sweep only runs past 4096 total keys, but then it evicts every
     entry older than the window — so a stale flood can never pin the map."""
+    import app.api.auth as auth
     import app.api.routes as routes
 
     clock = {"now": 0.0}
@@ -134,7 +131,9 @@ def test_rate_limiter_prunes_stale_keys_on_sweep(monkeypatch):
     def fake_now():
         return clock["now"]
 
-    monkeypatch.setattr(routes.time, "monotonic", fake_now)
+    # The limiter reads time via app.api.auth; patching routes.time only
+    # worked because both names bound the same stdlib module.
+    monkeypatch.setattr(auth.time, "monotonic", fake_now)
     monkeypatch.setattr(routes, "_rate_limiter", None)
 
     limiter = routes._RateLimiter(window_seconds=60, max_requests=2)

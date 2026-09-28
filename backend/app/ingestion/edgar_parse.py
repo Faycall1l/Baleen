@@ -8,7 +8,7 @@ without touching the SEC. :mod:`app.ingestion.edgar` re-exports the public names
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import datetime
 from xml.etree import ElementTree as ET
 
 from app.ingestion.source import RawTweet

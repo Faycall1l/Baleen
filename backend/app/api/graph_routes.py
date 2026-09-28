@@ -181,7 +181,7 @@ def _fetch_nodes_and_links(neo4j, keep_ids: list[str] | None) -> list[dict]:
     as before.
     """
     node_conditions = [
-        *([f"elementId(n) IN $keep_ids"] if keep_ids is not None else []),
+        *(["elementId(n) IN $keep_ids"] if keep_ids is not None else []),
         # Tombstoned identity nodes (merged_into set, see IdentityEngine)
         # are hidden from the UI: their SAME_AS edge is provenance, not a
         # user-facing connection.

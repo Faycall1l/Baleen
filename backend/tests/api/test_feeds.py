@@ -6,10 +6,8 @@ Part of the API suite split out of the former ``tests/test_api.py`` (M1).
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tests.api.conftest import (
-    _StoreBoom,
     _quiet_settings,
     _boom_app,
     _client,

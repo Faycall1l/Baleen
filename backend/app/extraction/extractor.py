@@ -18,7 +18,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.extraction.client import (
-    InvalidJSONError,
     LLMClient,
     LLMError,
     LLMTransportError,

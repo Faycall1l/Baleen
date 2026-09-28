@@ -1,6 +1,8 @@
-"""Shared builders for the entity-resolution suite.
+"""Shared builders and roster constants for the entity-resolution suite.
 
-Split out of the former ``tests/test_resolution.py`` (M5).
+Part of the resolution suite split out of the former ``tests/test_resolution.py``
+(M5). Helpers are named ``make_*`` so a call site can bind the result to a
+same-named local without shadowing the import.
 """
 
 from __future__ import annotations
@@ -8,19 +10,21 @@ from __future__ import annotations
 import difflib
 
 from app.graph.resolution import (
-    AUTO_MERGE_THRESHOLD,
-    REVIEW_MIN_THRESHOLD,
     EntityResolver,
     normalize_mention,
 )
 from app.models.events import CongressTradeEvent
 
 
-def resolver(postgres_store) -> EntityResolver:
+# Elizabeth Warren is part of the reference roster (seed_data.POLITICIANS).
+WARREN_ID = "W000817"
+WARREN_NAME = "Elizabeth Warren"
+
+def make_resolver(postgres_store) -> EntityResolver:
     return EntityResolver(postgres_store)
 
 
-def congress_event(
+def make_congress_event(
     tweet_id: str,
     politician_id: str,
     politician_name: str,
@@ -40,8 +44,5 @@ def congress_event(
     )
 
 
-def confidence(a: str, b: str) -> float:
+def make_confidence(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, normalize_mention(a), normalize_mention(b)).ratio()
-
-WARREN_ID = "W000817"
-WARREN_NAME = "Elizabeth Warren"

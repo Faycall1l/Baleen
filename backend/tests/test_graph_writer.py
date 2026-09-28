@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 
-import pytest
 
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent

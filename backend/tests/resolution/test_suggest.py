@@ -15,8 +15,8 @@ from app.graph.resolution import (
 from tests.resolution.conftest import (
     WARREN_ID,
     WARREN_NAME,
-    confidence,
-    resolver,
+    make_confidence,
+    make_resolver,
 )
 
 
@@ -32,9 +32,9 @@ class TestSuggestMerges:
         self._seed_distinct_politicians(
             postgres_store, [("X001", "John Johnson"), ("X002", "John Johnsen")]
         )
-        assert REVIEW_MIN_THRESHOLD <= confidence("John Johnson", "John Johnsen") < AUTO_MERGE_THRESHOLD
+        assert REVIEW_MIN_THRESHOLD <= make_confidence("John Johnson", "John Johnsen") < AUTO_MERGE_THRESHOLD
 
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         assert resolver.suggest_merges("Politician") == 1
 
         pending = resolver.pending_reviews()
@@ -52,9 +52,9 @@ class TestSuggestMerges:
         self._seed_distinct_politicians(
             postgres_store, [("X010", "Kevin McCarthy"), ("X011", "Kevin McCarty")]
         )
-        assert confidence("Kevin McCarthy", "Kevin McCarty") >= AUTO_MERGE_THRESHOLD
+        assert make_confidence("Kevin McCarthy", "Kevin McCarty") >= AUTO_MERGE_THRESHOLD
 
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         resolver.suggest_merges("Politician")
         pending = resolver.pending_reviews()
         assert len(pending) == 1
@@ -68,7 +68,7 @@ class TestSuggestMerges:
         postgres_store.ensure_alias(
             "Politician", "Senator Elizabeth Warren", WARREN_ID, WARREN_NAME
         )
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         assert resolver.suggest_merges("Politician") == 0
         assert resolver.pending_reviews() == []
 
@@ -76,14 +76,14 @@ class TestSuggestMerges:
         self._seed_distinct_politicians(
             postgres_store, [("X020", "Joe Biden"), ("X021", "Donald Trump")]
         )
-        assert resolver(postgres_store).suggest_merges("Politician") == 0
-        assert resolver(postgres_store).pending_reviews() == []
+        assert make_resolver(postgres_store).suggest_merges("Politician") == 0
+        assert make_resolver(postgres_store).pending_reviews() == []
 
     def test_suggest_merges_is_idempotent(self, postgres_store):
         self._seed_distinct_politicians(
             postgres_store, [("X030", "John Johnson"), ("X031", "John Johnsen")]
         )
-        resolver = resolver(postgres_store)
+        resolver = make_resolver(postgres_store)
         assert resolver.suggest_merges("Politician") == 1
         assert resolver.suggest_merges("Politician") == 0
         assert len(resolver.pending_reviews()) == 1
@@ -94,14 +94,14 @@ class TestSuggestMerges:
             postgres_store,
             [("X040", "John Johnson"), ("X041", "Donald Trump")],
         )
-        assert resolver(postgres_store).suggest_merges("Politician") == 0
+        assert make_resolver(postgres_store).suggest_merges("Politician") == 0
 
     def test_below_threshold_stored_confidence_matches_scorer(self, postgres_store):
         self._seed_distinct_politicians(
             postgres_store, [("X050", "John Johnson"), ("X051", "John Johnsen")]
         )
-        resolver(postgres_store).suggest_merges("Politician")
-        item = resolver(postgres_store).pending_reviews()[0]
+        make_resolver(postgres_store).suggest_merges("Politician")
+        item = make_resolver(postgres_store).pending_reviews()[0]
         assert item["confidence"] == round(
-            confidence(item["candidate_name"], item["canonical_name"]), 3
+            make_confidence(item["candidate_name"], item["canonical_name"]), 3
         )
