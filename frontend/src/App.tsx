@@ -7,6 +7,7 @@ import GraphView from './components/GraphView';
 import HealthDot from './components/HealthDot';
 import NodeDetail from './components/NodeDetail';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
+import PanelRail from './components/PanelRail';
 import QueryBar from './components/QueryBar';
 import type { QueryResponse } from './types';
 import { useFeeds } from './hooks/useFeeds';
@@ -60,29 +61,6 @@ export default function App() {
     handleSelect,
   );
 
-  const rail = (
-    <nav className="rail" aria-label="Panels">
-      {(
-        [
-          { key: 'alerts', label: 'Alerts', count: alerts.length },
-          { key: 'reports', label: 'Reports', count: reportCount },
-          { key: 'leaders', label: 'Board', count: leaders.length },
-          { key: 'signals', label: 'Signals', count: signalsCount },
-        ] as { key: Exclude<Drawer, null>; label: string; count: number }[]
-      ).map(({ key, label, count }) => (
-        <button
-          key={key}
-          className={`rail-btn${drawer === key ? ' active' : ''}`}
-          onClick={() => setDrawer(drawer === key ? null : key)}
-          title={label}
-        >
-          <span className="rail-label">{label}</span>
-          {count > 0 && <span className="rail-badge">{count}</span>}
-        </button>
-      ))}
-    </nav>
-  );
-
   return (
     <div className="app">
       <header className="commandbar">
@@ -113,7 +91,11 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        {rail}
+        <PanelRail
+          drawer={drawer}
+          onSelect={setDrawer}
+          counts={{ alerts: alerts.length, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
+        />
         <main className="graph-area">
           <GraphErrorBoundary>
             <GraphView
