@@ -2,35 +2,8 @@ import Graph from 'graphology';
 
 import type { GraphData } from '../types';
 import { hashStr } from './geometry';
-import { eventTitle, nodeColor, nodeSize, shade, truncate } from './nodes';
-import {
-  aggregateSchema,
-  humanizeRel,
-  isSchemaId,
-  SCHEMA_LABELS,
-  SCHEMA_RADIUS,
-  schemaId,
-} from './schema';
-
-const POS_CACHE_CAP = 2000;
-
-function bankPos(
-  posCache: Map<string, { x: number; y: number }>,
-  graph: Graph,
-  id: string,
-): void {
-  const x = graph.getNodeAttribute(id, 'x') as number;
-  const y = graph.getNodeAttribute(id, 'y') as number;
-  if (Number.isFinite(x) && Number.isFinite(y)) {
-    posCache.delete(id);
-    posCache.set(id, { x, y });
-    while (posCache.size > POS_CACHE_CAP) {
-      const oldest = posCache.keys().next();
-      if (oldest.done) break;
-      posCache.delete(oldest.value);
-    }
-  }
-}
+import { bankPos, instanceAttrs, schemaAttrs, schemaPosition } from './nodeAttrs';
+import { aggregateSchema, humanizeRel, isSchemaId, schemaId } from './schema';
 
 // Single owner of graph membership AND per-item visuals. Computes the wanted
 // id set from the mode/filter, drops anything else (banking positions),
@@ -39,7 +12,8 @@ function bankPos(
 // deterministic ring). Surviving nodes are never moved or relaid out.
 // Returns membership stats for diagnostics. Ends with a guarantee pass: any
 // node still lacking finite coordinates gets a deterministic ring spot, so
-// no caller can ever hand sigma a positionless node.
+// no caller can ever hand sigma a positionless node. Per-item attr builders
+// live in ./nodeAttrs.
 
 export function applyVisibility(
   graph: Graph,
@@ -90,31 +64,14 @@ export function applyVisibility(
       // Refresh attrs of survivors (titles/counts/colors can change).
       if (isSchemaId(id)) {
         const label = id.slice('schema:'.length);
-        const count = agg.counts.get(label) ?? 0;
-        const color = nodeColor(label);
-        graph.mergeNodeAttributes(id, {
-          title: schemaTitle(label, count, byId, degree),
-          color,
-          borderColor: shade(color, 0.55),
-          size: 10 + Math.sqrt(count) * 1.5,
-        });
+        graph.mergeNodeAttributes(
+          id,
+          schemaAttrs(label, agg.counts.get(label) ?? 0, byId, degree),
+        );
       } else {
         const n = byId.get(id);
         if (!n) continue;
-        const color = nodeColor(n.label);
-        const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
-        graph.mergeNodeAttributes(id, {
-          type: 'bordered',
-          kind: n.label,
-          label: display,
-          key: n.key,
-          title: display,
-          props: n.props,
-          tweet_url: n.tweet_url,
-          color,
-          borderColor: shade(color, 0.55),
-          size: nodeSize(n.label, degree.get(id) ?? 0),
-        });
+        graph.mergeNodeAttributes(id, instanceAttrs(n, degree));
       }
       continue;
     }
@@ -123,32 +80,14 @@ export function applyVisibility(
     // must never exist even transiently without a finite position.
     if (isSchemaId(id)) {
       const label = id.slice('schema:'.length);
-      const count = agg.counts.get(label) ?? 0;
-      const color = nodeColor(label);
-      const idx = Math.max(SCHEMA_LABELS.indexOf(label), 0);
-      const a = (idx / SCHEMA_LABELS.length) * 2 * Math.PI;
-      const x = Math.cos(a) * SCHEMA_RADIUS;
-      const y = Math.sin(a) * SCHEMA_RADIUS;
       graph.addNode(id, {
-        type: 'bordered',
-        kind: label,
-        label: schemaTitle(label, count, byId, degree),
-        key: label,
-        title: schemaTitle(label, count, byId, degree),
-        props: {},
-        tweet_url: null,
-        color,
-        borderColor: shade(color, 0.55),
-        size: 10 + Math.sqrt(count) * 1.5,
-        x,
-        y,
+        ...schemaAttrs(label, agg.counts.get(label) ?? 0, byId, degree),
+        ...schemaPosition(label),
       });
       continue;
     }
     const n = byId.get(id);
     if (!n) continue;
-    const color = nodeColor(n.label);
-    const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
     const saved = posCache.get(id);
     let px: number;
     let py: number;
@@ -181,20 +120,7 @@ export function applyVisibility(
         py = Math.sin(a) * r;
       }
     }
-    graph.addNode(id, {
-      type: 'bordered',
-      kind: n.label,
-      label: display,
-      key: n.key,
-      title: display,
-      props: n.props,
-      tweet_url: n.tweet_url,
-      color,
-      borderColor: shade(color, 0.55),
-      size: nodeSize(n.label, degree.get(id) ?? 0),
-      x: px,
-      y: py,
-    });
+    graph.addNode(id, { ...instanceAttrs(n, degree), x: px, y: py });
   }
 
   // Edges: payload links between present nodes, schema rels between present
@@ -238,23 +164,4 @@ export function applyVisibility(
   }
 
   return { want: want.size, order: graph.order, dataNodes: data.nodes.length };
-}
-
-function schemaTitle(
-  label: string,
-  count: number,
-  byId: Map<string, GraphData['nodes'][number]>,
-  degree: Map<string, number>,
-): string {
-  if (count === 0) return `${label} (0)`;
-  const tops = [...byId.values()]
-    .filter((n) => n.label === label)
-    .map((n) => ({
-      t: n.label === 'Event' ? eventTitle(n.props) : n.title,
-      d: degree.get(n.id) ?? 0,
-    }))
-    .sort((x, y) => y.d - x.d)
-    .slice(0, 2)
-    .map((t) => truncate(t.t, 15));
-  return tops.length ? `${label} (${count}): ${tops.join(', ')}` : `${label} (${count})`;
 }
