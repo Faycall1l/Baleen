@@ -1,0 +1,19 @@
+/* ------------------------------------------------------------------- panels */
+
+.panel h2 {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9b9ba5;
+  border-bottom: 1px solid #33333a;
+}
+
+.empty-hint {
+  padding: 16px 14px;
+  color: #9b9ba5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+

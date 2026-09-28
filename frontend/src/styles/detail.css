@@ -1,0 +1,65 @@
+/* ------------------------------------------------------------------ detail */
+
+.node-detail .node-title {
+  padding: 12px 14px;
+  border-bottom: 1px solid #33333a;
+}
+
+.node-detail .node-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.node-detail .node-title .label {
+  color: #9b9ba5;
+  font-size: 12px;
+}
+
+.props {
+  padding: 8px 14px 14px;
+}
+
+.props dl {
+  margin: 0;
+}
+
+.props .prop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #2f2f35;
+  font-size: 13px;
+}
+
+.props dt {
+  color: #9b9ba5;
+}
+
+.props dd {
+  margin: 0;
+  text-align: right;
+  word-break: break-word;
+}
+
+.node-links {
+  padding: 4px 14px 14px;
+}
+
+.node-links-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9b9ba5;
+  margin-bottom: 6px;
+}
+
+.node-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
