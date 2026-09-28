@@ -13,16 +13,17 @@ import threading
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
 from app.alerts.engine import AlertEngine
 from app.config import Settings, get_settings
+from app.query.agent import QueryAgent
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
-from app.query.agent import QueryAgent
 from app.api.feed_routes import router as feed_router
 from app.api.graph_routes import router as graph_router
+from app.api.query_routes import router as query_router
+from app.api.signals_routes import router as signals_router
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -30,6 +31,8 @@ router = APIRouter(prefix="/api")
 # module at call time so tests keep one monkeypatch surface.
 router.include_router(feed_router)
 router.include_router(graph_router)
+router.include_router(query_router)
+router.include_router(signals_router)
 
 # Lazily-built shared clients (service objects are cheap to keep around).
 # A lock guards the first build so concurrent startup requests cannot create
@@ -174,10 +177,6 @@ def _get_llm() -> LLMClient:
     return _llm
 
 
-class QueryRequest(BaseModel):
-    question: str = Field(min_length=1)
-
-
 from app.api.graph_payload import (
     build_graph_payload,
     json_safe as _json_safe,
@@ -204,7 +203,7 @@ def ask_question(request: QueryRequest) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Signals
+# Live stream (Server-Sent Events) lives in app.api.stream (B3).
 # ---------------------------------------------------------------------------
 
 
@@ -214,32 +213,8 @@ def get_signals_engine() -> "SignalsEngine":
     return SignalsEngine(neo4j=_get_neo4j(), store=_get_store())
 
 
-@router.get("/signals")
-def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
-    """Computed pressure signals: momentum, insider clusters, options meter,
-    uncovered sector bets, suspicious timing."""
-    try:
-        bundle = get_signals_engine().bundle(window_days=window_days)
-    except Exception as exc:
-        logger.exception("signals failed")
-        raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
-    return _json_safe(bundle)
-
-
-@router.get("/signals/similar")
-def signals_similar(politician_id: str = Query(min_length=1)) -> dict:
-    """Politicians trading the same tickers (shared-ticker similarity)."""
-    try:
-        rows = get_signals_engine().similar(politician_id)
-    except Exception as exc:
-        logger.exception("similar failed")
-        raise HTTPException(status_code=500, detail=f"similar failed: {exc}")
-    return {"similar": _json_safe(rows)}
-
-
-# ---------------------------------------------------------------------------
-# Live stream (Server-Sent Events) lives in app.api.stream (B3).
-# ---------------------------------------------------------------------------
+def get_query_agent() -> QueryAgent:
+    return QueryAgent(llm=_get_llm(), store=_get_neo4j())
 
 
 def get_alert_engine() -> AlertEngine:
