@@ -9,6 +9,7 @@ import pytest
 from app.extraction.client import LLMResponse, ToolCall
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
 from app.query.agent import NO_DATA_ANSWER, QueryAgent
+from app.query.tools import bounded_query
 from app.query.validate import validate_cypher
 
 # ---------------------------------------------------------------------------
@@ -295,7 +296,7 @@ def test_query_result_as_dict_snapshot():
 
 def test_bounded_rejects_empty_query():
     agent = QueryAgent(llm=object(), store=object())  # type: ignore[arg-type]
-    assert agent._bounded("  ;   ") == ""
+    assert bounded_query("  ;   ") == ""
 
 
 def test_agent_falls_back_when_answer_contains_no_answer_call():
@@ -425,7 +426,7 @@ def test_agent_prompt_instructs_inlining_literals():
 
 
 def _tool_text() -> str:
-    from app.query.agent import GENERATE_TOOL
+    from app.query.tools import GENERATE_TOOL
 
     return GENERATE_TOOL["function"]["description"]
 
@@ -436,17 +437,18 @@ def _tool_text() -> str:
 
 
 def test_bounded_appends_limit_when_missing():
-    from app.query.agent import MAX_RESULT_ROWS, QueryAgent
+    from app.query.agent import QueryAgent
+    from app.query.tools import MAX_RESULT_ROWS
 
     agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
-    bounded = agent._bounded("MATCH (e:Event) RETURN e")
+    bounded = bounded_query("MATCH (e:Event) RETURN e")
     assert bounded.endswith(f"LIMIT {MAX_RESULT_ROWS}")
 
 
 def test_bounded_keeps_existing_limit():
     agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
     query = "MATCH (e:Event) RETURN e ORDER BY e.event_time DESC LIMIT 10"
-    assert agent._bounded(query) == query
+    assert bounded_query(query) == query
 
 
 def test_bounded_leaves_aggregations_alone():
@@ -455,19 +457,19 @@ def test_bounded_leaves_aggregations_alone():
         "MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker) "
         "RETURN t.ticker AS ticker, count(e) AS n ORDER BY n DESC"
     )
-    assert agent._bounded(query) == query
+    assert bounded_query(query) == query
 
 
 def test_bounded_strips_trailing_semicolon():
-    from app.query.agent import MAX_RESULT_ROWS
+    from app.query.tools import MAX_RESULT_ROWS
 
     agent = QueryAgent(llm=_stub_llm(), store=EmptyStore())
-    bounded = agent._bounded("MATCH (e:Event) RETURN e;")
+    bounded = bounded_query("MATCH (e:Event) RETURN e;")
     assert bounded.endswith(f"LIMIT {MAX_RESULT_ROWS}")
 
 
 def test_agent_caps_unbounded_query_at_execution():
-    from app.query.agent import MAX_RESULT_ROWS
+    from app.query.tools import MAX_RESULT_ROWS
 
     captured = {}
 

@@ -301,7 +301,7 @@ def test_constrained_json_unwraps_tool_parameters_envelope():
 def test_constrained_json_unwraps_action_envelope():
     """ReAct-style {"action", "action_input"} envelope, where the input is a
     bare string (the query agent's single-input generator tool)."""
-    from app.query.agent import GENERATE_TOOL
+    from app.query.tools import GENERATE_TOOL
 
     client = LLMClient("http://x", "k", "m", tool_mode="json")
 
