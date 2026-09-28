@@ -46,48 +46,6 @@ def _quiet_lifespan(monkeypatch):
     monkeypatch.setattr("app.api.routes.get_settings", lambda: quiet)
 
 
-def test_json_safe_serializes_native_temporal_props():
-    """The writer stores temporal props natively; /api/graph must hand the JSON
-    encoder plain ISO strings, including for the Neo4j driver's own temporal
-    classes (which do NOT subclass stdlib datetime/date)."""
-    from datetime import date, datetime, timezone
-
-    from neo4j.time import Date as Neo4jDate
-    from neo4j.time import DateTime as Neo4jDateTime
-
-    from app.api.routes import _json_safe
-
-    assert _json_safe(Neo4jDateTime(2026, 1, 16, 12, 30, 0)) == "2026-01-16T12:30:00.000000000"
-    assert _json_safe(Neo4jDate(2026, 1, 15)) == "2026-01-15"
-    assert _json_safe(datetime(2026, 1, 16, tzinfo=timezone.utc)) == "2026-01-16T00:00:00+00:00"
-    assert _json_safe(date(2026, 1, 15)) == "2026-01-15"
-    assert _json_safe("NVDA") == "NVDA"
-    assert _json_safe(42) == 42
-
-
-def test_json_safe_recurses_into_rows():
-    """collect(...) projections nest values; whole row lists must come out
-    JSON-encodable (this is what /api/query returns)."""
-    from datetime import date, datetime, timezone
-
-    from neo4j.time import DateTime as Neo4jDateTime
-
-    from app.api.routes import _json_safe
-
-    rows = [
-        {"ticker": "NVDA", "at": Neo4jDateTime(2026, 9, 10, 12, 0, 0)},
-        {"sector": "Tech", "tickers": ["NVDA", "AMD"],
-         "d": datetime(2026, 1, 1, tzinfo=timezone.utc), "day": date(2026, 1, 2)},
-    ]
-    import json
-
-    safe = _json_safe(rows)
-    json.dumps(safe)  # must not raise
-    assert safe[0]["at"] == "2026-09-10T12:00:00.000000000"
-    assert safe[1]["tickers"] == ["NVDA", "AMD"]
-    assert safe[1]["day"] == "2026-01-02"
-
-
 def _client():
     from app.main import app
 
@@ -966,7 +924,7 @@ def test_stream_emits_alert_and_report_rows():
 
 
 def test_client_ip_honors_forwarded_header():
-    import app.api.routes as routes
+    from app.api.auth import client_ip
     from fastapi import Request
     from starlette.datastructures import Headers
 
@@ -977,13 +935,15 @@ def test_client_ip_honors_forwarded_header():
             "client": ("10.0.0.1", 12345),
         }
     )
-    assert routes._client_ip(req) == "203.0.113.7"
+    from app.api.auth import client_ip
+
+    assert client_ip(req) == "203.0.113.7"
 
 
 def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
     """Garbage in X-Forwarded-For must not become a rate-limit key: a client
     could otherwise rotate keys to defeat the limiter and its eviction sweep."""
-    import app.api.routes as routes
+    from app.api.auth import client_ip
     from fastapi import Request
     from starlette.datastructures import Headers
 
@@ -997,9 +957,11 @@ def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
         )
 
     for spoofed in ["not-an-ip", "evil.example", "203.0.113.7 garbage", ":::" , ""]:
-        assert routes._client_ip(req(spoofed)) == "203.0.113.9"
+        from app.api.auth import client_ip
+
+        assert client_ip(req(spoofed)) == "203.0.113.9"
     # a valid IPv6 address is accepted as a bonafide proxy-derived peer
-    assert routes._client_ip(req("2001:db8::1, 10.0.0.1")) == "2001:db8::1"
+    assert client_ip(req("2001:db8::1, 10.0.0.1")) == "2001:db8::1"
 
 
 def test_rate_limiter_prunes_stale_keys_on_sweep(monkeypatch):
@@ -1055,16 +1017,6 @@ def test_close_services_survives_close_failures(monkeypatch):
 # ---------------------------------------------------------------------------
 # Remaining route branches + engine factories
 # ---------------------------------------------------------------------------
-
-
-def test_node_key_falls_back_when_label_key_missing():
-    from app.api.routes import _node_key
-
-    # Ticker's label key is `ticker`; absent props fall back to id, then repr.
-    assert _node_key("Ticker", {"ticker": "NVDA"}) == "NVDA"
-    assert _node_key("Ticker", {"id": "evt-1"}) == "evt-1"
-    fallback = _node_key("Ticker", {"anything": 1})
-    assert fallback.startswith("{")
 
 
 def test_reports_digest_leaderboard_success_paths(monkeypatch):

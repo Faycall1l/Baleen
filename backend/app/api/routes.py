@@ -14,7 +14,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.alerts.engine import AlertEngine
-from app.api.auth import _RateLimiter, client_ip as _client_ip, require_api_key
+from app.api.auth import _RateLimiter, require_api_key
 from app.config import Settings, get_settings
 from app.query.agent import QueryAgent
 from app.db.neo4j import Neo4jStore
@@ -106,11 +106,9 @@ def _get_llm() -> LLMClient:
     return _llm
 
 
-from app.api.graph_payload import (
-    build_graph_payload,
-    json_safe as _json_safe,
-    node_key as _node_key,
-)
+# Re-exported for the route modules and the SSE stream, which resolve their
+# dependencies from here so tests keep a single monkeypatch surface.
+from app.api.graph_payload import json_safe as _json_safe  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
