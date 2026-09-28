@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.extraction.client import LLMClient, LLMResponse, ToolCall
+from app.extraction.tool_calls import parse_tool_calls_from_json
 from app.extraction.extractor import EventExtractor, build_tool_definitions
 from app.ingestion.source import RawTweet
 from app.models.events import (
@@ -215,7 +216,7 @@ def test_constrained_json_parse_tool_call():
     client = LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
-    calls = client._parse_tool_calls_from_json(
+    calls = parse_tool_calls_from_json(
         '{"tool_calls": [{"name": "extract_options_flow", "arguments": {"ticker": "NVDA", "contract_type": "call", "confidence": 0.8}}]}',
         tools,
     )
@@ -229,7 +230,7 @@ def test_constrained_json_parse_single_object():
     client = LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
-    calls = client._parse_tool_calls_from_json(
+    calls = parse_tool_calls_from_json(
         '{"ticker": "NVDA", "contract_type": "put", "confidence": 0.7}',
         tools,
     )
@@ -248,7 +249,7 @@ def test_constrained_json_rejects_unknown_tool():
     client = LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
     with pytest.raises(InvalidJSONError):
-        client._parse_tool_calls_from_json(
+        parse_tool_calls_from_json(
             '{"name": "extract_dark_pool", "ticker": "NVDA"}', tools
         )
 
@@ -260,7 +261,7 @@ def test_constrained_json_unwraps_name_arguments_envelope():
     client = LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
-    calls = client._parse_tool_calls_from_json(
+    calls = parse_tool_calls_from_json(
         '{"name": "extract_congress_trade", "arguments": {'
         '"politician_name": "David J. Taylor", "politician_id": "x", '
         '"chamber": "house", "party": "R", "ticker": "VRTX", '
@@ -283,7 +284,7 @@ def test_constrained_json_unwraps_tool_parameters_envelope():
     client = LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
-    calls = client._parse_tool_calls_from_json(
+    calls = parse_tool_calls_from_json(
         '{"tool": "extract_options_flow", "parameters": {'
         '"ticker": "AAPL", "contract_type": "call", "confidence": 0.9}}',
         tools,
@@ -304,7 +305,7 @@ def test_constrained_json_unwraps_action_envelope():
 
     client = LLMClient("http://x", "k", "m", tool_mode="json")
 
-    calls = client._parse_tool_calls_from_json(
+    calls = parse_tool_calls_from_json(
         '{"action": "generate_cypher", "action_input": "MATCH (t:Ticker) RETURN t"}',
         [GENERATE_TOOL],
     )
@@ -727,17 +728,17 @@ def test_insider_trade_tool_validates():
 
 
 def test_unwrap_arguments_handles_envelopes_and_bare_action_input():
-    from app.extraction.client import _unwrap_arguments
+    from app.extraction.tool_calls import unwrap_arguments
 
-    assert _unwrap_arguments({"arguments": {"cypher": "MATCH (n) RETURN n"}}) == {"cypher": "MATCH (n) RETURN n"}
-    assert _unwrap_arguments({"arguments": '{"a": 1}'}) == {"a": 1}
-    assert _unwrap_arguments({"parameters": {"b": 2}}) == {"b": 2}
+    assert unwrap_arguments({"arguments": {"cypher": "MATCH (n) RETURN n"}}) == {"cypher": "MATCH (n) RETURN n"}
+    assert unwrap_arguments({"arguments": '{"a": 1}'}) == {"a": 1}
+    assert unwrap_arguments({"parameters": {"b": 2}}) == {"b": 2}
     # ReAct-style bare string input maps to the query agent's single cypher field
-    assert _unwrap_arguments({"action_input": "MATCH (n) RETURN n"}) == {"cypher": "MATCH (n) RETURN n"}
+    assert unwrap_arguments({"action_input": "MATCH (n) RETURN n"}) == {"cypher": "MATCH (n) RETURN n"}
     # Unparseable string in a non-action_input key falls through to the envelope
-    assert _unwrap_arguments({"arguments": "not-json", "x": 1}) == {"arguments": "not-json", "x": 1}
+    assert unwrap_arguments({"arguments": "not-json", "x": 1}) == {"arguments": "not-json", "x": 1}
     # No known envelope key: flat field objects pass through unchanged
-    assert _unwrap_arguments({"flat": True}) == {"flat": True}
+    assert unwrap_arguments({"flat": True}) == {"flat": True}
 
 
 def test_tools_mode_does_not_fallback_to_json(monkeypatch):
@@ -838,7 +839,7 @@ def test_constrained_json_empty_array_raises():
     client = LLMClient("http://x", "k", "m")
 
     with pytest.raises(InvalidJSONError, match="no tool call matched"):
-        client._parse_tool_calls_from_json("[]", [])
+        parse_tool_calls_from_json("[]", [])
 
 
 def test_malformed_closed_json_block_is_invalid_json_error():
@@ -849,4 +850,4 @@ def test_malformed_closed_json_block_is_invalid_json_error():
     client = LLMClient("http://x", "k", "m")
 
     with pytest.raises(InvalidJSONError, match="malformed JSON block"):
-        client._parse_tool_calls_from_json('prefix {"ticker": } trailing', [])
+        parse_tool_calls_from_json('prefix {"ticker": } trailing', [])

@@ -4,6 +4,10 @@ Everything is driven by ``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL_NAME``
 (plus ``LLM_TOOL_MODE``). No provider SDK is hardcoded — this is the only place
 Baleen talks to an LLM.
 
+The response/error contract lives in :mod:`app.extraction.protocol` and the
+constrained-JSON tool-call parsing in :mod:`app.extraction.tool_calls` (L3);
+this module is the transport, retry, and tool-mode policy.
+
 Tool-calling modes (``LLM_TOOL_MODE``):
 
 - ``tools`` — send native ``tools`` in the chat-completions payload and expect
@@ -23,54 +27,21 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
-from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
+from app.extraction.protocol import (
+    InvalidJSONError,
+    LLMError,
+    LLMResponse,
+    LLMTransportError,
+    ToolCall,
+)
+from app.extraction.tool_calls import parse_tool_calls_from_json
+
 logger = logging.getLogger(__name__)
-
-JSON_BLOCK_RE = re.compile(r"\{[\s\S]*\}")
-
-
-class LLMError(Exception):
-    """Base error for any LLM call failure."""
-
-
-def _unwrap_arguments(envelope: dict) -> dict:
-    """Extract the field object from a tool-call envelope.
-
-    Accepts ``arguments`` / ``parameters`` / ``params`` / ``action_input``
-    (object or string-encoded JSON); falls back to the envelope itself when
-    none is present (flat field objects). A bare-string ``action_input``
-    (ReAct style) maps to ``{"cypher": ...}`` — the query agent's generator
-    is the only single-string-input tool, and the extractor never receives
-    bare strings.
-    """
-    for key in ("arguments", "parameters", "params", "action_input"):
-        value = envelope.get(key)
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                if key == "action_input":
-                    return {"cypher": envelope[key]}
-                continue
-        if isinstance(value, dict):
-            return value
-    return envelope
-
-
-class LLMTransportError(LLMError):
-    """Transient infrastructure failure (network, timeout, HTTP error status).
-
-    Raised for conditions that will not improve by marking the tweet as
-    unparsed — the endpoint is unreachable or misbehaving at the transport
-    level. Callers should leave the tweet pending and retry later.
-    """
-
 
 def draft_text(llm: "LLMClient", *, system: str, prompt: str, fallback: str) -> str:
     """Draft short grounded copy, falling back to a template on LLM failure.
@@ -92,28 +63,6 @@ def draft_text(llm: "LLMClient", *, system: str, prompt: str, fallback: str) -> 
     except LLMError as exc:
         logger.warning("LLM draft failed: %s", exc)
     return fallback
-
-
-class InvalidJSONError(LLMError):
-    """The model returned content that could not be parsed as JSON."""
-
-
-@dataclass
-class ToolCall:
-    name: str
-    arguments: dict[str, Any]
-
-
-@dataclass
-class LLMResponse:
-    content: str = ""
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    raw: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def has_tool_call(self) -> bool:
-        return bool(self.tool_calls)
-
 
 class LLMClient:
     def __init__(
@@ -294,7 +243,7 @@ class LLMClient:
                 response = self._parse(data, parse_tools=False)
                 return LLMResponse(
                     content=response.content,
-                    tool_calls=self._parse_tool_calls_from_json(response.content, tools),
+                    tool_calls=parse_tool_calls_from_json(response.content, tools),
                     raw=response.raw,
                 )
             except LLMTransportError:
@@ -352,56 +301,3 @@ class LLMClient:
                     arguments = {}
                 tool_calls.append(ToolCall(name=name, arguments=arguments))
         return LLMResponse(content=content, tool_calls=tool_calls, raw=data)
-
-    def _parse_tool_calls_from_json(
-        self, content: str, tools: list[dict]
-    ) -> list[ToolCall]:
-        """Parse a constrained-JSON reply into tool calls.
-
-        Accepts either ``{"tool_calls": [...]}`` (matching the tools payload
-        shape) or a single object shaped like one tool's schema. Raises
-        ``InvalidJSONError`` when the content cannot be mapped to a known tool.
-        """
-        try:
-            raw = json.loads(content)
-        except json.JSONDecodeError:
-            match = JSON_BLOCK_RE.search(content)
-            if not match:
-                raise InvalidJSONError("no JSON block found in model output")
-            # issue #14: a matched-but-malformed block must not leak the raw
-            # JSONDecodeError (which no caller catches); normalize to
-            # InvalidJSONError so bounding/retry logic keeps working.
-            try:
-                raw = json.loads(match.group(0))
-            except json.JSONDecodeError as exc:
-                raise InvalidJSONError("malformed JSON block in model output") from exc
-
-        known = {t["function"]["name"] for t in tools}
-        tool_calls: list[ToolCall] = []
-        if isinstance(raw, dict) and "tool_calls" in raw:
-            for tc in raw["tool_calls"]:
-                name = (
-                    tc.get("name")
-                    or tc.get("tool")
-                    or tc.get("action")
-                    or tc.get("function", {}).get("name", "")
-                )
-                arguments = _unwrap_arguments(tc)
-                tool_calls.append(ToolCall(name=name, arguments=arguments))
-        elif isinstance(raw, dict):
-            name = raw.get("name") or raw.get("tool") or raw.get("action") or raw.get("event_type")
-            if name in known:
-                # Models wrap fields in varying envelopes ({"name",
-                # "arguments"}, {"tool", "parameters"}, ...). Unwrap so the
-                # extractor validates the actual fields, not the envelope.
-                tool_calls.append(ToolCall(name=name, arguments=_unwrap_arguments(raw)))
-            elif name:
-                raise InvalidJSONError(f"unknown tool target: {name}")
-            else:
-                # No name given — leave it to the caller to match against the
-                # known schemas (the extractor validates against each model).
-                tool_calls.append(ToolCall(name="", arguments=raw))
-
-        if not tool_calls:
-            raise InvalidJSONError("no tool call matched a known tool")
-        return tool_calls
