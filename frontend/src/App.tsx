@@ -4,27 +4,15 @@ import AlertStack from './components/AlertStack';
 import AnswerPanel from './components/AnswerPanel';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
+import HealthDot from './components/HealthDot';
 import NodeDetail from './components/NodeDetail';
+import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import QueryBar from './components/QueryBar';
-import type { Health, QueryResponse } from './types';
+import type { QueryResponse } from './types';
 import { useFeeds } from './hooks/useFeeds';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
 import { useSelection } from './hooks/useSelection';
-
-function HealthDot({ health }: { health: Health | null }) {
-  if (!health) {
-    return <span className="health-dot offline" title="Backend unreachable" />;
-  }
-  const down = Object.entries(health.checks)
-    .filter(([, c]) => c.status !== 'ok')
-    .map(([name]) => name);
-  const title = down.length > 0 ? `degraded: ${down.join(', ')} down` : 'all systems ok';
-  const cls = health.status === 'ok' ? 'ok' : 'degraded';
-  return <span className={`health-dot ${cls}`} title={title} />;
-}
-
-import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
