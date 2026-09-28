@@ -2,7 +2,7 @@
 
 .alert-item {
   padding: 12px 14px;
-  border-bottom: 1px solid #33333a;
+  border-bottom: 1px solid var(--border);
 }
 
 .alert-item .alert-title {
@@ -11,7 +11,7 @@
 }
 
 .alert-item .alert-summary {
-  color: #9b9ba5;
+  color: var(--text-muted);
   line-height: 1.45;
   font-size: 13px;
 }
@@ -19,7 +19,7 @@
 .alert-item .alert-meta {
   margin-top: 8px;
   font-size: 11px;
-  color: #6f6f7a;
+  color: var(--text-dim);
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -30,14 +30,14 @@
 }
 
 .alert-item.clickable:hover {
-  background: #26262c;
+  background: var(--border-soft);
 }
 
 .alert-badge {
   display: inline-block;
-  background: #3a2f22;
-  color: #e0a458;
-  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
   padding: 1px 6px;
   font-size: 11px;
 }

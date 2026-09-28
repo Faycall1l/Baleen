@@ -4,10 +4,10 @@
   bottom: 12px;
   z-index: 2;
   font-size: 11px;
-  color: #6f6f7a;
+  color: var(--text-dim);
   background: rgba(35, 35, 40, 0.88);
-  border: 1px solid #33333a;
-  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   padding: 3px 10px;
   pointer-events: none;
 }
@@ -21,7 +21,7 @@
   color: #ff9d94;
   background: rgba(60, 22, 20, 0.92);
   border: 1px solid rgba(248, 81, 73, 0.45);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 5px 12px;
   max-width: 320px;
   white-space: nowrap;
@@ -33,7 +33,7 @@
 .panel-detail {
   width: 320px;
   border-right: none;
-  border-left: 1px solid #33333a;
+  border-left: 1px solid var(--border);
 }
 
 .graph-area {
@@ -65,8 +65,8 @@
 .graph-mode {
   display: flex;
   background: rgba(35, 35, 40, 0.92);
-  border: 1px solid #33333a;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -76,25 +76,25 @@
   border-radius: 0;
   padding: 7px 12px;
   font-size: 13px;
-  color: #9b9ba5;
+  color: var(--text-muted);
 }
 
 .graph-mode button:hover {
-  color: #d6d6dd;
+  color: var(--text);
   border: none;
 }
 
 .graph-mode button.active {
-  background: #2b2b31;
-  color: #e0a458;
+  background: var(--surface-2);
+  color: var(--accent);
 }
 
 .graph-hint {
   font-size: 12px;
-  color: #9b9ba5;
+  color: var(--text-muted);
   background: rgba(35, 35, 40, 0.92);
-  border: 1px solid #33333a;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 7px 10px;
   white-space: nowrap;
 }
@@ -106,16 +106,16 @@
 .graph-search input {
   width: 220px;
   background: rgba(35, 35, 40, 0.92);
-  border: 1px solid #33333a;
-  border-radius: 6px;
-  color: #d6d6dd;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
   padding: 7px 10px;
   font-size: 13px;
 }
 
 .graph-search input:focus {
   outline: none;
-  border-color: #e0a458;
+  border-color: var(--accent);
 }
 
 .graph-search-results {
@@ -123,9 +123,9 @@
   top: calc(100% + 4px);
   left: 0;
   width: 260px;
-  background: #232328;
-  border: 1px solid #33333a;
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
@@ -139,19 +139,19 @@
   border-radius: 0;
   padding: 8px 12px;
   font-size: 13px;
-  color: #d6d6dd;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .graph-search-results button:hover {
-  background: #2b2b31;
+  background: var(--surface-2);
   border: none;
 }
 
 .graph-search-label {
-  color: #9b9ba5;
+  color: var(--text-muted);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -175,10 +175,10 @@
   max-width: 60%;
   padding: 8px 12px;
   background: rgba(35, 35, 40, 0.88);
-  border: 1px solid #33333a;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   font-size: 12px;
-  color: #9b9ba5;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
@@ -194,7 +194,7 @@
 }
 
 .graph-legend-item.clickable:hover {
-  color: #d6d6dd;
+  color: var(--text);
 }
 
 .graph-legend-item.off {
@@ -204,7 +204,7 @@
 .graph-legend-dot {
   width: 9px;
   height: 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-block;
 }
 

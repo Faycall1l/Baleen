@@ -11,8 +11,8 @@
   align-items: center;
   gap: 14px;
   padding: 8px 14px;
-  background: #232328;
-  border-bottom: 1px solid #33333a;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
 
@@ -32,7 +32,7 @@
   margin: 0;
   line-height: 1;
   letter-spacing: 0.02em;
-  color: #e0a458;
+  color: var(--accent);
 }
 
 .ask-wrap {
@@ -48,9 +48,9 @@
   left: 0;
   right: 0;
   z-index: 10;
-  background: #232328;
-  border: 1px solid #33333a;
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   max-height: 50vh;
   overflow-y: auto;
@@ -65,16 +65,16 @@
   font-size: 14px;
   background: transparent;
   border: none;
-  color: #9b9ba5;
+  color: var(--text-muted);
 }
 
 .answer-close:hover {
-  color: #d6d6dd;
+  color: var(--text);
   border: none;
 }
 
 .answer-empty {
-  color: #9b9ba5;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.5;
   padding-right: 24px;
@@ -83,7 +83,7 @@
 .health-dot {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex: 0 0 auto;
 }
 

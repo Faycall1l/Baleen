@@ -6,13 +6,13 @@
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #9b9ba5;
-  border-bottom: 1px solid #33333a;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 .empty-hint {
   padding: 16px 14px;
-  color: #9b9ba5;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
