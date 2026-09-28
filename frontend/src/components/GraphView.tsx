@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Graph from 'graphology';
 
 import type { GraphData, GraphNode } from '../types';
 import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
-import { isSchemaId, SCHEMA_LABELS } from '../graph/schema';
+import { SCHEMA_LABELS } from '../graph/schema';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';
+import { useGraphSearch } from '../hooks/useGraphSearch';
+import { useGraphSelection } from '../hooks/useGraphSelection';
 import { useGraphSync } from '../hooks/useGraphSync';
 import { useSigmaInstance } from '../hooks/useSigmaInstance';
 
@@ -46,58 +48,40 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
   const dataRef = useRef(data);
   dataRef.current = data;
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-  const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [mode, setMode] = useState<'instances' | 'schema'>('instances');
   // Labels hidden from the instance view (legend toggles). Schema view is
   // always complete; hidden types only apply to instances.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
-  // Selection entry point: schema nodes drill into their type, instance
-  // nodes select for the inspector. Dropped (invisible) nodes can never be
-  // selected because hit-testing only sees rendered nodes — and the guard
-  // below makes that structural, not assumed.
-  const selectNodeByKey = (node: string) => {
-    const g = graphRef.current;
-    if (!g || !g.hasNode(node)) return;
-    if (isSchemaId(node)) {
-      // Drill-down keeps the type PLUS its directly related types (read off
-      // the schema edges): isolating a single type would show dots with no
-      // relationships, which is exactly as useless as it sounds.
-      const label = node.slice('schema:'.length);
-      const keep = new Set<string>([label]);
-      g.forEachEdge((e) => {
-        if (!e.startsWith('schema-rel:')) return;
-        const [s, t] = g.extremities(e);
-        const sl = g.getNodeAttribute(s, 'kind') as string;
-        const tl = g.getNodeAttribute(t, 'kind') as string;
-        if (sl === label && tl) keep.add(tl);
-        if (tl === label && sl) keep.add(sl);
-      });
-      setHiddenTypes(new Set(SCHEMA_LABELS.filter((l) => !keep.has(l))));
-      setMode('instances');
-      onSelectRef.current(null);
-      return;
-    }
-    const a = g.getNodeAttributes(node);
-    onSelectRef.current({
-      id: node,
-      label: a.kind,
-      key: a.key,
-      title: a.label,
-      props: a.props,
-      tweet_url: a.tweet_url ?? null,
+  const toggleType = useCallback((label: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
     });
+  }, []);
+
+  const handleModeChange = (m: GraphMode) => {
+    if (m === 'schema') onSelect(null);
+    setMode(m);
   };
+
+  const selectNodeByKey = useGraphSelection({
+    graphRef,
+    onSelect,
+    onDrillToType: (next) => {
+      setHiddenTypes(next);
+      setMode('instances');
+    },
+  });
 
   const { sigmaRef, ensureSigma } = useSigmaInstance(
     containerRef,
     () => graphRef.current,
     {
       onNodeClick: (id) => selectNodeByKey(id),
-      onStageClick: () => onSelectRef.current(null),
+      onStageClick: () => onSelect(null),
       onNodeDragged: (id, x, y) => {
         const g = graphRef.current;
         if (g && g.hasNode(id)) {
@@ -138,15 +122,6 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     }
   }, [mode, hiddenTypes]);
 
-  const toggleType = (label: string) => {
-    setHiddenTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  };
-
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>();
     if (!data) return counts;
@@ -156,31 +131,14 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
 
   useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTypes });
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!data || q.length < 2) return [];
-    return data.nodes.filter((n) => n.title.toLowerCase().includes(q)).slice(0, 8);
-  }, [query, data]);
-
-  const chooseMatch = (m: GraphNode) => {
-    if (mode === 'schema') setMode('instances');
-    const kind = data?.nodes.find((n) => n.id === m.id)?.label;
-    if (kind && mode === 'instances' && hiddenTypes.has(kind)) {
-      setHiddenTypes((prev) => {
-        const next = new Set(prev);
-        next.delete(kind);
-        return next;
-      });
-    }
-    onSelect(m);
-    setQuery('');
-    setSearchOpen(false);
-  };
-
-  const handleModeChange = (m: GraphMode) => {
-    if (m === 'schema') onSelectRef.current(null);
-    setMode(m);
-  };
+  const search = useGraphSearch({
+    data,
+    mode,
+    hiddenTypes,
+    setMode,
+    showType: toggleType,
+    onSelect,
+  });
 
   const handleFit = () => {
     sigmaRef.current?.getCamera().animatedReset({ duration: 600 });
@@ -207,12 +165,12 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
       <GraphToolbar
         mode={mode}
         onModeChange={handleModeChange}
-        query={query}
-        onQueryChange={setQuery}
-        searchOpen={searchOpen}
-        onSearchOpenChange={setSearchOpen}
-        matches={matches}
-        onChooseMatch={chooseMatch}
+        query={search.query}
+        onQueryChange={search.setQuery}
+        searchOpen={search.open}
+        onSearchOpenChange={search.setOpen}
+        matches={search.matches}
+        onChooseMatch={search.choose}
         onFit={handleFit}
       />
       <GraphLegend
