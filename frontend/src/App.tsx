@@ -7,9 +7,10 @@ import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
 import NodeDetail from './components/NodeDetail';
 import QueryBar from './components/QueryBar';
-import type { Alert, GraphNode, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
+import type { Alert, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
+import { useSelection } from './hooks/useSelection';
 
 function HealthDot({ health }: { health: Health | null }) {
   if (!health) {
@@ -27,7 +28,7 @@ import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
-  const [selected, setSelected] = useState<GraphNode | null>(null);
+  const { selected, handleSelect, setSelected } = useSelection(graph);
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [answerOpen, setAnswerOpen] = useState(false);
@@ -48,27 +49,6 @@ export default function App() {
   reportsRef.current = reports;
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
-  // Guards the selection-clear race: a background click landing within a
-  // beat of picking a node is treated as part of the same gesture.
-  const lastPickRef = useRef(0);
-
-  const handleSelect = useCallback((n: GraphNode | null) => {
-    if (n) {
-      lastPickRef.current = Date.now();
-      setSelected(n);
-    } else if (Date.now() - lastPickRef.current > 300) {
-      setSelected(null);
-    }
-  }, []);
-
-  // A poll can drop the selected node (truncated window shifts, type filter
-  // hides it): release the selection instead of pointing at a ghost.
-  useEffect(() => {
-    if (selected && graph && !graph.nodes.some((n) => n.id === selected.id)) {
-      setSelected(null);
-    }
-  }, [graph, selected]);
-
   const loadAlerts = useCallback(() => {
     setAlertsError(null);
     fetchAlerts()
