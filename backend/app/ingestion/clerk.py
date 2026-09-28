@@ -25,7 +25,7 @@ from typing import Callable
 import httpx
 from pypdf import PdfReader
 
-from app.ingestion.disclosures import _record
+from app.ingestion.disclosures_parse import _record
 from app.ingestion.source import BoundedSeen, FetchResult, RawTweet, TweetSource
 
 logger = logging.getLogger(__name__)

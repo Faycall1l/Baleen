@@ -223,7 +223,7 @@ def test_maybe_enrich_never_raises():
 
 
 def test_stable_id_falls_back_to_hash_without_row_id():
-    from app.ingestion.disclosures import _stable_id
+    from app.ingestion.disclosures_parse import _stable_id
 
     row = _row().copy()
     row.pop("id")
@@ -234,7 +234,7 @@ def test_stable_id_falls_back_to_hash_without_row_id():
 
 
 def test_side_verb_covers_buy_sell_exchange_and_unknown():
-    from app.ingestion.disclosures import _side_verb
+    from app.ingestion.disclosures_parse import _side_verb
 
     assert _side_verb("Purchase") == "purchased"
     assert _side_verb("buy") == "purchased"
@@ -245,7 +245,7 @@ def test_side_verb_covers_buy_sell_exchange_and_unknown():
 
 
 def test_parse_day_rejects_garbage():
-    from app.ingestion.disclosures import _parse_day
+    from app.ingestion.disclosures_parse import _parse_day
 
     assert _parse_day("not-a-date") is None
     assert _parse_day("2026-13-40") is None
@@ -272,17 +272,19 @@ def test_malformed_row_is_skipped_not_crash(monkeypatch):
     """A row that explodes inside the record builder is skipped; the rest of
     the poll still emits its records (and the failure is not an error)."""
     import app.ingestion.disclosures as disclosures
+    import app.ingestion.disclosures_parse as disclosures_parse
 
     good = _row(transaction_date="2026-08-26")
     broken = _row(transaction_date="2026-08-26", id="broken-row")
 
-    real = disclosures._record
+    real = disclosures_parse._record
 
     def flaky(row, now):
         if row.get("id") == "broken-row":
             raise AttributeError("unexpected field type")
         return real(row, now)
 
+    # The source resolves `_record` in its own module (L5), so patch there.
     monkeypatch.setattr(disclosures, "_record", flaky)
     src = _source([broken, good], lookback_days=30)
     result = src.fetch_recent([], 3600)

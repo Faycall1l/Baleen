@@ -156,7 +156,7 @@ def enrich_insider_trade(tweet: RawTweet, event: InsiderTradeEvent) -> InsiderTr
     XML. Unknown filers (no CIK) get a stable slug id. Confidence and
     classification stay the model's.
     """
-    from app.ingestion.disclosures import _normalize_name, _slug  # shared helpers
+    from app.ingestion.disclosures_parse import _normalize_name, _slug  # shared helpers
 
     meta = tweet.raw_json or {}
     updates: dict[str, Any] = {}
