@@ -23,7 +23,6 @@ from sqlalchemy import text
 from app.alerts.rules import AlertRules
 from app.api import routes, stream
 from app.config import Settings, get_settings
-from app.pipeline import ProcessingPipeline
 from app.scheduler import BaleenScheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")

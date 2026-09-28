@@ -14,7 +14,12 @@ from app.db.neo4j import Neo4jStore
 from app.graph.resolution import EntityResolver
 from app.graph.schema import LABEL_KEYS
 from app.graph.seed_data import COMMITTEES, TICKER_SECTORS
-from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent, UnparsedEvent
+from app.models.events import (
+    CongressTradeEvent,
+    Event,
+    InsiderTradeEvent,
+    OptionsFlowEvent,
+)
 
 logger = logging.getLogger(__name__)
 

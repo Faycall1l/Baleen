@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.db.neo4j import Neo4jStore
-from app.extraction.client import LLMClient, LLMError, ToolCall
+from app.extraction.client import LLMClient, LLMError
 from app.graph.schema import schema_context
 from app.query.validate import validate_cypher
 
