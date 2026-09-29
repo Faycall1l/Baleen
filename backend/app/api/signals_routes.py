@@ -7,6 +7,8 @@ it holds no cache of its own) from the shared store + Neo4j clients.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -15,6 +17,13 @@ from app.api.graph_payload import json_safe
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Short-TTL cache for the /api/signals bundle (keyed by ``window_days``),
+# mirroring the /api/graph cache in routes.py: the UI polls every 30s and the
+# bundle costs five sequential Neo4j round-trips, which pile up into gateway
+# timeouts under load. 0 TTL disables caching.
+_signals_cache: dict[int, tuple[float, dict]] = {}
+_signals_cache_lock = threading.Lock()
 
 
 def _engine():
@@ -27,12 +36,26 @@ def _engine():
 def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
     """Computed pressure signals: momentum, insider clusters, options meter,
     uncovered sector bets, suspicious timing."""
+    from app.api import routes
+
+    ttl = routes.get_settings().signals_cache_ttl_seconds
+    if ttl > 0:
+        with _signals_cache_lock:
+            hit = _signals_cache.get(window_days)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+
     try:
         bundle = _engine().bundle(window_days=window_days)
     except Exception as exc:
         logger.exception("signals failed")
         raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
-    return json_safe(bundle)
+    payload = json_safe(bundle)
+
+    if ttl > 0:
+        with _signals_cache_lock:
+            _signals_cache[window_days] = (time.monotonic() + ttl, payload)
+    return payload
 
 
 @router.get("/signals/flow")

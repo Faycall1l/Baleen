@@ -106,6 +106,48 @@ def test_signals_bundle_shape():
         assert body["window_days"] == 365
 
 
+def test_signals_bundle_cached_within_ttl(monkeypatch):
+    """Two identical polls must rebuild the five-query bundle once."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    calls = {"n": 0}
+
+    class _Counting:
+        def bundle(self, window_days=90):
+            calls["n"] += 1
+            return {"window_days": window_days}
+
+    monkeypatch.setattr(routes, "get_signals_engine", lambda: _Counting())
+    with _client() as c:
+        assert c.get("/api/signals?window_days=90").status_code == 200
+        assert c.get("/api/signals?window_days=90").status_code == 200
+        assert c.get("/api/signals?window_days=30").status_code == 200
+    assert calls["n"] == 2  # 90-day window rebuilt once, 30-day once
+
+
+def test_signals_cache_disabled_when_ttl_zero(monkeypatch):
+    """signals_cache_ttl_seconds=0 must bypass the cache entirely."""
+    import app.api.routes as routes
+    from app.config import get_settings
+
+    _quiet_settings(monkeypatch)
+    no_cache = get_settings().model_copy(update={"signals_cache_ttl_seconds": 0})
+    monkeypatch.setattr("app.api.routes.get_settings", lambda: no_cache)
+    calls = {"n": 0}
+
+    class _Counting:
+        def bundle(self, window_days=90):
+            calls["n"] += 1
+            return {"window_days": window_days}
+
+    monkeypatch.setattr(routes, "get_signals_engine", lambda: _Counting())
+    with _client() as c:
+        assert c.get("/api/signals?window_days=90").status_code == 200
+        assert c.get("/api/signals?window_days=90").status_code == 200
+    assert calls["n"] == 2
+
+
 def test_signals_similar_returns_traders():
     if not _services_available():
         pytest.skip("postgres/neo4j not available")

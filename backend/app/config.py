@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     # polling. 0 disables the cache.
     graph_cache_ttl_seconds: float = Field(default=120.0, ge=0)
 
+    # Cache TTL (seconds) for the /api/signals bundle. The UI polls it every
+    # 30s and the bundle fires five sequential Neo4j reads; under load those
+    # pile up into gateway timeouts, so a 60s memoize keeps polling cheap.
+    # 0 disables the cache.
+    signals_cache_ttl_seconds: float = Field(default=60.0, ge=0)
+
     # --- Scheduler ---
     scheduler_enabled: bool = True
     seed_default_alerts: bool = True

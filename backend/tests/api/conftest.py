@@ -20,10 +20,13 @@ def _clear_graph_cache():
     without clearing it, one test's payload (real or boom-mock) leaks into the
     next test's assertions."""
     from app.api import routes
+    from app.api import signals_routes
 
     routes._graph_cache.clear()
+    signals_routes._signals_cache.clear()
     yield
     routes._graph_cache.clear()
+    signals_routes._signals_cache.clear()
 
 
 @pytest.fixture(autouse=True)
