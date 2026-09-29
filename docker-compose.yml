@@ -29,8 +29,11 @@ services:
     mem_limit: ${NEO4J_MEM:-2g}
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-baleen_dev_pass}
-      NEO4J_server_memory_heap_max__size: 1G
-      NEO4J_server_memory_pagecache_size: 512M
+      # Sized for the 4.5k-node demo graph under a 2G container cap: the old
+      # 1G heap + 512M pagecache touched ~1.7G at boot (AlwaysPreTouch) and
+      # the kernel OOM-killed the container mid-recovery on a loaded host.
+      NEO4J_server_memory_heap_max__size: 768M
+      NEO4J_server_memory_pagecache_size: 256M
     ports:
       - "7474:7474"
       - "7687:7687"
