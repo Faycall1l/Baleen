@@ -90,6 +90,52 @@ button:disabled {
   font-size: 12px;
 }
 
+.answer-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.answer-table th,
+.answer-table td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.answer-table thead th {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+
+.answer-table .num {
+  text-align: right;
+}
+
+.answer-table-more {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.query-followups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .error {
   color: #e06666;
   font-size: 13px;

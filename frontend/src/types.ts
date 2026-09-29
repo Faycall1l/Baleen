@@ -26,12 +26,20 @@ export interface GraphData {
   delta?: boolean;
 }
 
+export interface QueryColumn {
+  key: string;
+  label: string;
+  kind: 'string' | 'number' | 'boolean' | 'value' | 'unknown';
+}
+
 export interface QueryResponse {
   question: string;
   cypher: string;
   allowed: boolean;
   violations: string[];
-  rows: unknown[];
+  rows: Record<string, unknown>[];
+  columns: QueryColumn[];
+  followups: string[];
   answer: string;
   sources: string[];
   has_data: boolean;
