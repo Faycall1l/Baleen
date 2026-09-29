@@ -11,6 +11,7 @@ import { useFeeds } from './hooks/useFeeds';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
+import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
 
 export default function App() {
@@ -19,6 +20,12 @@ export default function App() {
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
   const [drawer, setDrawer] = useState<Drawer>(null);
+
+  // Staggered poll phases (R7): feeds at :00/:30, flow at :10/:40, graph at
+  // :20/:50, so the heaviest request bursts never coincide on the database.
+  // Ticks pause while the tab is hidden.
+  const feedsTick = usePollingTick(30_000, 0);
+  const graphTick = usePollingTick(30_000, 20_000);
 
   const {
     alerts,
@@ -39,13 +46,11 @@ export default function App() {
 
   useEffect(() => {
     loadAll();
-    // Poll so newly-ingested events appear live.
-    const id = setInterval(() => {
-      loadGraph();
-      loadAll();
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [loadGraph, loadAll]);
+  }, [feedsTick, loadAll]);
+
+  useEffect(() => {
+    loadGraph();
+  }, [graphTick, loadGraph]);
 
   const { openAlertNode, openReportNode, openLeaderNode, inspectorLinks } = useInspectorLinks(
     graph,

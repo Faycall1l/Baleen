@@ -64,7 +64,10 @@ export function useFeeds() {
   alertsRef.current = alerts;
 
   useEffect(() => {
-    const checkHealth = () => fetchHealth().then(setHealth);
+    // A hidden tab skips health polls like every other tick (R7).
+    const checkHealth = () => {
+      if (!document.hidden) fetchHealth().then(setHealth);
+    };
     checkHealth();
     const id = setInterval(checkHealth, 15_000);
     return () => clearInterval(id);
