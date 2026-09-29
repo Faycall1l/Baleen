@@ -8,6 +8,7 @@ import NodeDetail from './components/NodeDetail';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
 import { useFeeds } from './hooks/useFeeds';
+import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
 import { useSelection } from './hooks/useSelection';
@@ -15,6 +16,8 @@ import { useSelection } from './hooks/useSelection';
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
+  const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
+    useFlow();
   const [drawer, setDrawer] = useState<Drawer>(null);
 
   const {
@@ -62,7 +65,7 @@ export default function App() {
         <PanelRail
           drawer={drawer}
           onSelect={setDrawer}
-          counts={{ alerts: alerts.length, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
+          counts={{ flow: flowCount, alerts: alerts.length, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
         />
         <main className="graph-area">
           <GraphErrorBoundary>
@@ -80,6 +83,12 @@ export default function App() {
           <PanelDrawers
             drawer={drawer}
             onClose={() => setDrawer(null)}
+            flow={flow}
+            flowCount={flowCount}
+            flowError={flowError}
+            flowFilters={flowFilters}
+            onFlowFiltersChange={setFlowFilters}
+            onFlowRetry={reloadFlow}
             alerts={alerts}
             alertsError={alertsError}
             onAlertClick={openAlertNode}

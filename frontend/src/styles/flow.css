@@ -1,0 +1,101 @@
+/* Terminal options tape: tabular mono, stable columns, semantic color only. */
+
+.flow-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.flow-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.flow-controls input,
+.flow-controls select {
+  min-width: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.flow-status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.flow-tape {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.flow-tape th,
+.flow-tape td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+  text-align: left;
+}
+
+.flow-tape thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+
+.flow-tape .num {
+  text-align: right;
+}
+
+.flow-tape tbody tr:hover {
+  background: rgba(122, 184, 232, 0.08);
+}
+
+.flow-tape .ticker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.flow-tape .ratio {
+  font-weight: 700;
+}
+
+.flow-tape tr.up .ratio {
+  color: #7ee787;
+}
+
+.flow-tape tr.down .ratio {
+  color: #ff7b72;
+}
+
+.flow-tape tr.flat .ratio {
+  color: var(--text-muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

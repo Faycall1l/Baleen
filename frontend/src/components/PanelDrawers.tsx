@@ -1,14 +1,21 @@
 import AlertsPanel from './AlertsPanel';
+import FlowTape from './FlowTape';
 import LeaderboardPanel from './LeaderboardPanel';
 import ReportsPanel from './ReportsPanel';
 import SignalsPanel from './SignalsPanel';
-import type { Alert, LeaderboardEntry, Report, SignalsBundle } from '../types';
+import type { Alert, FlowFilters, FlowPrint, LeaderboardEntry, Report, SignalsBundle } from '../types';
 
-export type Drawer = 'alerts' | 'reports' | 'leaders' | 'signals' | null;
+export type Drawer = 'flow' | 'alerts' | 'reports' | 'leaders' | 'signals' | null;
 
 interface Props {
   drawer: Drawer;
   onClose: () => void;
+  flow: FlowPrint[];
+  flowCount: number;
+  flowError: string | null;
+  flowFilters: FlowFilters;
+  onFlowFiltersChange: (filters: FlowFilters) => void;
+  onFlowRetry: () => void;
   alerts: Alert[];
   alertsError: string | null;
   onAlertClick: (alert: Alert) => void;
@@ -39,6 +46,12 @@ function Shell({ onClose, children }: { onClose: () => void; children: React.Rea
 export default function PanelDrawers({
   drawer,
   onClose,
+  flow,
+  flowCount,
+  flowError,
+  flowFilters,
+  onFlowFiltersChange,
+  onFlowRetry,
   alerts,
   alertsError,
   onAlertClick,
@@ -52,6 +65,20 @@ export default function PanelDrawers({
   signals,
   signalsError,
 }: Props) {
+  if (drawer === 'flow') {
+    return (
+      <Shell onClose={onClose}>
+        <FlowTape
+          flow={flow}
+          count={flowCount}
+          error={flowError}
+          filters={flowFilters}
+          onFiltersChange={onFlowFiltersChange}
+          onRetry={onFlowRetry}
+        />
+      </Shell>
+    );
+  }
   if (drawer === 'alerts') {
     return (
       <Shell onClose={onClose}>

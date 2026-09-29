@@ -1,6 +1,7 @@
 // Thin client for the Baleen API surfaces.
 
-import type { Alert, GraphData, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
+import { buildFlowQuery } from './flow';
+import type { Alert, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, QueryResponse, Report, SignalsBundle } from './types';
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -71,4 +72,8 @@ export function fetchLeaderboard(limit = 10): Promise<{ leaders: LeaderboardEntr
 
 export function fetchSignals(): Promise<SignalsBundle> {
   return json<SignalsBundle>('/api/signals?window_days=90');
+}
+
+export function fetchFlow(filters: FlowFilters, signal?: AbortSignal): Promise<FlowResponse> {
+  return json<FlowResponse>(buildFlowQuery(filters), signal ? { signal } : undefined);
 }

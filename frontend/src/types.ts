@@ -99,6 +99,38 @@ export interface SuspiciousRow {
   source_url: string;
 }
 
+export type FlowSide = 'all' | 'call' | 'put';
+
+export interface FlowPrint {
+  event_id: string;
+  ticker: string;
+  side: 'call' | 'put';
+  strike: number | null;
+  expiration: string | null;
+  premium: number | null;
+  volume: number | null;
+  open_interest: number | null;
+  ratio: number;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  event_time: string | null;
+  first_seen_at: string | null;
+  source_url: string | null;
+}
+
+export interface FlowFilters {
+  tickers: string[];
+  side: FlowSide;
+  min_ratio: number;
+  window_days: number;
+  limit: number;
+}
+
+export interface FlowResponse {
+  flow: FlowPrint[];
+  count: number;
+  filters: FlowFilters;
+}
+
 export interface UncoveredRow {
   politician: string;
   sector: string;

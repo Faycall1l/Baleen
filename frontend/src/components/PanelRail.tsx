@@ -3,6 +3,7 @@ import type { Drawer } from './PanelDrawers';
 export type RailKey = Exclude<Drawer, null>;
 
 const ITEMS: { key: RailKey; label: string }[] = [
+  { key: 'flow', label: 'Flow' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'reports', label: 'Reports' },
   { key: 'leaders', label: 'Board' },
