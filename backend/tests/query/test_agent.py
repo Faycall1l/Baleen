@@ -232,3 +232,58 @@ def test_agent_prompt_instructs_inlining_literals():
     assert "Do NOT use $parameters" in system
     assert "Use $parameters" not in tool_text()
     assert "Do NOT use $parameters" in tool_text()
+
+
+def test_columns_describe_ragged_rows_with_types():
+    from app.query.agent import columns_for_rows
+
+    rows = [
+        {"ticker": "NVDA", "buys": 3, "active": True},
+        {"ticker": "AMD", "excess_pct": 44.5, "note": None, "tags": ["x"]},
+    ]
+    assert columns_for_rows(rows) == [
+        {"key": "ticker", "label": "ticker", "kind": "string"},
+        {"key": "buys", "label": "buys", "kind": "number"},
+        {"key": "active", "label": "active", "kind": "boolean"},
+        {"key": "excess_pct", "label": "excess_pct", "kind": "number"},
+        {"key": "note", "label": "note", "kind": "value"},
+        {"key": "tags", "label": "tags", "kind": "value"},
+    ]
+    assert columns_for_rows([]) == []
+
+
+def test_followups_suggest_tickers_present_capped_and_deduped():
+    from app.query.agent import followups_for_rows
+
+    rows = [
+        {"ticker": "NVDA"},
+        {"ticker": "AMD"},
+        {"ticker": "NVDA"},
+        {"ticker": "MSFT"},
+        {"ticker": "TSLA"},
+        {"n": 1},
+    ]
+    assert followups_for_rows(rows) == [
+        "Show more activity for NVDA",
+        "Show more activity for AMD",
+        "Show more activity for MSFT",
+    ]
+    assert followups_for_rows([{"n": 1}]) == []
+    assert followups_for_rows([]) == []
+
+
+def test_ask_returns_columns_and_followups_with_rows():
+    class OneRowStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            return [{"ticker": "NVDA", "buys": 2}]
+
+    agent = QueryAgent(llm=stub_llm(), store=OneRowStore())
+    result = agent.ask("Which tickers?")
+
+    assert result.columns == [
+        {"key": "ticker", "label": "ticker", "kind": "string"},
+        {"key": "buys", "label": "buys", "kind": "number"},
+    ]
+    assert result.followups == ["Show more activity for NVDA"]
+    assert result.as_dict()["columns"] == result.columns
+    assert result.as_dict()["followups"] == result.followups

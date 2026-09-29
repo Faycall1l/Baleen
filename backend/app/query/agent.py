@@ -43,7 +43,67 @@ __all__ = [
     "NO_DATA_ANSWER",
     "QueryAgent",
     "QueryResult",
+    "columns_for_rows",
+    "followups_for_rows",
 ]
+
+
+def columns_for_rows(rows: list[dict]) -> list[dict]:
+    """Typed column descriptors for a result set, in first-seen key order.
+
+    The UI renders these as a table instead of inferring shape from the first
+    row (which breaks on ragged Cypher projections). ``kind`` is inferred
+    from the first non-null value: boolean before number because ``bool`` is
+    a subclass of ``int``.
+    """
+    columns: list[dict] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key, value in row.items():
+            if key in seen:
+                continue
+            seen.add(key)
+            columns.append({"key": key, "label": key, "kind": _kind_of(value)})
+    for column in columns:
+        if column["kind"] == "unknown":
+            column["kind"] = _kind_of_first(rows, column["key"])
+    return columns
+
+
+def _kind_of(value) -> str:
+    if value is None:
+        return "unknown"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    return "value"
+
+
+def _kind_of_first(rows: list[dict], key: str) -> str:
+    for row in rows:
+        kind = _kind_of(row.get(key))
+        if kind != "unknown":
+            return kind
+    return "value"
+
+
+def followups_for_rows(rows: list[dict], limit: int = 3) -> list[str]:
+    """Suggested next questions, grounded in tickers actually present.
+
+    Suggestions are prompts re-run through the agent, never answers — so they
+    stay honest even when the row set is thin.
+    """
+    seen: list[str] = []
+    for row in rows:
+        ticker = row.get("ticker")
+        if isinstance(ticker, str) and ticker.strip() and ticker not in seen:
+            seen.append(ticker.strip())
+        if len(seen) >= limit:
+            break
+    return [f"Show more activity for {ticker}" for ticker in seen]
 
 
 @dataclass
@@ -60,6 +120,14 @@ class QueryResult:
     def has_data(self) -> bool:
         return bool(self.rows)
 
+    @property
+    def columns(self) -> list[dict]:
+        return columns_for_rows(self.rows)
+
+    @property
+    def followups(self) -> list[str]:
+        return followups_for_rows(self.rows)
+
     def as_dict(self) -> dict:
         return {
             "question": self.question,
@@ -67,6 +135,8 @@ class QueryResult:
             "allowed": self.allowed,
             "violations": self.violations,
             "rows": self.rows,
+            "columns": self.columns,
+            "followups": self.followups,
             "answer": self.answer,
             "sources": self.sources,
             "has_data": self.has_data,
