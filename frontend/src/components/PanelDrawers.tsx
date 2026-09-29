@@ -17,8 +17,15 @@ interface Props {
   onFlowFiltersChange: (filters: FlowFilters) => void;
   onFlowRetry: () => void;
   alerts: Alert[];
+  alertsTotal: number;
+  alertsRules: string[];
   alertsError: string | null;
   onAlertClick: (alert: Alert) => void;
+  alertRule: string;
+  onAlertRuleChange: (rule: string) => void;
+  alertQuery: string;
+  onAlertQueryChange: (query: string) => void;
+  alertSeenMax: number;
   digest: Report | null;
   reports: Report[];
   reportsError: string | null;
@@ -53,8 +60,15 @@ export default function PanelDrawers({
   onFlowFiltersChange,
   onFlowRetry,
   alerts,
+  alertsTotal,
+  alertsRules,
   alertsError,
   onAlertClick,
+  alertRule,
+  onAlertRuleChange,
+  alertQuery,
+  onAlertQueryChange,
+  alertSeenMax,
   digest,
   reports,
   reportsError,
@@ -82,7 +96,18 @@ export default function PanelDrawers({
   if (drawer === 'alerts') {
     return (
       <Shell onClose={onClose}>
-        <AlertsPanel alerts={alerts} error={alertsError} onAlertClick={onAlertClick} />
+        <AlertsPanel
+          alerts={alerts}
+          total={alertsTotal}
+          rules={alertsRules}
+          error={alertsError}
+          onAlertClick={onAlertClick}
+          rule={alertRule}
+          onRuleChange={onAlertRuleChange}
+          query={alertQuery}
+          onQueryChange={onAlertQueryChange}
+          seenMax={alertSeenMax}
+        />
       </Shell>
     );
   }

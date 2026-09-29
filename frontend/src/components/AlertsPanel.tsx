@@ -1,9 +1,17 @@
+import { shortRuleLabel } from '../alertsInbox';
 import type { Alert } from '../types';
 
 interface Props {
   alerts: Alert[];
+  total: number;
+  rules: string[];
   error: string | null;
   onAlertClick?: (alert: Alert) => void;
+  rule: string;
+  onRuleChange: (rule: string) => void;
+  query: string;
+  onQueryChange: (query: string) => void;
+  seenMax: number;
 }
 
 function fmtDate(iso: string): string {
@@ -34,20 +42,56 @@ const RULE_BADGE: Record<string, { label: string; color: string; background: str
   },
 };
 
-export default function AlertsPanel({ alerts, error, onAlertClick }: Props) {
+export default function AlertsPanel({
+  alerts,
+  total,
+  rules,
+  error,
+  onAlertClick,
+  rule,
+  onRuleChange,
+  query,
+  onQueryChange,
+  seenMax,
+}: Props) {
   return (
     <>
       <h2>Alerts</h2>
+      <div className="inbox-controls">
+        <div className="inbox-chips" role="group" aria-label="Filter by rule">
+          {['all', ...rules].map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={`inbox-chip${rule === r ? ' active' : ''}`}
+              aria-pressed={rule === r}
+              onClick={() => onRuleChange(r)}
+            >
+              {r === 'all' ? 'All' : shortRuleLabel(r)}
+            </button>
+          ))}
+        </div>
+        <input
+          className="inbox-search"
+          value={query}
+          placeholder="Filter alerts…"
+          aria-label="Filter alerts by text"
+          onChange={(e) => onQueryChange(e.target.value)}
+        />
+      </div>
       {error && (
         <div className="empty-hint">
           <div className="error">{error}</div>
         </div>
       )}
-      {!error && alerts.length === 0 && (
+      {!error && total === 0 && (
         <div className="empty-hint">
           No alerts yet. They fire when trades match a watch rule — oversight-sector
           trades, $1M+ insider buys, unusual options sweeps.
         </div>
+      )}
+      {!error && total > 0 && alerts.length === 0 && (
+        <div className="empty-hint">No alerts match these filters.</div>
       )}
       {alerts.map((a) => {
         const badge = RULE_BADGE[a.rule_name];
@@ -58,6 +102,9 @@ export default function AlertsPanel({ alerts, error, onAlertClick }: Props) {
             onClick={onAlertClick ? () => onAlertClick(a) : undefined}
           >
             <div className="alert-title">
+              {a.id > seenMax && (
+                <span className="unread-dot" aria-label="Unread alert" />
+              )}
               <span
                 className="alert-badge"
                 style={

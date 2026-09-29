@@ -8,6 +8,7 @@ import NodeDetail from './components/NodeDetail';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
 import { useFeeds } from './hooks/useFeeds';
+import { useAlertsInbox } from './hooks/useAlertsInbox';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
@@ -52,6 +53,10 @@ export default function App() {
     loadGraph();
   }, [graphTick, loadGraph]);
 
+  // Alerts inbox (R8): unread watermark + rule/text filtering live here so
+  // the rail badge and the drawer share one source of truth.
+  const inbox = useAlertsInbox(alerts, drawer === 'alerts');
+
   const { openAlertNode, openReportNode, openLeaderNode, inspectorLinks } = useInspectorLinks(
     graph,
     alerts,
@@ -70,7 +75,7 @@ export default function App() {
         <PanelRail
           drawer={drawer}
           onSelect={setDrawer}
-          counts={{ flow: flowCount, alerts: alerts.length, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
+          counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
         />
         <main className="graph-area">
           <GraphErrorBoundary>
@@ -94,9 +99,16 @@ export default function App() {
             flowFilters={flowFilters}
             onFlowFiltersChange={setFlowFilters}
             onFlowRetry={reloadFlow}
-            alerts={alerts}
+            alerts={inbox.visible}
+            alertsTotal={alerts.length}
+            alertsRules={inbox.rules}
             alertsError={alertsError}
             onAlertClick={openAlertNode}
+            alertRule={inbox.rule}
+            onAlertRuleChange={inbox.setRule}
+            alertQuery={inbox.query}
+            onAlertQueryChange={inbox.setQuery}
+            alertSeenMax={inbox.seenMax}
             digest={digest}
             reports={reports}
             reportsError={reportsError}
