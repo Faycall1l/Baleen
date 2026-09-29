@@ -45,11 +45,14 @@ def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
         if hit and hit[0] > time.monotonic():
             return hit[1]
 
-    try:
-        bundle = _engine().bundle(window_days=window_days)
-    except Exception as exc:
-        logger.exception("signals failed")
-        raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
+    # The gate raises 503 itself when saturated; hold it outside the try so
+    # an engine failure still maps to 500 without swallowing the 503.
+    with routes.neo4j_read_slot():
+        try:
+            bundle = _engine().bundle(window_days=window_days)
+        except Exception as exc:
+            logger.exception("signals failed")
+            raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
     payload = json_safe(bundle)
 
     if ttl > 0:
@@ -67,22 +70,26 @@ def signals_flow(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     """Per-print unusual-options tape, ranked by volume/open-interest ratio."""
-    try:
-        symbols = (
-            [s.strip().upper() for s in tickers.split(",") if s.strip()]
-            if tickers
-            else []
-        )
-        rows = _engine().flow(
-            tickers=symbols,
-            side=side,
-            min_ratio=min_ratio,
-            window_days=window_days,
-            limit=limit,
-        )
-    except Exception as exc:
-        logger.exception("options flow failed")
-        raise HTTPException(status_code=500, detail=f"options flow failed: {exc}")
+    from app.api import routes
+
+    symbols = (
+        [s.strip().upper() for s in tickers.split(",") if s.strip()]
+        if tickers
+        else []
+    )
+    # Gate outside the try (see /signals): saturation stays a 503.
+    with routes.neo4j_read_slot():
+        try:
+            rows = _engine().flow(
+                tickers=symbols,
+                side=side,
+                min_ratio=min_ratio,
+                window_days=window_days,
+                limit=limit,
+            )
+        except Exception as exc:
+            logger.exception("options flow failed")
+            raise HTTPException(status_code=500, detail=f"options flow failed: {exc}")
     return {
         "flow": json_safe(rows),
         "count": len(rows),

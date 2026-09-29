@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 from typing import TYPE_CHECKING
@@ -53,6 +54,13 @@ _llm: LLMClient | None = None
 # keeps the endpoint snappy. 0 TTL disables caching.
 _graph_cache: dict[int, tuple[float, dict]] = {}
 _graph_cache_lock = threading.Lock()
+
+# Concurrency gate for Neo4j-heavy reads (R6). The UI's 30s poll fans out
+# graph + signals + flow requests; when the database slows, overlapping polls
+# pile queries faster than they drain, which OOMs the 2GB Neo4j container and
+# restarts it mid-recovery. Fail fast with 503 instead of queueing behind a
+# dying backend — the UI already treats 503 as degraded, not offline.
+_neo4j_read_gate = threading.BoundedSemaphore(4)
 
 
 # ---------------------------------------------------------------------------
@@ -189,3 +197,24 @@ def close_services() -> None:
             logger.exception("llm close failed")
         _llm = None
     logger.info("shared service clients closed")
+
+
+@contextlib.contextmanager
+def neo4j_read_slot():
+    """Fail-fast slot for one Neo4j-heavy read (R6).
+
+    Yields when a gate slot is free, else raises 503 immediately. Callers
+    must hold the slot only around the render — never around cache hits —
+    so a saturated backend sheds load instead of queueing polls behind a
+    dying database.
+    """
+    from fastapi import HTTPException
+
+    if not _neo4j_read_gate.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503, detail="graph busy; retry shortly"
+        )
+    try:
+        yield
+    finally:
+        _neo4j_read_gate.release()

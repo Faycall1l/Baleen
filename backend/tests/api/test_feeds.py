@@ -197,6 +197,28 @@ def test_signals_flow_success_path(monkeypatch):
     assert seen["tickers"] == ["NVDA", "AAPL"]
 
 
+def test_heavy_endpoints_shed_load_with_503_when_gate_saturated(monkeypatch):
+    """With all four Neo4j read slots held, graph/signals/flow must fail
+    fast with 503 — never queue behind a dying database."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    slots = [routes._neo4j_read_gate.acquire() for _ in range(4)]
+    try:
+        with _client() as c:
+            for path in (
+                "/api/graph?limit=20",
+                "/api/signals?window_days=90",
+                "/api/signals/flow",
+            ):
+                res = c.get(path)
+                assert res.status_code == 503
+                assert res.json()["detail"] == "graph busy; retry shortly"
+    finally:
+        for _ in slots:
+            routes._neo4j_read_gate.release()
+
+
 def test_reports_digest_leaderboard_success_paths(monkeypatch):
     """The happy-path returns for /api/reports, /api/reports/digest and
     /api/leaderboard (the error 500s are already covered elsewhere)."""

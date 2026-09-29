@@ -82,7 +82,8 @@ def graph(
         if hit and hit[0] > time.monotonic():
             return hit[1]
 
-    payload = _render_graph(limit, since_dt)
+    with routes.neo4j_read_slot():
+        payload = _render_graph(limit, since_dt)
 
     if ttl > 0 and since_dt is None:
         with routes._graph_cache_lock:
