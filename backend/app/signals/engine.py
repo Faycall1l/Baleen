@@ -63,6 +63,36 @@ ORDER BY call_vol + put_vol DESC
 LIMIT 15
 """
 
+FLOW_QUERY = """
+MATCH (e:Event {type: 'options_flow'})-[:INVOLVES_TICKER]->(t:Ticker)
+WHERE e.first_seen_at IS NOT NULL
+  AND e.first_seen_at >= datetime($since_ts)
+  AND e.volume IS NOT NULL
+  AND ($side = 'all' OR e.contract_type = $side)
+  AND (size($tickers) = 0 OR t.ticker IN $tickers)
+WITH e, t,
+     CASE WHEN coalesce(e.open_interest, 0) > 0
+          THEN toFloat(e.volume) / toFloat(e.open_interest)
+          ELSE toFloat(e.volume)
+     END AS ratio
+WHERE ratio >= $min_ratio
+RETURN e.id AS event_id,
+       t.ticker AS ticker,
+       e.contract_type AS side,
+       e.strike AS strike,
+       e.expiration AS expiration,
+       e.premium AS premium,
+       e.volume AS volume,
+       e.open_interest AS open_interest,
+       ratio,
+       e.sentiment AS sentiment,
+       e.event_time AS event_time,
+       e.first_seen_at AS first_seen_at,
+       e.tweet_url AS source_url
+ORDER BY ratio DESC, e.volume DESC
+LIMIT $limit
+"""
+
 SIMILAR_QUERY = """
 MATCH (p:Politician {id: $pid})<-[:INVOLVES_POLITICIAN]-(e:Event)-[:INVOLVES_TICKER]->(t:Ticker),
       (t)<-[:INVOLVES_TICKER]-(e2:Event)-[:INVOLVES_POLITICIAN]->(other:Politician)
@@ -130,6 +160,37 @@ class SignalsEngine:
             return self.neo4j.run_read(OPTIONS_QUERY, since_ts=since_ts)
         except Exception:
             logger.exception("options meter query failed")
+            return []
+
+    def flow(
+        self,
+        tickers: list[str] | None = None,
+        side: str = "all",
+        min_ratio: float = 2.0,
+        window_days: int = 30,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Per-print options tape, ranked by volume/open-interest ratio.
+
+        Unlike ``options_meter`` (per-ticker totals), the tape preserves each
+        contract's strike, expiry, side, and sentiment so a terminal UI can
+        filter and scan like a trading desk.
+        """
+        try:
+            symbols = [t.strip().upper() for t in (tickers or []) if t.strip()]
+            since_ts = (
+                datetime.now(timezone.utc).date() - timedelta(days=window_days)
+            ).isoformat() + "T00:00:00Z"
+            return self.neo4j.run_read(
+                FLOW_QUERY,
+                tickers=symbols,
+                side=side,
+                min_ratio=float(min_ratio),
+                since_ts=since_ts,
+                limit=int(limit),
+            )
+        except Exception:
+            logger.exception("options flow query failed")
             return []
 
     def uncovered(self) -> list[dict]:

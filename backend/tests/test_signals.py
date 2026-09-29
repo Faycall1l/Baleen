@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 from app.graph.writer import GraphWriter
 from app.ingestion.source import RawTweet
-from app.models.events import CongressTradeEvent
+from app.models.events import CongressTradeEvent, OptionsFlowEvent
 from app.signals.engine import SignalsEngine
 
 
@@ -35,6 +35,29 @@ def _trade(tweet_id: str, pid: str, name: str, ticker: str, side: str) -> Congre
     )
 
 
+def _option(
+    tweet_id: str,
+    ticker: str,
+    side: str,
+    volume: int,
+    open_interest: int,
+) -> OptionsFlowEvent:
+    return OptionsFlowEvent(
+        tweet_id=tweet_id,
+        tweet_url=f"https://finance.yahoo.com/quote/{ticker}",
+        confidence=0.95,
+        ticker=ticker,
+        contract_type=side,
+        strike=130.0,
+        expiration=date(2026, 10, 17),
+        premium=2.5,
+        volume=volume,
+        open_interest=open_interest,
+        sentiment="bullish" if side == "call" else "bearish",
+        event_time=datetime.now(timezone.utc),
+    )
+
+
 def _cleanup(neo4j_store, *tweet_ids: str) -> None:
     neo4j_store.run(
         "MATCH (e:Event) WHERE e.tweet_id IN $ids DETACH DELETE e",
@@ -60,6 +83,42 @@ def test_momentum_counts_buys_and_sells(neo4j_store, postgres_store):
     assert rows["NVDA"]["sells"] >= 1
 
     _cleanup(neo4j_store, "sig-mo-1", "sig-mo-2")
+
+
+def test_flow_returns_prints_ranked_by_volume_ratio(neo4j_store, postgres_store):
+    writer = GraphWriter(neo4j_store)
+    writer.write_event(_option("sig-flow-high", "NVDA", "call", 5000, 1000))
+    writer.write_event(_option("sig-flow-low", "NVDA", "call", 1200, 1000))
+
+    rows = _engine(neo4j_store, postgres_store).flow(min_ratio=2.0, limit=10)
+    assert [r["event_id"] for r in rows if r["ticker"] == "NVDA"][0].endswith(
+        _option("sig-flow-high", "NVDA", "call", 5000, 1000).deterministic_id
+    )
+    high = next(r for r in rows if r["ticker"] == "NVDA" and r["volume"] == 5000)
+    assert high["side"] == "call"
+    assert high["ratio"] == 5.0
+    assert high["strike"] == 130.0
+    assert high["sentiment"] == "bullish"
+    assert all(r["ratio"] >= 2.0 for r in rows)
+
+    _cleanup(neo4j_store, "sig-flow-high", "sig-flow-low")
+
+
+def test_flow_filters_by_side_and_ticker(neo4j_store, postgres_store):
+    writer = GraphWriter(neo4j_store)
+    writer.write_event(_option("sig-flow-call", "NVDA", "call", 5000, 1000))
+    writer.write_event(_option("sig-flow-put", "NVDA", "put", 6000, 1000))
+
+    engine = _engine(neo4j_store, postgres_store)
+    puts = [r for r in engine.flow(side="put", min_ratio=2.0) if r["ticker"] == "NVDA"]
+    assert {r["side"] for r in puts} == {"put"}
+    assert all(
+        r["ticker"] == "NVDA"
+        for r in engine.flow(tickers=["NVDA"], min_ratio=2.0, limit=10)
+    )
+    assert engine.flow(tickers=["ZZZ"], min_ratio=0, limit=10) == []
+
+    _cleanup(neo4j_store, "sig-flow-call", "sig-flow-put")
 
 
 def test_similar_finds_shared_ticker_traders(neo4j_store, postgres_store):
@@ -155,6 +214,7 @@ def test_signal_queries_degrade_to_empty_list_when_neo4j_down():
     assert engine.options_meter() == []
     assert engine.uncovered() == []
     assert engine.similar("W000187") == []
+    assert engine.flow() == []
 
 
 def test_suspicious_timing_degrades_to_empty_list_when_postgres_down():

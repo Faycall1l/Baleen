@@ -66,12 +66,18 @@ def test_signals_error_is_json_500(monkeypatch):
         def similar(self, **k):
             raise RuntimeError("signals exploded")
 
+        def flow(self, **k):
+            raise RuntimeError("signals exploded")
+
     import app.api.routes as routes
 
     monkeypatch.setattr(routes, "get_signals_engine", lambda: _SignalsBoom())
     with _client() as c:
         assert c.get("/api/signals").status_code == 500
         assert c.get("/api/signals/similar?politician_id=W000187").status_code == 500
+        res = c.get("/api/signals/flow")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("options flow failed")
 
 
 def test_digest_error_is_json_500(monkeypatch):
@@ -106,6 +112,47 @@ def test_signals_similar_returns_traders():
     with _client() as c:
         body = c.get("/api/signals/similar?politician_id=W000187").json()
         assert isinstance(body["similar"], list)
+
+
+def test_signals_flow_success_path(monkeypatch):
+    """The tape normalizes tickers, echoes filters, and reports its count."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+
+    seen = {}
+
+    class _Flow:
+        @staticmethod
+        def flow(**kwargs):
+            seen.update(kwargs)
+            return [
+                {
+                    "event_id": "evt_flow",
+                    "ticker": "NVDA",
+                    "side": "call",
+                    "ratio": 5.0,
+                    "volume": 5000,
+                }
+            ]
+
+    monkeypatch.setattr(routes, "get_signals_engine", lambda: _Flow())
+    with _client() as c:
+        body = c.get(
+            "/api/signals/flow?tickers=nvda,aapl&side=call&min_ratio=3"
+            "&window_days=7&limit=5"
+        ).json()
+
+    assert body["count"] == 1
+    assert body["flow"][0]["ticker"] == "NVDA"
+    assert body["filters"] == {
+        "tickers": ["NVDA", "AAPL"],
+        "side": "call",
+        "min_ratio": 3.0,
+        "window_days": 7,
+        "limit": 5,
+    }
+    assert seen["tickers"] == ["NVDA", "AAPL"]
 
 
 def test_reports_digest_leaderboard_success_paths(monkeypatch):
