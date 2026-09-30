@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, packComponents, withFiniteFallback } from './forceLayout';
+import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, normalizeRadius, packComponents, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
