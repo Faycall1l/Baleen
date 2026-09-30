@@ -31,7 +31,20 @@ export function forceLayout(data: GraphData): Map<string, { x: number; y: number
   // FA2 is quadratic per iteration: beyond this size the synchronous pass
   // would block the main thread, so huge graphs keep the radial seeds.
   if (data.nodes.length > MAX_FA2_ORDER) return seeds;
+  // The layout must never blank the canvas: any engine failure (degenerate
+  // input, numerical blowup) falls back to the radial seeds.
+  try {
+    return runForceAtlas2(data, seeds, ITERATIONS);
+  } catch {
+    return seeds;
+  }
+}
 
+function runForceAtlas2(
+  data: GraphData,
+  seeds: Map<string, { x: number; y: number }>,
+  iterations: number,
+): Map<string, { x: number; y: number }> {
   const g = new Graph({ type: 'directed', allowSelfLoops: false });
   for (const n of data.nodes) {
     const s = seeds.get(n.id) ?? { x: 0, y: 0 };
@@ -47,7 +60,7 @@ export function forceLayout(data: GraphData): Map<string, { x: number; y: number
 
   const settings = forceAtlas2.inferSettings(g);
   if (g.order > BARNES_HUT_ORDER) settings.barnesHutOptimize = true;
-  const positions = forceAtlas2(g, { iterations: ITERATIONS, settings });
+  const positions = forceAtlas2(g, { iterations, settings });
   const out = new Map<string, { x: number; y: number }>();
   for (const [id, pos] of Object.entries(positions)) {
     out.set(id, { x: pos.x, y: pos.y });

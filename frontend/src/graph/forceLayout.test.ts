@@ -49,4 +49,18 @@ describe('forceLayout', () => {
   it('handles empty input', () => {
     expect(forceLayout({ nodes: [], links: [], node_count: 0, link_count: 0 }).size).toBe(0);
   });
+
+  it('places even a single edgeless node at finite coordinates', () => {
+    const solo: GraphData = {
+      nodes: [node('Ticker:Solo')],
+      links: [],
+      node_count: 1,
+      link_count: 0,
+    };
+    const positions = forceLayout(solo);
+    expect(positions.size).toBe(1);
+    const p = positions.get('Ticker:Solo')!;
+    expect(Number.isFinite(p.x)).toBe(true);
+    expect(Number.isFinite(p.y)).toBe(true);
+  });
 });
