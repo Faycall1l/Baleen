@@ -6,6 +6,7 @@ import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
 import NodeDetail from './components/NodeDetail';
+import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
 import { useFeeds } from './hooks/useFeeds';
@@ -15,6 +16,7 @@ import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
 import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
+import { loadOnboarded, saveOnboarded } from './onboarding';
 
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
@@ -22,6 +24,12 @@ export default function App() {
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
   const [drawer, setDrawer] = useState<Drawer>(null);
+  // First-run tour (R11): shown until dismissed, persisted across visits.
+  const [showTour, setShowTour] = useState(() => !loadOnboarded());
+  const dismissTour = () => {
+    saveOnboarded();
+    setShowTour(false);
+  };
 
   // Staggered poll phases (R7): feeds at :00/:30, flow at :10/:40, graph at
   // :20/:50, so the heaviest request bursts never coincide on the database.
@@ -71,6 +79,7 @@ export default function App() {
   return (
     <div className="app">
       <CommandBar health={health} />
+      {showTour && <OnboardingTour onDone={dismissTour} />}
 
       <div className="app-body">
         <PanelRail

@@ -102,3 +102,73 @@
   box-shadow: 0 0 6px rgba(255, 123, 114, 0.7);
 }
 
+/* First-run tour (R11): a centered card over a dimmed terminal. */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 12, 0.72);
+  padding: 20px;
+}
+
+.onboarding-card {
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  padding: 22px 24px;
+}
+
+.onboarding-card h2 {
+  margin: 6px 0 8px;
+  font-size: 18px;
+}
+
+.onboarding-card p {
+  margin: 0 0 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.onboarding-kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.onboarding-pip {
+  width: 22px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+}
+
+.onboarding-pip.active {
+  background: var(--accent);
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.onboarding-skip {
+  margin-right: auto;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
