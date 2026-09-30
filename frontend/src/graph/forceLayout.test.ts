@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, withFiniteFallback } from './forceLayout';
+import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, packComponents, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -60,6 +60,45 @@ describe('connectedComponents', () => {
     const flipped: GraphData = { ...data, links: [...data.links].reverse() };
     expect(connectedComponents(flipped)).toEqual(connectedComponents(data));
     expect(connectedComponents({ nodes: [], links: [], node_count: 0, link_count: 0 })).toEqual([]);
+  });
+});
+
+describe('packComponents', () => {
+  it('separates disconnected groups and leaves single components alone', () => {
+    const two: GraphData = {
+      nodes: [node('Ticker:A'), node('Ticker:B'), node('Ticker:C'), node('Ticker:D')],
+      links: [
+        { source: 'Ticker:A', target: 'Ticker:B', type: 'T' },
+        { source: 'Ticker:C', target: 'Ticker:D', type: 'T' },
+      ],
+      node_count: 4,
+      link_count: 2,
+    };
+    const seeds = new Map([
+      ['Ticker:A', { x: 0, y: 0 }],
+      ['Ticker:B', { x: 1, y: 1 }],
+      ['Ticker:C', { x: 2, y: 2 }],
+      ['Ticker:D', { x: 3, y: 3 }],
+    ]);
+    const packed = packComponents(seeds, two);
+    const centroid = (ids: string[]) => {
+      const pts = ids.map((id) => packed.get(id)!);
+      return {
+        x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+        y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+      };
+    };
+    const ab = centroid(['Ticker:A', 'Ticker:B']);
+    const cd = centroid(['Ticker:C', 'Ticker:D']);
+    const between = Math.hypot(ab.x - cd.x, ab.y - cd.y);
+    const within = Math.max(
+      Math.hypot(ab.x - packed.get('Ticker:A')!.x, ab.y - packed.get('Ticker:A')!.y),
+      Math.hypot(cd.x - packed.get('Ticker:C')!.x, cd.y - packed.get('Ticker:C')!.y),
+    );
+    expect(between).toBeGreaterThan(within);
+    // Single component: identical map back.
+    const one: GraphData = { ...two, links: two.links.slice(0, 1) };
+    expect(packComponents(seeds, one)).toEqual(seeds);
   });
 });
 

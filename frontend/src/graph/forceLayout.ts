@@ -92,9 +92,66 @@ function runForceAtlas2(
   // Sanitize first: centering a NaN poisons the whole map. Normalize last
   // so every payload opens at the same framing regardless of engine drift.
   return normalizeRadius(
-    liftIsolates(centerOnCentroid(withFiniteFallback(out, seeds)), data, seeds),
+    liftIsolates(packComponents(centerOnCentroid(withFiniteFallback(out, seeds)), data), data, seeds),
     radialRadius(data.nodes.length),
   );
+}
+
+/**
+ * Separate multi-node components onto a deterministic grid (F9): FA2 often
+ * settles disconnected groups on top of each other, which reads as one
+ * blob. Singletons skip packing — the halo ring (F5) owns them.
+ */
+export function packComponents(
+  positions: Map<string, { x: number; y: number }>,
+  data: GraphData,
+): Map<string, { x: number; y: number }> {
+  const multis = connectedComponents(data).filter((c) => c.length > 1);
+  if (multis.length <= 1) return positions;
+  interface Box {
+    ids: string[];
+    cx: number;
+    cy: number;
+    w: number;
+    h: number;
+  }
+  const boxes: Box[] = [];
+  for (const ids of multis) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const present = ids.filter((id) => positions.has(id));
+    if (present.length === 0) continue;
+    for (const id of present) {
+      const p = positions.get(id)!;
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    boxes.push({
+      ids: present,
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      w: Math.max(maxX - minX, 1),
+      h: Math.max(maxY - minY, 1),
+    });
+  }
+  if (boxes.length <= 1) return positions;
+  const cell = Math.max(...boxes.map((b) => Math.max(b.w, b.h))) * 1.3;
+  const cols = Math.ceil(Math.sqrt(boxes.length));
+  const rows = Math.ceil(boxes.length / cols);
+  const out = new Map(positions);
+  boxes.forEach((box, i) => {
+    const tx = ((i % cols) - (cols - 1) / 2) * cell - box.cx;
+    const ty = (Math.floor(i / cols) - (rows - 1) / 2) * cell - box.cy;
+    for (const id of box.ids) {
+      const p = out.get(id)!;
+      out.set(id, { x: p.x + tx, y: p.y + ty });
+    }
+  });
+  return out;
 }
 
 /**
