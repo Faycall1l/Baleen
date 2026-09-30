@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { centerOnCentroid, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, withFiniteFallback } from './forceLayout';
+import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -37,6 +37,29 @@ describe('withFiniteFallback', () => {
     const out = withFiniteFallback(positions, seeds);
     expect(out.get('a')).toEqual({ x: 10, y: 20 });
     expect(out.get('b')).toEqual({ x: 3, y: 4 });
+  });
+});
+
+describe('connectedComponents', () => {
+  it('splits pairs, chains, and isolates deterministically, largest first', () => {
+    const data: GraphData = {
+      nodes: [node('Ticker:A'), node('Ticker:B'), node('Ticker:C'), node('Ticker:D'), node('Ticker:X')],
+      links: [
+        { source: 'Ticker:A', target: 'Ticker:B', type: 'T' },
+        { source: 'Ticker:C', target: 'Ticker:D', type: 'T' },
+      ],
+      node_count: 5,
+      link_count: 2,
+    };
+    expect(connectedComponents(data)).toEqual([
+      ['Ticker:A', 'Ticker:B'],
+      ['Ticker:C', 'Ticker:D'],
+      ['Ticker:X'],
+    ]);
+    // Stable across calls and independent of link order.
+    const flipped: GraphData = { ...data, links: [...data.links].reverse() };
+    expect(connectedComponents(flipped)).toEqual(connectedComponents(data));
+    expect(connectedComponents({ nodes: [], links: [], node_count: 0, link_count: 0 })).toEqual([]);
   });
 });
 

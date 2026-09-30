@@ -98,10 +98,46 @@ function runForceAtlas2(
 }
 
 /**
+ * Connected components over the payload links, largest first, ties broken
+ * by smallest node id: isolates become singleton components. Deterministic
+ * BFS — no dependency, no randomness — so component packing (F9) is stable.
+ */
+export function connectedComponents(data: GraphData): string[][] {
+  const adj = new Map<string, Set<string>>();
+  for (const n of data.nodes) adj.set(n.id, new Set());
+  for (const l of data.links) {
+    if (!adj.has(l.source) || !adj.has(l.target)) continue;
+    adj.get(l.source)!.add(l.target);
+    adj.get(l.target)!.add(l.source);
+  }
+  const seen = new Set<string>();
+  const components: string[][] = [];
+  for (const n of data.nodes) {
+    if (seen.has(n.id)) continue;
+    const component: string[] = [];
+    const queue = [n.id];
+    seen.add(n.id);
+    while (queue.length > 0) {
+      const id = queue.pop()!;
+      component.push(id);
+      const neighbors = [...(adj.get(id) ?? [])].sort();
+      for (const nb of neighbors) {
+        if (!seen.has(nb)) {
+          seen.add(nb);
+          queue.push(nb);
+        }
+      }
+    }
+    components.push(component.sort());
+  }
+  components.sort((a, b) => b.length - a.length || (a[0] < b[0] ? -1 : 1));
+  return components;
+}
+/**
  * Scale the map so its extent matches a target radius: FA2 output scale
- * drifts with graph size and settings, which used to reframe the camera
- * per payload. Uniform scaling preserves every angle and ratio, so the
- * layout's structure is untouched — only the framing is stable.
+ * drifts with size and settings, which used to reframe the camera per
+ * payload. Uniform scaling preserves every angle and ratio — only the
+ * framing stabilizes.
  */
 export function normalizeRadius(
   positions: Map<string, { x: number; y: number }>,
