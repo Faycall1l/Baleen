@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { forceLayout } from './forceLayout';
+import { forceLayout, iterationsForOrder } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -13,6 +13,16 @@ const PAIR: GraphData = {
   node_count: 2,
   link_count: 1,
 };
+
+describe('iterationsForOrder', () => {
+  it('holds full iterations for small graphs and floors at the minimum', () => {
+    expect(iterationsForOrder(0)).toBe(100);
+    expect(iterationsForOrder(300)).toBe(100);
+    expect(iterationsForOrder(600)).toBe(50);
+    expect(iterationsForOrder(1000)).toBe(30);
+    expect(iterationsForOrder(100000)).toBe(30);
+  });
+});
 
 describe('forceLayout', () => {
   it('places every node at finite coordinates', () => {

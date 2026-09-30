@@ -4,12 +4,21 @@ import forceAtlas2 from 'graphology-layout-forceatlas2';
 import type { GraphData } from '../types';
 import { radialLayout } from './radial';
 
-// Iterations for the one-shot pass. Enough for ~300 nodes to settle from a
-// radial start; the engine is O(n^2) per iteration without Barnes-Hut, so
+// Iterations for the one-shot pass. Fixed at FULL_ITERATIONS for small
+// graphs; beyond that the budget scales down so total engine work stays
+// roughly constant (~30k node-iterations) instead of growing quadratically
+// with order. The engine is O(n^2) per iteration without Barnes-Hut, so
 // large graphs flip to Barnes-Hut (and huge ones skip FA2 entirely).
-const ITERATIONS = 100;
+const FULL_ITERATIONS = 100;
+const MIN_ITERATIONS = 30;
 const BARNES_HUT_ORDER = 400;
 const MAX_FA2_ORDER = 1200;
+
+/** Fixed work budget: small graphs settle fully, large ones stay fast. */
+export function iterationsForOrder(order: number): number {
+  if (order <= 300) return FULL_ITERATIONS;
+  return Math.max(MIN_ITERATIONS, Math.floor(30000 / order));
+}
 
 /**
  * One-shot ForceAtlas2 layout with deterministic seeds (R19).
@@ -34,7 +43,7 @@ export function forceLayout(data: GraphData): Map<string, { x: number; y: number
   // The layout must never blank the canvas: any engine failure (degenerate
   // input, numerical blowup) falls back to the radial seeds.
   try {
-    return runForceAtlas2(data, seeds, ITERATIONS);
+    return runForceAtlas2(data, seeds, iterationsForOrder(data.nodes.length));
   } catch {
     return seeds;
   }
