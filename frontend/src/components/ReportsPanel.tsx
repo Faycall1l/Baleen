@@ -1,3 +1,4 @@
+import { groupBriefsByDay } from '../reportsView';
 import type { Report } from '../types';
 
 interface Props {
@@ -15,8 +16,29 @@ function fmtDate(iso: string): string {
   }
 }
 
+function BriefRow({ report, onReportClick }: { report: Report; onReportClick?: (report: Report) => void }) {
+  return (
+    <div
+      className={`alert-item${onReportClick ? ' clickable' : ''}`}
+      onClick={onReportClick ? () => onReportClick(report) : undefined}
+    >
+      <div className="alert-title">{report.title}</div>
+      <div className="alert-summary">{report.body}</div>
+      <div className="alert-meta">
+        <span>{report.created_at ? fmtDate(report.created_at) : ''}</span>
+        {(report.graph_refs ?? []).map((ref) => (
+          <span key={ref} className="ref-chip">
+            {ref}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPanel({ digest, reports, error, onReportClick }: Props) {
   const briefs = reports.filter((r) => r.kind === 'brief');
+  const days = groupBriefsByDay(briefs);
   return (
     <>
       <h2>Reports</h2>
@@ -26,14 +48,10 @@ export default function ReportsPanel({ digest, reports, error, onReportClick }: 
         </div>
       )}
       {!error && digest && (
-        <div className="alert-item" key={`digest-${digest.id}`}>
-          <div className="alert-title">
-            <span className="alert-badge">digest</span> {digest.title}
-          </div>
+        <div className="digest-card" key={`digest-${digest.id}`}>
+          <div className="digest-kicker">DAILY DIGEST · {digest.period ?? ''}</div>
+          <div className="digest-title">{digest.title}</div>
           <div className="alert-summary">{digest.body}</div>
-          <div className="alert-meta">
-            <span>{digest.created_at ? fmtDate(digest.created_at) : ''}</span>
-          </div>
         </div>
       )}
       {!error && briefs.length === 0 && !digest && (
@@ -42,20 +60,16 @@ export default function ReportsPanel({ digest, reports, error, onReportClick }: 
           processed; the daily digest appears here once a day has data.
         </div>
       )}
-      {briefs.map((r) => (
-        <div
-          className={`alert-item${onReportClick ? ' clickable' : ''}`}
-          key={r.id}
-          onClick={onReportClick ? () => onReportClick(r) : undefined}
-        >
-          <div className="alert-title">
-            <span className="alert-badge">brief</span> {r.title}
-          </div>
-          <div className="alert-summary">{r.body}</div>
-          <div className="alert-meta">
-            <span>{r.created_at ? fmtDate(r.created_at) : ''}</span>
-          </div>
-        </div>
+      {days.map((day) => (
+        <section key={day.day}>
+          <h3 className="brief-day">
+            Briefs · {day.label}
+            <span className="brief-day-count">{day.items.length}</span>
+          </h3>
+          {day.items.map((r) => (
+            <BriefRow key={r.id} report={r} onReportClick={onReportClick} />
+          ))}
+        </section>
       ))}
     </>
   );

@@ -17,3 +17,54 @@
   line-height: 1.5;
 }
 
+/* Digest + grouped briefs (R12): one header card per day, ref chips back to
+   the graph via the row click. */
+.digest-card {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.digest-kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.digest-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.brief-day {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px 6px;
+  margin: 0;
+}
+
+.brief-day-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-dim);
+}
+
+.ref-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--link);
+  background: rgba(122, 184, 232, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
