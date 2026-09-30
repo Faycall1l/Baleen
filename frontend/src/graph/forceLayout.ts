@@ -2,7 +2,8 @@ import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 
 import type { GraphData } from '../types';
-import { radialLayout } from './radial';
+import { hashStr } from './geometry';
+import { radialLayout, radialRadius } from './radial';
 
 // Iterations for the one-shot pass. Fixed at FULL_ITERATIONS for small
 // graphs; beyond that the budget scales down so total engine work stays
@@ -87,7 +88,41 @@ function runForceAtlas2(
   for (const [id, pos] of Object.entries(positions)) {
     out.set(id, { x: pos.x, y: pos.y });
   }
-  return withFiniteFallback(out, seeds);
+  return liftIsolates(out, data, seeds);
+}
+
+/**
+ * Zero-degree nodes collapse into the gravity well and read as noise, so
+ * lift them onto a deterministic halo ring just outside the connected
+ * mass: same angle hash the radial map uses, radius 15% past the
+ * connected extent.
+ */
+export function liftIsolates(
+  positions: Map<string, { x: number; y: number }>,
+  data: GraphData,
+  seeds: Map<string, { x: number; y: number }>,
+): Map<string, { x: number; y: number }> {
+  const degree = new Map<string, number>();
+  for (const n of data.nodes) degree.set(n.id, 0);
+  for (const l of data.links) {
+    if (l.source === l.target || !degree.has(l.source) || !degree.has(l.target)) continue;
+    degree.set(l.source, degree.get(l.source)! + 1);
+    degree.set(l.target, degree.get(l.target)! + 1);
+  }
+  const out = withFiniteFallback(positions, seeds);
+  let maxR = 0;
+  for (const [id, pos] of out) {
+    if ((degree.get(id) ?? 0) > 0) maxR = Math.max(maxR, Math.hypot(pos.x, pos.y));
+  }
+  if (maxR === 0) maxR = radialRadius(data.nodes.length);
+  const halo = maxR * 1.15;
+  for (const [id, d] of degree) {
+    if (d === 0 && out.has(id)) {
+      const a = hashStr(id) * 2 * Math.PI;
+      out.set(id, { x: Math.cos(a) * halo, y: Math.sin(a) * halo });
+    }
+  }
+  return out;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { forceLayout, iterationsForOrder, withFiniteFallback } from './forceLayout';
+import { forceLayout, iterationsForOrder, liftIsolates, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -37,6 +37,30 @@ describe('withFiniteFallback', () => {
     const out = withFiniteFallback(positions, seeds);
     expect(out.get('a')).toEqual({ x: 10, y: 20 });
     expect(out.get('b')).toEqual({ x: 3, y: 4 });
+  });
+});
+
+describe('liftIsolates', () => {
+  it('rings zero-degree nodes outside the connected mass', () => {
+    const star: GraphData = {
+      nodes: [node('Ticker:C'), node('Ticker:L1'), node('Ticker:L2'), node('Ticker:X')],
+      links: [
+        { source: 'Ticker:C', target: 'Ticker:L1', type: 'T' },
+        { source: 'Ticker:C', target: 'Ticker:L2', type: 'T' },
+      ],
+      node_count: 4,
+      link_count: 2,
+    };
+    const positions = forceLayout(star);
+    const halo = positions.get('Ticker:X')!;
+    const haloR = Math.hypot(halo.x, halo.y);
+    const connected = ['Ticker:C', 'Ticker:L1', 'Ticker:L2'].map((id) => {
+      const p = positions.get(id)!;
+      return Math.hypot(p.x, p.y);
+    });
+    expect(haloR).toBeGreaterThan(Math.max(...connected));
+    // Deterministic: same input, same halo slot.
+    expect(forceLayout(star).get('Ticker:X')).toEqual(halo);
   });
 });
 
