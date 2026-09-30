@@ -34,8 +34,21 @@ export function iterationsForOrder(order: number): number {
  * always yields the same map. Runs only on first paint and staged upgrades
  * (see useGraphSync); steady-state polls keep the centroid fallback.
  */
-export function forceLayout(data: GraphData): Map<string, { x: number; y: number }> {
+export function forceLayout(
+  data: GraphData,
+  existing?: Map<string, { x: number; y: number }>,
+): Map<string, { x: number; y: number }> {
   const seeds = radialLayout(data);
+  // Survivors keep their live spots as seeds: a staged upgrade (small
+  // window -> full snapshot) settles around the map the user is already
+  // reading instead of jumping to a fresh arrangement.
+  if (existing) {
+    for (const [id, pos] of existing) {
+      if (seeds.has(id) && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        seeds.set(id, { x: pos.x, y: pos.y });
+      }
+    }
+  }
   if (data.nodes.length === 0) return seeds;
   // FA2 is quadratic per iteration: beyond this size the synchronous pass
   // would block the main thread, so huge graphs keep the radial seeds.

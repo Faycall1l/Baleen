@@ -76,6 +76,36 @@ describe('forceLayout', () => {
     expect(forceLayout({ nodes: [], links: [], node_count: 0, link_count: 0 }).size).toBe(0);
   });
 
+  it('lets live positions steer the result (staged upgrades keep the map)', () => {
+    const live = { x: 5000, y: 5000 };
+    const plain = forceLayout(PAIR);
+    const shifted = forceLayout(
+      PAIR,
+      new Map([
+        ['Ticker:A', live],
+        ['Ticker:B', live],
+      ]),
+    );
+    // A two-node graph converges near-identically either way, so assert the
+    // direction, not the distance: the seeded run must land closer to the
+    // live spots than the radial-seeded run.
+    const dist = (p: { x: number; y: number }) => Math.hypot(p.x - live.x, p.y - live.y);
+    const plainA = plain.get('Ticker:A')!;
+    const shiftedA = shifted.get('Ticker:A')!;
+    expect(dist(shiftedA)).toBeLessThan(dist(plainA));
+    for (const { x, y } of shifted.values()) {
+      expect(Number.isFinite(x)).toBe(true);
+      expect(Number.isFinite(y)).toBe(true);
+    }
+  });
+
+  it('ignores existing spots for unknown nodes and stays deterministic', () => {
+    const once = forceLayout(PAIR, new Map([['Ticker:Ghost', { x: 1, y: 1 }]]));
+    const twice = forceLayout(PAIR, new Map([['Ticker:Ghost', { x: 1, y: 1 }]]));
+    expect([...once.entries()]).toEqual([...twice.entries()]);
+    expect(once.size).toBe(2);
+  });
+
   it('places even a single edgeless node at finite coordinates', () => {
     const solo: GraphData = {
       nodes: [node('Ticker:Solo')],

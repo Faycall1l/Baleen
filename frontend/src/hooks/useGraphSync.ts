@@ -72,12 +72,23 @@ export function useGraphSync({
     // and never trip this, so no flicker.
     const first = !paintedRef.current || data.nodes.length > paintedOrderRef.current * 1.3;
     if (first) {
-      paintedRef.current = true;
-      paintedOrderRef.current = data.nodes.length;
       // First paint: one-shot ForceAtlas2 from deterministic radial seeds
       // (R19). Same data always yields the same map — no random hairball —
       // and the engine never runs live, so nothing animates afterwards.
-      const positions = forceLayout(data);
+      // Staged upgrades additionally seed survivors from their live spots
+      // (F4) so the map settles instead of jumping.
+      let existing: Map<string, { x: number; y: number }> | undefined;
+      if (paintedRef.current) {
+        existing = new Map();
+        graph.forEachNode((id) => {
+          const x = graph.getNodeAttribute(id, 'x') as number;
+          const y = graph.getNodeAttribute(id, 'y') as number;
+          if (Number.isFinite(x) && Number.isFinite(y)) existing!.set(id, { x, y });
+        });
+      }
+      paintedRef.current = true;
+      paintedOrderRef.current = data.nodes.length;
+      const positions = forceLayout(data, existing);
       graph.forEachNode((n) => {
         const p = positions.get(n);
         if (p) {
