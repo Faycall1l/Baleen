@@ -2,6 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { GraphData, GraphNode } from '../types';
 
+// A freshly picked node outruns the graph snapshot by up to a poll cycle:
+// the alert feed leads, the canvas follows. Give picks this long before the
+// ghost release may clear them for vanishing from the loaded graph.
+export const PICK_GRACE_MS = 60_000;
+
+export function isGhostReleaseDue(pickedAtMs: number, nowMs: number, present: boolean): boolean {
+  if (present) return false;
+  return nowMs - pickedAtMs >= PICK_GRACE_MS;
+}
+
 // Selection ownership (extracted from App, H8): guarded select (a background
 // click landing within a beat of picking is part of the same gesture) plus
 // ghost release when polls drop the selected node.
@@ -23,7 +33,9 @@ export function useSelection(graph: GraphData | null): {
   }, []);
 
   useEffect(() => {
-    if (selected && graph && !graph.nodes.some((n) => n.id === selected.id)) {
+    if (!selected || !graph) return;
+    const present = graph.nodes.some((n) => n.id === selected.id);
+    if (isGhostReleaseDue(lastPickRef.current, Date.now(), present)) {
       setSelected(null);
     }
   }, [graph, selected]);

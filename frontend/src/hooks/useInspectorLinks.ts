@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
+import { resolveAlertNode } from '../alertNavigation';
 import type { Alert, GraphData, GraphNode, LeaderboardEntry, Report } from '../types';
 import type { Drawer } from '../components/PanelDrawers';
 
@@ -16,7 +17,7 @@ export function useInspectorLinks(
   setDrawer: (d: Drawer) => void,
   handleSelect: (n: GraphNode | null) => void,
 ): {
-  openAlertNode: (a: Alert) => void;
+  openAlertNode: (a: Alert) => boolean;
   openReportNode: (r: Report) => void;
   openLeaderNode: (l: LeaderboardEntry) => void;
   inspectorLinks: { label: string; onOpen: () => void }[];
@@ -44,34 +45,26 @@ export function useInspectorLinks(
     [graph],
   );
 
-  const findNameNode = useCallback(
-    (name: string): GraphNode | undefined => {
-      if (!graph || !name) return undefined;
-      return graph.nodes.find(
-        (n) =>
-          (n.label === 'Politician' || n.label === 'Insider') && n.title === name,
-      );
-    },
-    [graph],
-  );
-
   const reveal = useCallback(
-    (node: GraphNode | undefined) => {
-      if (!node) return;
+    (node: GraphNode | undefined): boolean => {
+      if (!node) return false;
       setDrawer(null);
       handleSelect(node);
+      return true;
     },
     [handleSelect, setDrawer],
   );
 
   const openAlertNode = useCallback(
-    (a: Alert) => {
-      const node =
-        findEventNode(a.event_id) ??
-        a.graph_refs.map((r) => findTickerNode(r) ?? findNameNode(r)).find(Boolean);
-      reveal(node);
+    (a: Alert): boolean => {
+      // The alert feed leads the graph snapshot by up to a poll cycle: when
+      // the event (and every fallback) is missing, open the alerts drawer
+      // so the click lands somewhere with context instead of dying.
+      if (reveal(resolveAlertNode(a, graph))) return true;
+      setDrawer('alerts');
+      return false;
     },
-    [findEventNode, findTickerNode, findNameNode, reveal],
+    [graph, reveal, setDrawer],
   );
 
   const openReportNode = useCallback(

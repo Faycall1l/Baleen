@@ -4,7 +4,7 @@ import type { Alert } from '../types';
 
 interface Props {
   alerts: Alert[];
-  onAlertClick: (alert: Alert) => void;
+  onAlertClick: (alert: Alert) => boolean;
 }
 
 const MAX_TOASTS = 3;
@@ -64,6 +64,13 @@ export default function AlertStack({ alerts, onAlertClick }: Props) {
     setToasts((prev) => prev.filter((x) => x.id !== id));
   };
 
+  // Clicking navigates first: the toast dismisses only when the click
+  // landed somewhere (node revealed). A missed navigation keeps the toast
+  // (it still auto-dismisses) and opens the alerts drawer for context.
+  const activate = (a: Alert) => {
+    if (onAlertClick(a)) dismiss(a.id);
+  };
+
   if (toasts.length === 0) return null;
   return (
     <div className="alert-stack" role="status" aria-label="New alerts">
@@ -71,17 +78,13 @@ export default function AlertStack({ alerts, onAlertClick }: Props) {
         <div
           key={a.id}
           className="alert-toast"
-          onClick={() => {
-            dismiss(a.id);
-            onAlertClick(a);
-          }}
+          onClick={() => activate(a)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              dismiss(a.id);
-              onAlertClick(a);
+              activate(a);
             }
           }}
         >
