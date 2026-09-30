@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { forceLayout, iterationsForOrder, liftIsolates, withFiniteFallback } from './forceLayout';
+import { centerOnCentroid, forceLayout, iterationsForOrder, liftIsolates, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -37,6 +37,20 @@ describe('withFiniteFallback', () => {
     const out = withFiniteFallback(positions, seeds);
     expect(out.get('a')).toEqual({ x: 10, y: 20 });
     expect(out.get('b')).toEqual({ x: 3, y: 4 });
+  });
+});
+
+describe('centerOnCentroid', () => {
+  it('moves the centroid to the origin, preserving relative layout', () => {
+    const positions = centerOnCentroid(
+      new Map([
+        ['a', { x: 10, y: 10 }],
+        ['b', { x: 20, y: 30 }],
+      ]),
+    );
+    expect(positions.get('a')).toEqual({ x: -5, y: -10 });
+    expect(positions.get('b')).toEqual({ x: 5, y: 10 });
+    expect(centerOnCentroid(new Map()).size).toBe(0);
   });
 });
 
@@ -101,22 +115,30 @@ describe('forceLayout', () => {
   });
 
   it('lets live positions steer the result (staged upgrades keep the map)', () => {
-    const live = { x: 5000, y: 5000 };
-    const plain = forceLayout(PAIR);
+    // Seeds feed the engine: an asymmetric graph started from flung live
+    // spots must settle somewhere different than from radial seeds. (Exact
+    // geometry is the engine's business; influence is what we own.)
+    const star: GraphData = {
+      nodes: [node('Ticker:C'), node('Ticker:L1'), node('Ticker:L2'), node('Ticker:L3')],
+      links: [
+        { source: 'Ticker:C', target: 'Ticker:L1', type: 'T' },
+        { source: 'Ticker:C', target: 'Ticker:L2', type: 'T' },
+        { source: 'Ticker:C', target: 'Ticker:L3', type: 'T' },
+      ],
+      node_count: 4,
+      link_count: 3,
+    };
+    const plain = forceLayout(star);
     const shifted = forceLayout(
-      PAIR,
+      star,
       new Map([
-        ['Ticker:A', live],
-        ['Ticker:B', live],
+        ['Ticker:C', { x: 0, y: 0 }],
+        ['Ticker:L1', { x: 5000, y: 5000 }],
+        ['Ticker:L2', { x: -5000, y: 5000 }],
+        ['Ticker:L3', { x: 0, y: -5000 }],
       ]),
     );
-    // A two-node graph converges near-identically either way, so assert the
-    // direction, not the distance: the seeded run must land closer to the
-    // live spots than the radial-seeded run.
-    const dist = (p: { x: number; y: number }) => Math.hypot(p.x - live.x, p.y - live.y);
-    const plainA = plain.get('Ticker:A')!;
-    const shiftedA = shifted.get('Ticker:A')!;
-    expect(dist(shiftedA)).toBeLessThan(dist(plainA));
+    expect([...shifted.entries()]).not.toEqual([...plain.entries()]);
     for (const { x, y } of shifted.values()) {
       expect(Number.isFinite(x)).toBe(true);
       expect(Number.isFinite(y)).toBe(true);

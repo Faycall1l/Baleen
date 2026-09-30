@@ -88,7 +88,33 @@ function runForceAtlas2(
   for (const [id, pos] of Object.entries(positions)) {
     out.set(id, { x: pos.x, y: pos.y });
   }
-  return liftIsolates(out, data, seeds);
+  // Halo after centering so the ring is measured in final frame coordinates.
+  // Sanitize first: centering a NaN poisons the whole map.
+  return liftIsolates(centerOnCentroid(withFiniteFallback(out, seeds)), data, seeds);
+}
+
+/**
+ * Recenter on the centroid so the map sits at the origin regardless of
+ * where gravity drifted it: the camera opens on content center by
+ * construction, and survivors keep comparable framing across payloads.
+ */
+export function centerOnCentroid(
+  positions: Map<string, { x: number; y: number }>,
+): Map<string, { x: number; y: number }> {
+  if (positions.size === 0) return positions;
+  let sx = 0;
+  let sy = 0;
+  for (const pos of positions.values()) {
+    sx += pos.x;
+    sy += pos.y;
+  }
+  const cx = sx / positions.size;
+  const cy = sy / positions.size;
+  const out = new Map<string, { x: number; y: number }>();
+  for (const [id, pos] of positions) {
+    out.set(id, { x: pos.x - cx, y: pos.y - cy });
+  }
+  return out;
 }
 
 /**
