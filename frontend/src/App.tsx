@@ -62,15 +62,19 @@ export default function App() {
     loadGraph();
   }, [graphTick, loadGraph]);
 
-  // Esc closes the open drawer from anywhere (R15).
+  // Esc closes the open drawer from anywhere (R15); with no drawer it
+  // clears the inspector selection (R16).
   useEffect(() => {
-    if (!drawer) return;
+    if (!drawer && !selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDrawer(null);
+      if (e.key === 'Escape') {
+        if (drawer) setDrawer(null);
+        else setSelected(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer]);
+  }, [drawer, selected]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.

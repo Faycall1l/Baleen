@@ -26,6 +26,16 @@ const step = async (name, fn) => {
 
 await page.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
+// First-run tour (R11) overlays the shell on a fresh profile and would
+// swallow every click below: dismiss it like a user would, if present.
+await step('tour: dismiss onboarding overlay', async () => {
+  const skip = page.getByRole('button', { name: 'Skip tour' });
+  if (await skip.count()) {
+    await skip.click({ timeout: 5000 });
+  }
+  await page.waitForTimeout(500);
+});
+
 await step('load: canvas + first layout', async () => {
   // First paint is DOM-observable: the footer stats line renders node counts
   // once the snapshot lands (no telemetry hooks since P4).
@@ -58,11 +68,17 @@ await step('search-select opens inspector', async () => {
 });
 
 await step('stage-click clears inspector', async () => {
-  await page.mouse.click(60, 800); // left gutter, off-canvas chrome -> stage area is canvas; use far corner of canvas
+  // Click empty canvas: resolve the canvas box at runtime so the tape dock
+  // (R10) can't shift fixed coordinates onto the wrong element. Bottom-left
+  // is safe — legend and status pills are pointer-events: none there.
+  const canvas = page.locator('.graph-canvas');
+  const box = await canvas.boundingBox({ timeout: 15000 });
+  if (!box) throw new Error('no canvas box');
+  await page.mouse.click(box.x + 40, box.y + box.height - 120);
   await page.waitForTimeout(1200);
-  // Fallback: click true canvas center-top where no node sits (empty space clears too).
+  // Fallback: Esc clears selection too (R15/R16).
   if (await page.locator('.node-detail').count()) {
-    await page.mouse.click(720, 120);
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(1200);
   }
   if (await page.locator('.node-detail').count()) throw new Error('inspector still open');
