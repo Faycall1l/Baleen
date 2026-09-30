@@ -52,6 +52,11 @@ export function useGraphSync({
 }: Args): void {
   const paintedRef = useRef(false);
   const paintedOrderRef = useRef(0);
+  // Ids placed by the last forceLayout run: only these may seed the next
+  // run (F11). Newcomers must start from spread radial seeds — seeding them
+  // from their centroid spots stacks dozens of nodes on identical
+  // coordinates, and the engine cannot separate coincident nodes.
+  const paintedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!containerRef.current || !data || data.nodes.length === 0) return;
@@ -79,8 +84,10 @@ export function useGraphSync({
       // (F4) so the map settles instead of jumping.
       let existing: Map<string, { x: number; y: number }> | undefined;
       if (paintedRef.current) {
+        const survivors = paintedIdsRef.current;
         existing = new Map();
         graph.forEachNode((id) => {
+          if (!survivors.has(id)) return;
           const x = graph.getNodeAttribute(id, 'x') as number;
           const y = graph.getNodeAttribute(id, 'y') as number;
           if (Number.isFinite(x) && Number.isFinite(y)) existing!.set(id, { x, y });
@@ -96,6 +103,7 @@ export function useGraphSync({
           graph.setNodeAttribute(n, 'y', p.y);
         }
       });
+      paintedIdsRef.current = new Set(data.nodes.map((n) => n.id));
       sanitizePositions(graph);
     }
 

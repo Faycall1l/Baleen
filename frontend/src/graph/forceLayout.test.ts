@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
+import Graph from 'graphology';
+
+import { applyVisibility } from './visibility';
 import { centerOnCentroid, connectedComponents, forceLayout, iterationsForOrder, normalizeRadius, packComponents, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
@@ -60,6 +63,71 @@ describe('connectedComponents', () => {
     const flipped: GraphData = { ...data, links: [...data.links].reverse() };
     expect(connectedComponents(flipped)).toEqual(connectedComponents(data));
     expect(connectedComponents({ nodes: [], links: [], node_count: 0, link_count: 0 })).toEqual([]);
+  });
+});
+
+describe('staged upgrade spread', () => {
+  // Regression: seeding newcomers from their centroid spots stacked them
+  // on identical coordinates and collapsed the map to a line. Survivors
+  // only — newcomers start spread.
+  function starOfStars(): GraphData {
+    const nodes: GraphData['nodes'] = [];
+    const links: GraphData['links'] = [];
+    const mkNode = (id: string, label: string): GraphData['nodes'][number] => ({
+      id, label, key: id, title: id, props: {}, tweet_url: null,
+    });
+    for (const t of ['Ticker:NVDA', 'Ticker:AMD']) nodes.push(mkNode(t, 'Ticker'));
+    for (let i = 0; i < 24; i++) nodes.push(mkNode(`Politician:P${i}`, 'Politician'));
+    for (let i = 0; i < 150; i++) {
+      const e = `Event:E${i}`;
+      nodes.push(mkNode(e, 'Event'));
+      links.push({ source: e, target: i % 2 ? 'Ticker:NVDA' : 'Ticker:AMD', type: 'T' });
+      links.push({ source: e, target: `Politician:P${i % 24}`, type: 'P' });
+    }
+    return { nodes, links, node_count: nodes.length, link_count: links.length };
+  }
+
+  function stdRatio(positions: Map<string, { x: number; y: number }>): number {
+    const xs = [...positions.values()].map((p) => p.x);
+    const ys = [...positions.values()].map((p) => p.y);
+    const std = (vs: number[]) => {
+      const m = vs.reduce((s, v) => s + v, 0) / vs.length;
+      return Math.sqrt(vs.reduce((s, v) => s + (v - m) ** 2, 0) / vs.length);
+    };
+    return std(xs) / Math.max(std(ys), 1e-9);
+  }
+
+  it('keeps the map two-dimensional across a staged upgrade', () => {
+    const full = starOfStars();
+    const first: GraphData = {
+      nodes: full.nodes.slice(0, 25),
+      links: [],
+      node_count: 25,
+      link_count: 0,
+    };
+    const graph = new Graph({ type: 'directed', allowSelfLoops: true });
+    const posCache = new Map<string, { x: number; y: number }>();
+    applyVisibility(graph, first, new Set(), posCache);
+    const firstPositions = forceLayout(first);
+    graph.forEachNode((id) => {
+      const p = firstPositions.get(id);
+      if (p) {
+        graph.setNodeAttribute(id, 'x', p.x);
+        graph.setNodeAttribute(id, 'y', p.y);
+      }
+    });
+    const paintedIds = new Set(first.nodes.map((n) => n.id));
+    applyVisibility(graph, full, new Set(), posCache);
+    const existing = new Map<string, { x: number; y: number }>();
+    graph.forEachNode((id) => {
+      if (!paintedIds.has(id)) return;
+      const x = graph.getNodeAttribute(id, 'x') as number;
+      const y = graph.getNodeAttribute(id, 'y') as number;
+      if (Number.isFinite(x) && Number.isFinite(y)) existing.set(id, { x, y });
+    });
+    const ratio = stdRatio(forceLayout(full, existing));
+    expect(ratio).toBeGreaterThan(0.25);
+    expect(ratio).toBeLessThan(4);
   });
 });
 
