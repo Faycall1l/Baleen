@@ -139,6 +139,29 @@ export interface FlowResponse {
   filters: FlowFilters;
 }
 
+export interface PersonCommittee {
+  id: string;
+  name: string | null;
+}
+
+export interface PersonTrade {
+  event_id: string;
+  ticker: string | null;
+  side: string | null;
+  date: string | null;
+  amount: string | null;
+  source_url: string | null;
+}
+
+export interface PersonCard {
+  id: string;
+  name: string;
+  chamber: string | null;
+  party: string | null;
+  committees: PersonCommittee[];
+  trades: PersonTrade[];
+}
+
 export interface UncoveredRow {
   politician: string;
   sector: string;

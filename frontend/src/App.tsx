@@ -9,14 +9,17 @@ import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
+import PoliticianDetail from './components/PoliticianDetail';
 import { useFeeds } from './hooks/useFeeds';
 import { useAlertsInbox } from './hooks/useAlertsInbox';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
+import { usePerson } from './hooks/usePerson';
 import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
+import { personIdForNode } from './personView';
 
 export default function App() {
   const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
@@ -89,6 +92,13 @@ export default function App() {
     setDrawer,
     handleSelect,
   );
+
+  // Person view (R17b): a selected Politician node loads its card instead
+  // of the generic property list.
+  const politicianId = selected
+    ? personIdForNode(selected.label, selected.id, selected.props)
+    : null;
+  const { person, error: personError } = usePerson(politicianId);
 
   return (
     <div className="app">
@@ -163,7 +173,18 @@ export default function App() {
 
         {selected && (
           <aside className="panel panel-detail">
-            <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
+            {politicianId ? (
+              <PoliticianDetail
+                node={selected}
+                person={person}
+                personError={personError}
+                alerts={alerts}
+                onClose={() => setSelected(null)}
+                onAlertClick={openAlertNode}
+              />
+            ) : (
+              <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
+            )}
           </aside>
         )}
         <AlertStack alerts={alerts} onAlertClick={openAlertNode} />
