@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Graph from 'graphology';
 
 import type { GraphData, GraphNode } from '../types';
-import type { GraphMode } from '../graph/types';
 import { applyVisibility } from '../graph/visibility';
 import { SCHEMA_LABELS } from '../graph/schema';
 import GraphLegend from './GraphLegend';
@@ -34,9 +33,9 @@ interface Props {
 // popping, no flicker. Pan/zoom/drag still work; drag rewrites coordinates.
 //
 // Visibility model: what you see is what EXISTS in the graphology graph.
-// Modes and legend filters add/drop nodes (banking positions), never paint
-// tricks — custom WebGL programs don't reliably honor sigma's `hidden`
-// flag, so hiding-by-paint is not used anywhere. Reducers only dim.
+// Type filters add/drop nodes (banking positions), never paint tricks —
+// custom WebGL programs don't reliably honor sigma's `hidden` flag, so
+// hiding-by-paint is not used anywhere. Reducers only dim.
 //
 // Exploration model (Shneiderman, condensed): search to find, click to focus
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
@@ -48,9 +47,9 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
   const dataRef = useRef(data);
   dataRef.current = data;
-  const [mode, setMode] = useState<'instances' | 'schema'>('instances');
-  // Labels hidden from the instance view (legend toggles). Schema view is
-  // always complete; hidden types only apply to instances.
+  // Labels hidden from the view (legend toggles + toolbar pills). There is
+  // exactly one canvas — no modes — so every filter is visible as a pill
+  // and reversible in one click.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
   const toggleType = useCallback((label: string) => {
@@ -62,19 +61,9 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     });
   }, []);
 
-  const handleModeChange = (m: GraphMode) => {
-    if (m === 'schema') onSelect(null);
-    setMode(m);
-  };
+  const clearTypes = useCallback(() => setHiddenTypes(new Set()), []);
 
-  const selectNodeByKey = useGraphSelection({
-    graphRef,
-    onSelect,
-    onDrillToType: (next) => {
-      setHiddenTypes(next);
-      setMode('instances');
-    },
-  });
+  const selectNodeByKey = useGraphSelection({ graphRef, onSelect });
 
   const { sigmaRef, ensureSigma } = useSigmaInstance(
     containerRef,
@@ -98,12 +87,11 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     graphRef,
     posCacheRef,
     data,
-    mode,
     hiddenTypes,
     ensureSigma,
   });
 
-  // Mode/filter changes re-run membership without touching data (positions
+  // Filter changes re-run membership without touching data (positions
   // of survivors are preserved by the bank/restore inside applyVisibility).
   useEffect(() => {
     const graph = graphRef.current;
@@ -111,7 +99,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     const latest = dataRef.current;
     if (!graph || !sigma || !latest) return;
     try {
-      applyVisibility(graph, latest, mode, hiddenTypes, posCacheRef.current);
+      applyVisibility(graph, latest, hiddenTypes, posCacheRef.current);
     } catch {
       /* a failed membership sync must never break the view */
     }
@@ -120,7 +108,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     } catch {
       /* visibility flip must never blank the canvas */
     }
-  }, [mode, hiddenTypes]);
+  }, [hiddenTypes]);
 
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -129,13 +117,11 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     return counts;
   }, [data]);
 
-  useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTypes });
+  useGraphCamera({ sigmaRef, graphRef, selectedId, hiddenTypes });
 
   const search = useGraphSearch({
     data,
-    mode,
     hiddenTypes,
-    setMode,
     showType: toggleType,
     onSelect,
   });
@@ -163,8 +149,9 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
   return (
     <div className="graph-wrap">
       <GraphToolbar
-        mode={mode}
-        onModeChange={handleModeChange}
+        hiddenTypes={hiddenTypes}
+        onToggleType={toggleType}
+        onClearTypes={clearTypes}
         query={search.query}
         onQueryChange={search.setQuery}
         searchOpen={search.open}
@@ -177,7 +164,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
         labels={SCHEMA_LABELS}
         counts={typeCounts}
         hiddenTypes={hiddenTypes}
-        interactive={mode === 'instances'}
+        interactive
         onToggleType={toggleType}
       />
       <div ref={containerRef} className="graph-canvas" />

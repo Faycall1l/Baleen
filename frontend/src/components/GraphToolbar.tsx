@@ -1,9 +1,9 @@
-import type { GraphMode } from '../graph/types';
 import type { GraphNode } from '../types';
 
 interface Props {
-  mode: GraphMode;
-  onModeChange: (mode: GraphMode) => void;
+  hiddenTypes: Set<string>;
+  onToggleType: (label: string) => void;
+  onClearTypes: () => void;
   query: string;
   onQueryChange: (q: string) => void;
   searchOpen: boolean;
@@ -14,8 +14,9 @@ interface Props {
 }
 
 export default function GraphToolbar({
-  mode,
-  onModeChange,
+  hiddenTypes,
+  onToggleType,
+  onClearTypes,
   query,
   onQueryChange,
   searchOpen,
@@ -26,26 +27,26 @@ export default function GraphToolbar({
 }: Props) {
   return (
     <div className="graph-toolbar">
-      <div className="graph-mode" role="tablist" aria-label="Graph view">
-        <button
-          className={mode === 'instances' ? 'active' : ''}
-          onClick={() => onModeChange('instances')}
-          role="tab"
-          aria-selected={mode === 'instances'}
-        >
-          Instances
-        </button>
-        <button
-          className={mode === 'schema' ? 'active' : ''}
-          onClick={() => onModeChange('schema')}
-          role="tab"
-          aria-selected={mode === 'schema'}
-        >
-          Schema
-        </button>
-      </div>
-      {mode === 'instances' ? (
-        <div className="graph-search">
+      {hiddenTypes.size > 0 && (
+        <div className="type-filters" role="group" aria-label="Hidden node types">
+          <span className="type-filters-label">Hidden:</span>
+          {[...hiddenTypes].sort().map((label) => (
+            <button
+              key={label}
+              className="type-pill"
+              onClick={() => onToggleType(label)}
+              aria-label={`Show ${label} nodes`}
+              title={`Show ${label} nodes`}
+            >
+              {label} ×
+            </button>
+          ))}
+          <button className="type-clear" onClick={onClearTypes}>
+            Show all
+          </button>
+        </div>
+      )}
+      <div className="graph-search">
           <input
             value={query}
             onChange={(e) => {
@@ -74,9 +75,6 @@ export default function GraphToolbar({
             </div>
           )}
         </div>
-      ) : (
-        <div className="graph-hint">Click a type to inspect its instances</div>
-      )}
       <button className="graph-fit-btn" onClick={onFit} title="Fit the whole graph in view">
         Fit
       </button>

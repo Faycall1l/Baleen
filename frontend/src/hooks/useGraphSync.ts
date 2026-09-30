@@ -32,7 +32,6 @@ interface Args {
   graphRef: React.MutableRefObject<Graph | null>;
   posCacheRef: React.MutableRefObject<Map<string, { x: number; y: number }>>;
   data: GraphData | null;
-  mode: 'instances' | 'schema';
   hiddenTypes: Set<string>;
   ensureSigma: () => Sigma | null;
 }
@@ -48,7 +47,6 @@ export function useGraphSync({
   graphRef,
   posCacheRef,
   data,
-  mode,
   hiddenTypes,
   ensureSigma,
 }: Args): void {
@@ -64,7 +62,7 @@ export function useGraphSync({
       graphRef.current = graph;
     }
 
-    applyVisibility(graph, data, mode, hiddenTypes, posCacheRef.current);
+    applyVisibility(graph, data, hiddenTypes, posCacheRef.current);
     sanitizePositions(graph);
 
     // Layout on first paint AND on staged upgrades (P1 boots a small window,
@@ -77,9 +75,8 @@ export function useGraphSync({
       paintedRef.current = true;
       paintedOrderRef.current = data.nodes.length;
       // First paint: deterministic radial-by-type layout (P2) over the
-      // rendered set (initial mode is always instances). Same data always
-      // yields the same map — no random hairball. Nothing animates, and no
-      // layout ever re-runs afterwards.
+      // rendered set. Same data always yields the same map — no random
+      // hairball. Nothing animates, and no layout ever re-runs afterwards.
       const positions = radialLayout(data);
       graph.forEachNode((n) => {
         const p = positions.get(n);

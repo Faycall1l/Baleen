@@ -44,7 +44,7 @@ function assertFinite(graph: Graph): void {
 describe('applyVisibility instances', () => {
   it('renders wanted nodes with positions and syncs edges', () => {
     const graph = freshGraph();
-    const stats = applyVisibility(graph, DATA, 'instances', new Set(), new Map());
+    const stats = applyVisibility(graph, DATA, new Set(), new Map());
     expect(stats.want).toBe(3);
     expect(stats.order).toBe(3);
     expect(graph.order).toBe(3);
@@ -55,15 +55,15 @@ describe('applyVisibility instances', () => {
   it('drops filtered types banking positions, restores on unhide', () => {
     const graph = freshGraph();
     const pos = new Map<string, { x: number; y: number }>();
-    applyVisibility(graph, DATA, 'instances', new Set(), pos);
+    applyVisibility(graph, DATA, new Set(), pos);
     const before = {
       x: graph.getNodeAttribute('Ticker:NVDA', 'x'),
       y: graph.getNodeAttribute('Ticker:NVDA', 'y'),
     };
-    applyVisibility(graph, DATA, 'instances', new Set(['Ticker']), pos);
+    applyVisibility(graph, DATA, new Set(['Ticker']), pos);
     expect(graph.hasNode('Ticker:NVDA')).toBe(false);
     expect(pos.get('Ticker:NVDA')).toEqual(before);
-    applyVisibility(graph, DATA, 'instances', new Set(), pos);
+    applyVisibility(graph, DATA, new Set(), pos);
     expect(graph.hasNode('Ticker:NVDA')).toBe(true);
     expect(graph.getNodeAttribute('Ticker:NVDA', 'x')).toBe(before.x);
     expect(graph.getNodeAttribute('Ticker:NVDA', 'y')).toBe(before.y);
@@ -73,7 +73,7 @@ describe('applyVisibility instances', () => {
   it('drops payload removals', () => {
     const graph = freshGraph();
     const pos = new Map<string, { x: number; y: number }>();
-    applyVisibility(graph, DATA, 'instances', new Set(), pos);
+    applyVisibility(graph, DATA, new Set(), pos);
     const smaller: GraphData = {
       ...DATA,
       nodes: DATA.nodes.slice(0, 1),
@@ -81,24 +81,9 @@ describe('applyVisibility instances', () => {
       node_count: 1,
       link_count: 0,
     };
-    applyVisibility(graph, smaller, 'instances', new Set(), pos);
+    applyVisibility(graph, smaller, new Set(), pos);
     expect(graph.order).toBe(1);
     expect(graph.size).toBe(0);
-  });
-});
-
-describe('applyVisibility schema', () => {
-  it('shows only counted supernodes at fixed slots with rels', () => {
-    const graph = freshGraph();
-    const stats = applyVisibility(graph, DATA, 'schema', new Set(), new Map());
-    // Ticker, Politician, Event have instances; Committee/Insider/Sector do not.
-    expect(stats.want).toBe(3);
-    expect(graph.hasNode('schema:Ticker')).toBe(true);
-    expect(graph.hasNode('schema:Committee')).toBe(false);
-    const t = graph.getNodeAttributes('schema:Ticker');
-    expect(t.label).toContain('Ticker (1)');
-    expect(graph.size).toBe(2);
-    assertFinite(graph);
   });
 });
 
@@ -107,7 +92,7 @@ describe('applyVisibility guarantee', () => {
     const graph = freshGraph();
     graph.addNode('Ticker:NVDA', {});
     graph.addNode('junk', {});
-    applyVisibility(graph, DATA, 'instances', new Set(), new Map());
+    applyVisibility(graph, DATA, new Set(), new Map());
     assertFinite(graph);
     expect(graph.hasNode('junk')).toBe(false);
   });

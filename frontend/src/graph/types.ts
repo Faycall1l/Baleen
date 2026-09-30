@@ -1,8 +1,6 @@
 // View-model types for the canvas graph: plain data in, plain data out.
 // Everything here is framework-free so it unit-tests without a browser.
 
-export type GraphMode = 'instances' | 'schema';
-
 export interface Camera {
   x: number;
   y: number;
@@ -12,7 +10,7 @@ export interface Camera {
 export interface ViewNode {
   id: string;
   kind: string;
-  /** Display text (names, composed event titles, schema titles). */
+  /** Display text (names, composed event titles). */
   label: string;
   title: string;
   x: number;

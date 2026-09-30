@@ -84,16 +84,19 @@ await step('stage-click clears inspector', async () => {
   if (await page.locator('.node-detail').count()) throw new Error('inspector still open');
 });
 
-await step('schema tab switches mode', async () => {
-  await page.getByRole('tab', { name: 'Schema' }).click();
-  await page.waitForTimeout(2500);
-  const sel = await page.getByRole('tab', { name: 'Schema' }).getAttribute('aria-selected');
-  if (sel !== 'true') throw new Error('schema tab not selected');
-  await page.screenshot({ path: path.join(outdir, '03-schema.png') });
+await step('type filter pills hide and restore', async () => {
+  // Hiding a type via the legend must surface as an explicit, reversible
+  // pill — no silent filter state (R18).
+  await page.getByText(/Event · \d+/).click({ timeout: 10000 });
+  const pill = page.getByRole('button', { name: 'Show Event nodes' });
+  await pill.waitFor({ timeout: 10000 });
+  await page.screenshot({ path: path.join(outdir, '03-filtered.png') });
+  await page.getByRole('button', { name: 'Show all' }).click();
+  await page.waitForTimeout(1500);
+  if (await pill.count()) throw new Error('pill still present after Show all');
 });
 
 await step('zoom out/in keeps canvas error-free', async () => {
-  await page.getByRole('tab', { name: 'Instances' }).click();
   await page.waitForTimeout(1500);
   await page.mouse.move(720, 450);
   for (let i = 0; i < 5; i++) {

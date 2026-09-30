@@ -9,16 +9,15 @@ interface Args {
   sigmaRef: React.MutableRefObject<Sigma | null>;
   graphRef: React.MutableRefObject<Graph | null>;
   selectedId: string | null;
-  mode: 'instances' | 'schema';
   hiddenTypes: Set<string>;
 }
 
 /**
- * Camera and selection presentation: focus dimming via reducers, instant
- * placement on selection, refit + edge labels on mode switch. Reducers only
- * touch color/label/size — plain attributes every node program honors.
+ * Camera and selection presentation: focus dimming via reducers and instant
+ * placement on selection. Reducers only touch color/label/size — plain
+ * attributes every node program honors.
  */
-export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTypes }: Args): void {
+export function useGraphCamera({ sigmaRef, graphRef, selectedId, hiddenTypes }: Args): void {
   // Focus dimming through reducers. Dimming follows selection ONLY —
   // hover-driven dimming used to strobe on every mouse move across dense
   // nodes, so hover is limited to the native label.
@@ -52,26 +51,6 @@ export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTyp
     }
   }, [selectedId, sigmaRef, graphRef]);
 
-  // Edge property labels only make sense on the schema overview; instance
-  // edges stay clean.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    if (!sigma) return;
-    try {
-      sigma.setSetting('renderEdgeLabels', mode === 'schema');
-      sigma.refresh();
-    } catch {
-      /* label toggle must never blank the canvas */
-    }
-  }, [mode, sigmaRef]);
-
-  // Refit on mode switch so each view opens framed.
-  useEffect(() => {
-    const sigma = sigmaRef.current;
-    if (!sigma) return;
-    sigma.getCamera().animatedReset({ duration: 600 });
-  }, [mode, sigmaRef]);
-
   // Place the camera on the selected node, keeping the zoom level. Instant
   // setState, not animate: no async animation machinery in the click path.
   // The camera lives in sigma's NORMALIZED space (see useGraphSync): convert
@@ -81,10 +60,7 @@ export function useGraphCamera({ sigmaRef, graphRef, selectedId, mode, hiddenTyp
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph || !selectedId || !graph.hasNode(selectedId)) return;
-    if (
-      mode !== 'schema' &&
-      hiddenTypes.has(graph.getNodeAttribute(selectedId, 'kind') as string)
-    ) {
+    if (hiddenTypes.has(graph.getNodeAttribute(selectedId, 'kind') as string)) {
       return;
     }
     const x = graph.getNodeAttribute(selectedId, 'x') as number;

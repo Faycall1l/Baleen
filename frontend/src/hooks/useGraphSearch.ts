@@ -4,9 +4,7 @@ import type { GraphData, GraphNode } from '../types';
 
 interface Args {
   data: GraphData | null;
-  mode: 'instances' | 'schema';
   hiddenTypes: Set<string>;
-  setMode: (m: 'instances' | 'schema') => void;
   showType: (label: string) => void;
   onSelect: (node: GraphNode) => void;
 }
@@ -30,9 +28,7 @@ export interface Search {
  */
 export function useGraphSearch({
   data,
-  mode,
   hiddenTypes,
-  setMode,
   showType,
   onSelect,
 }: Args): Search {
@@ -46,9 +42,8 @@ export function useGraphSearch({
   }, [query, data]);
 
   const choose = (m: GraphNode) => {
-    if (mode === 'schema') setMode('instances');
     const kind = data?.nodes.find((n) => n.id === m.id)?.label;
-    if (kind && mode === 'instances' && hiddenTypes.has(kind)) showType(kind);
+    if (kind && hiddenTypes.has(kind)) showType(kind);
     onSelect(m);
     setQuery('');
     setOpen(false);

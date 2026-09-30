@@ -2,11 +2,10 @@ import Graph from 'graphology';
 
 import type { GraphData } from '../types';
 import { hashStr } from './geometry';
-import { bankPos, instanceAttrs, schemaAttrs, schemaPosition } from './nodeAttrs';
-import { aggregateSchema, humanizeRel, isSchemaId, schemaId } from './schema';
+import { bankPos, instanceAttrs } from './nodeAttrs';
 
 // Single owner of graph membership AND per-item visuals. Computes the wanted
-// id set from the mode/filter, drops anything else (banking positions),
+// id set from the type filter, drops anything else (banking positions),
 // (re-)adds what's missing with full attrs, syncs edges, and seeds positions
 // for nodes that have none (banked restore, else neighbor centroid, else
 // deterministic ring). Surviving nodes are never moved or relaid out.
@@ -18,7 +17,6 @@ import { aggregateSchema, humanizeRel, isSchemaId, schemaId } from './schema';
 export function applyVisibility(
   graph: Graph,
   data: GraphData,
-  mode: 'instances' | 'schema',
   hiddenTypes: Set<string>,
   posCache: Map<string, { x: number; y: number }>,
 ): { want: number; order: number; dataNodes: number } {
@@ -28,7 +26,6 @@ export function applyVisibility(
     degree.set(l.source, (degree.get(l.source) ?? 0) + 1);
     degree.set(l.target, (degree.get(l.target) ?? 0) + 1);
   }
-  const agg = aggregateSchema(data.nodes, data.links);
 
   // Payload adjacency for centroid placement (graph edges sync below, so
   // graph.neighbors would see nothing yet — and throws on missing nodes).
@@ -44,11 +41,7 @@ export function applyVisibility(
   }
 
   const want = new Set<string>();
-  if (mode === 'instances') {
-    for (const n of data.nodes) if (!hiddenTypes.has(n.label)) want.add(n.id);
-  } else {
-    for (const [label, count] of agg.counts) if (count > 0) want.add(schemaId(label));
-  }
+  for (const n of data.nodes) if (!hiddenTypes.has(n.label)) want.add(n.id);
 
   const drop: string[] = [];
   graph.forEachNode((id) => {
@@ -61,31 +54,15 @@ export function applyVisibility(
 
   for (const id of want) {
     if (graph.hasNode(id)) {
-      // Refresh attrs of survivors (titles/counts/colors can change).
-      if (isSchemaId(id)) {
-        const label = id.slice('schema:'.length);
-        graph.mergeNodeAttributes(
-          id,
-          schemaAttrs(label, agg.counts.get(label) ?? 0, byId, degree),
-        );
-      } else {
-        const n = byId.get(id);
-        if (!n) continue;
-        graph.mergeNodeAttributes(id, instanceAttrs(n, degree));
-      }
+      // Refresh attrs of survivors (titles/colors can change).
+      const n = byId.get(id);
+      if (!n) continue;
+      graph.mergeNodeAttributes(id, instanceAttrs(n, degree));
       continue;
     }
     // New nodes are created WITH coordinates in the same call: sigma
     // validates synchronously on graphology mutation events, so a node
     // must never exist even transiently without a finite position.
-    if (isSchemaId(id)) {
-      const label = id.slice('schema:'.length);
-      graph.addNode(id, {
-        ...schemaAttrs(label, agg.counts.get(label) ?? 0, byId, degree),
-        ...schemaPosition(label),
-      });
-      continue;
-    }
     const n = byId.get(id);
     if (!n) continue;
     const saved = posCache.get(id);
@@ -123,8 +100,7 @@ export function applyVisibility(
     graph.addNode(id, { ...instanceAttrs(n, degree), x: px, y: py });
   }
 
-  // Edges: payload links between present nodes, schema rels between present
-  // supernodes; drop everything stale.
+  // Edges: payload links between present nodes; drop everything stale.
   const payloadEdgeKeys = new Set<string>();
   for (const l of data.links) {
     if (!graph.hasNode(l.source) || !graph.hasNode(l.target)) continue;
@@ -134,17 +110,8 @@ export function applyVisibility(
       graph.addEdgeWithKey(key, l.source, l.target, { label: l.type, size: 1 });
     }
   }
-  for (const [key, r] of agg.rels) {
-    const s = schemaId(r.source);
-    const t = schemaId(r.target);
-    if (!graph.hasNode(s) || !graph.hasNode(t)) continue;
-    if (!graph.hasEdge(key)) {
-      graph.addEdgeWithKey(key, s, t, { label: humanizeRel(r.rel) });
-    }
-    graph.setEdgeAttribute(key, 'size', 1.5 + Math.log10(r.count + 1));
-  }
   graph.forEachEdge((e) => {
-    if (!payloadEdgeKeys.has(e) && !agg.rels.has(e)) graph.dropEdge(e);
+    if (!payloadEdgeKeys.has(e)) graph.dropEdge(e);
   });
 
   // Guarantee pass: any node still lacking finite coordinates gets a
