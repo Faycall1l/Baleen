@@ -226,3 +226,50 @@ def test_bundle_stays_shaped_when_all_backends_down():
     assert bundle["window_days"] == 90
     for key in ("momentum", "clusters", "options_meter", "uncovered", "suspicious"):
         assert bundle[key] == []
+
+
+def test_person_merges_identity_committees_and_trades():
+    """The card joins identity, memberships, and latest trades in Python so
+    the route stays a thin shape over two indexed reads."""
+
+    class _FakeNeo4j:
+        def run_read(self, query, **params):
+            if "MEMBER_OF" in query:
+                assert params == {"pid": "W000817"}
+                return [
+                    {
+                        "id": "W000817",
+                        "name": "Elizabeth Warren",
+                        "chamber": "senate",
+                        "party": "D",
+                        "committees": [
+                            {"id": "SSBK", "name": "Banking"},
+                            {"id": None, "name": None},
+                        ],
+                    }
+                ]
+            return [
+                {
+                    "event_id": "evt_1",
+                    "ticker": "NVDA",
+                    "side": "sell",
+                    "date": "2026-09-01",
+                    "amount": "$1,001 - $15,000",
+                    "source_url": "https://x.com/y",
+                },
+                {"event_id": None, "ticker": None},
+            ]
+
+    person = SignalsEngine(_FakeNeo4j(), None).person("W000817")
+    assert person["name"] == "Elizabeth Warren"
+    assert person["committees"] == [{"id": "SSBK", "name": "Banking"}]
+    assert [t["ticker"] for t in person["trades"]] == ["NVDA"]
+
+
+def test_person_returns_none_when_unknown_or_down():
+    class _EmptyNeo4j:
+        def run_read(self, query, **params):
+            return []
+
+    assert SignalsEngine(_EmptyNeo4j(), None).person("NOPE") is None
+    assert _down_engine().person("W000817") is None

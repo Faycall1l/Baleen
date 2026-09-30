@@ -114,6 +114,25 @@ ORDER BY tickers DESC
 LIMIT 10
 """
 
+PERSON_QUERY = """
+MATCH (p:Politician {id: $pid})
+OPTIONAL MATCH (p)-[:MEMBER_OF]->(c:Committee)
+RETURN p.id AS id, p.name AS name, p.chamber AS chamber, p.party AS party,
+       collect(DISTINCT {id: c.id, name: c.name}) AS committees
+"""
+
+PERSON_TRADES_QUERY = """
+MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician {id: $pid})
+WHERE e.type = 'congress_trade'
+OPTIONAL MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)
+WITH e, t.ticker AS ticker
+ORDER BY e.transaction_date DESC
+LIMIT 20
+RETURN e.id AS event_id, ticker,
+       e.transaction_type AS side, e.transaction_date AS date,
+       e.amount_range AS amount, e.tweet_url AS source_url
+"""
+
 
 class SignalsEngine:
     """Read-only signal computation over the graph (+ filing returns in PG)."""
@@ -206,6 +225,26 @@ class SignalsEngine:
         except Exception:
             logger.exception("similar query failed")
             return []
+
+    def person(self, politician_id: str) -> dict | None:
+        """One politician's card: identity, committees, latest trades.
+
+        Returns None when the id is unknown so the route answers 404
+        instead of an empty shape. Trade rows carry ``event_id`` so the UI
+        can join its alert list client-side without a second round-trip.
+        """
+        try:
+            rows = self.neo4j.run_read(PERSON_QUERY, pid=politician_id)
+            trades = self.neo4j.run_read(PERSON_TRADES_QUERY, pid=politician_id)
+        except Exception:
+            logger.exception("person query failed")
+            return None
+        if not rows:
+            return None
+        person = dict(rows[0])
+        person["committees"] = [c for c in person.get("committees", []) if c.get("id")]
+        person["trades"] = [t for t in trades if t.get("event_id")]
+        return person
 
     def suspicious_timing(self, min_excess_pct: float = SUSPICIOUS_EXCESS_PCT) -> list[dict]:
         """Filings whose trade already beat the market hard — worth a look,
