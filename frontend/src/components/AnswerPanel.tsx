@@ -4,6 +4,7 @@ import type { QueryResponse } from '../types';
 interface Props {
   result: QueryResponse | null;
   error: string | null;
+  history: string[];
   onClose: () => void;
   onExample: (question: string) => void;
 }
@@ -14,7 +15,7 @@ const EXAMPLES = [
   'Show unusual options flow by sector.',
 ];
 
-export default function AnswerPanel({ result, error, onClose, onExample }: Props) {
+export default function AnswerPanel({ result, error, history, onClose, onExample }: Props) {
   return (
     <div className="answer-panel">
       <button className="answer-close" onClick={onClose} aria-label="Dismiss answer">
@@ -27,6 +28,15 @@ export default function AnswerPanel({ result, error, onClose, onExample }: Props
             Ask about the graph in plain English — the agent turns it into a
             validated Cypher query and explains the answer.
           </div>
+          {history.length > 0 && (
+            <div className="query-examples">
+              {history.slice(0, 5).map((q) => (
+                <button key={q} className="query-example" onClick={() => onExample(q)}>
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="query-examples">
             {EXAMPLES.map((ex) => (
               <button key={ex} className="query-example" onClick={() => onExample(ex)}>

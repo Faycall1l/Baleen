@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import AnswerPanel from './AnswerPanel';
 import HealthDot from './HealthDot';
 import QueryBar from './QueryBar';
+import { loadHistory } from '../queryHistory';
 import type { Health, QueryResponse } from '../types';
 
 // Top command bar: brand, ask box + answer panel, health dot (extracted from
@@ -13,10 +14,27 @@ export default function CommandBar({ health }: { health: Health | null }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [askSeed, setAskSeed] = useState<{ text: string; nonce: number } | null>(null);
+  const [focusSignal, setFocusSignal] = useState<number | null>(null);
 
   const onResult = useCallback((res: QueryResponse | null) => {
     setResult(res);
     setOpen(true);
+  }, []);
+
+  // Terminal palette trigger: Ctrl/⌘+K anywhere, or `/` when not typing,
+  // focuses the ask box (and opens the panel so history is one click away).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing)) {
+        e.preventDefault();
+        setFocusSignal(Date.now());
+        setOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
@@ -31,11 +49,13 @@ export default function CommandBar({ health }: { health: Health | null }) {
           onError={setError}
           onFocusAsk={() => setOpen(true)}
           externalAsk={askSeed}
+          focusSignal={focusSignal}
         />
         {open && (
           <AnswerPanel
             result={result}
             error={error}
+            history={loadHistory()}
             onClose={() => setOpen(false)}
             onExample={(q) => setAskSeed({ text: q, nonce: Date.now() })}
           />
