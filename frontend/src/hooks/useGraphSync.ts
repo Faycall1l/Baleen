@@ -5,7 +5,7 @@ import type Sigma from 'sigma';
 
 import { hashStr } from '../graph/geometry';
 import { applyVisibility } from '../graph/visibility';
-import { radialLayout } from '../graph/radial';
+import { forceLayout } from '../graph/forceLayout';
 import type { GraphData } from '../types';
 
 // Scan for non-finite coordinates (NaN/Infinity poison GPU batches and can
@@ -67,17 +67,17 @@ export function useGraphSync({
 
     // Layout on first paint AND on staged upgrades (P1 boots a small window,
     // then swaps in the full snapshot): a >30% order jump means a new window,
-    // not drift — relayout so the full graph gets real sectors instead of
+    // not drift — relayout so the full graph gets real clusters instead of
     // accreting around the small-window map. Steady-state polls hold order
     // and never trip this, so no flicker.
     const first = !paintedRef.current || data.nodes.length > paintedOrderRef.current * 1.3;
     if (first) {
       paintedRef.current = true;
       paintedOrderRef.current = data.nodes.length;
-      // First paint: deterministic radial-by-type layout (P2) over the
-      // rendered set. Same data always yields the same map — no random
-      // hairball. Nothing animates, and no layout ever re-runs afterwards.
-      const positions = radialLayout(data);
+      // First paint: one-shot ForceAtlas2 from deterministic radial seeds
+      // (R19). Same data always yields the same map — no random hairball —
+      // and the engine never runs live, so nothing animates afterwards.
+      const positions = forceLayout(data);
       graph.forEachNode((n) => {
         const p = positions.get(n);
         if (p) {
