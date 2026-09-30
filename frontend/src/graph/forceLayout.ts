@@ -74,5 +74,22 @@ function runForceAtlas2(
   for (const [id, pos] of Object.entries(positions)) {
     out.set(id, { x: pos.x, y: pos.y });
   }
+  return withFiniteFallback(out, seeds);
+}
+
+/**
+ * Belt and braces behind the try/catch: any non-finite engine output
+ * (NaN/Infinity from a degenerate component) falls back to that node's
+ * radial seed instead of poisoning the GPU batches downstream.
+ */
+export function withFiniteFallback(
+  positions: Map<string, { x: number; y: number }>,
+  seeds: Map<string, { x: number; y: number }>,
+): Map<string, { x: number; y: number }> {
+  const out = new Map<string, { x: number; y: number }>();
+  for (const [id, pos] of positions) {
+    if (Number.isFinite(pos.x) && Number.isFinite(pos.y)) out.set(id, pos);
+    else out.set(id, seeds.get(id) ?? { x: 0, y: 0 });
+  }
   return out;
 }

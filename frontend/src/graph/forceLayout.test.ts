@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { forceLayout, iterationsForOrder } from './forceLayout';
+import { forceLayout, iterationsForOrder, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -21,6 +21,22 @@ describe('iterationsForOrder', () => {
     expect(iterationsForOrder(600)).toBe(50);
     expect(iterationsForOrder(1000)).toBe(30);
     expect(iterationsForOrder(100000)).toBe(30);
+  });
+});
+
+describe('withFiniteFallback', () => {
+  it('replaces non-finite engine output with radial seeds', () => {
+    const seeds = new Map([
+      ['a', { x: 1, y: 2 }],
+      ['b', { x: 3, y: 4 }],
+    ]);
+    const positions = new Map([
+      ['a', { x: 10, y: 20 }],
+      ['b', { x: NaN, y: Infinity }],
+    ]);
+    const out = withFiniteFallback(positions, seeds);
+    expect(out.get('a')).toEqual({ x: 10, y: 20 });
+    expect(out.get('b')).toEqual({ x: 3, y: 4 });
   });
 });
 
