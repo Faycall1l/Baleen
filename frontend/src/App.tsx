@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import CommandBar from './components/CommandBar';
+import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
 import GraphView from './components/GraphView';
 import NodeDetail from './components/NodeDetail';
@@ -77,6 +78,16 @@ export default function App() {
           onSelect={setDrawer}
           counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
         />
+        <aside className="tape-dock" aria-label="Options flow tape">
+          <FlowTape
+            flow={flow}
+            count={flowCount}
+            error={flowError}
+            filters={flowFilters}
+            onFiltersChange={setFlowFilters}
+            onRetry={reloadFlow}
+          />
+        </aside>
         <main className="graph-area">
           <GraphErrorBoundary>
             <GraphView
