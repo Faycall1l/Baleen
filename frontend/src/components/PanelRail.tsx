@@ -29,6 +29,7 @@ export default function PanelRail({
           className={`rail-btn${drawer === key ? ' active' : ''}`}
           onClick={() => onSelect(drawer === key ? null : key)}
           title={label}
+          aria-expanded={drawer === key}
         >
           <span className="rail-label">{label}</span>
           {counts[key] > 0 && <span className="rail-badge">{counts[key]}</span>}

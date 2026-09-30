@@ -23,10 +23,15 @@ export default function CommandBar({ health }: { health: Health | null }) {
 
   // Terminal palette trigger: Ctrl/⌘+K anywhere, or `/` when not typing,
   // focuses the ask box (and opens the panel so history is one click away).
+  // Esc closes the answer panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
       if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing)) {
         e.preventDefault();
         setFocusSignal(Date.now());

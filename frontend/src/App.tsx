@@ -62,6 +62,16 @@ export default function App() {
     loadGraph();
   }, [graphTick, loadGraph]);
 
+  // Esc closes the open drawer from anywhere (R15).
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
+
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.
   const inbox = useAlertsInbox(alerts, drawer === 'alerts');
