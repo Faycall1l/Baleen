@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphData } from '../types';
-import { centerOnCentroid, forceLayout, iterationsForOrder, liftIsolates, withFiniteFallback } from './forceLayout';
+import { centerOnCentroid, forceLayout, iterationsForOrder, liftIsolates, normalizeRadius, withFiniteFallback } from './forceLayout';
 
 function node(id: string, label = 'Ticker', title = id): GraphData['nodes'][number] {
   return { id, label, key: id, title, props: {}, tweet_url: null };
@@ -37,6 +37,22 @@ describe('withFiniteFallback', () => {
     const out = withFiniteFallback(positions, seeds);
     expect(out.get('a')).toEqual({ x: 10, y: 20 });
     expect(out.get('b')).toEqual({ x: 3, y: 4 });
+  });
+});
+
+describe('normalizeRadius', () => {
+  it('scales the extent to the target, preserving direction', () => {
+    const out = normalizeRadius(
+      new Map([
+        ['a', { x: 6, y: 8 }],
+        ['b', { x: -3, y: -4 }],
+      ]),
+      20,
+    );
+    expect(out.get('a')).toEqual({ x: 12, y: 16 });
+    expect(out.get('b')).toEqual({ x: -6, y: -8 });
+    expect(normalizeRadius(new Map(), 20).size).toBe(0);
+    expect(normalizeRadius(new Map([['z', { x: 0, y: 0 }]]), 20).get('z')).toEqual({ x: 0, y: 0 });
   });
 });
 

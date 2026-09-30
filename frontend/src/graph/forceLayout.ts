@@ -89,15 +89,36 @@ function runForceAtlas2(
     out.set(id, { x: pos.x, y: pos.y });
   }
   // Halo after centering so the ring is measured in final frame coordinates.
-  // Sanitize first: centering a NaN poisons the whole map.
-  return liftIsolates(centerOnCentroid(withFiniteFallback(out, seeds)), data, seeds);
+  // Sanitize first: centering a NaN poisons the whole map. Normalize last
+  // so every payload opens at the same framing regardless of engine drift.
+  return normalizeRadius(
+    liftIsolates(centerOnCentroid(withFiniteFallback(out, seeds)), data, seeds),
+    radialRadius(data.nodes.length),
+  );
 }
 
 /**
- * Recenter on the centroid so the map sits at the origin regardless of
- * where gravity drifted it: the camera opens on content center by
- * construction, and survivors keep comparable framing across payloads.
+ * Scale the map so its extent matches a target radius: FA2 output scale
+ * drifts with graph size and settings, which used to reframe the camera
+ * per payload. Uniform scaling preserves every angle and ratio, so the
+ * layout's structure is untouched — only the framing is stable.
  */
+export function normalizeRadius(
+  positions: Map<string, { x: number; y: number }>,
+  targetRadius: number,
+): Map<string, { x: number; y: number }> {
+  let maxR = 0;
+  for (const pos of positions.values()) {
+    maxR = Math.max(maxR, Math.hypot(pos.x, pos.y));
+  }
+  if (maxR === 0) return positions;
+  const scale = targetRadius / maxR;
+  const out = new Map<string, { x: number; y: number }>();
+  for (const [id, pos] of positions) {
+    out.set(id, { x: pos.x * scale, y: pos.y * scale });
+  }
+  return out;
+}
 export function centerOnCentroid(
   positions: Map<string, { x: number; y: number }>,
 ): Map<string, { x: number; y: number }> {
