@@ -1,5 +1,5 @@
 import Graph from 'graphology';
-import forceAtlas2 from 'graphology-layout-forceatlas2';
+import forceAtlas2, { type ForceAtlas2Settings } from 'graphology-layout-forceatlas2';
 
 import type { GraphData } from '../types';
 import { hashStr } from './geometry';
@@ -38,6 +38,7 @@ export function iterationsForOrder(order: number): number {
 export function forceLayout(
   data: GraphData,
   existing?: Map<string, { x: number; y: number }>,
+  settingsOverride?: ForceAtlas2Settings,
 ): Map<string, { x: number; y: number }> {
   const seeds = radialLayout(data);
   // Survivors keep their live spots as seeds: a staged upgrade (small
@@ -57,7 +58,7 @@ export function forceLayout(
   // The layout must never blank the canvas: any engine failure (degenerate
   // input, numerical blowup) falls back to the radial seeds.
   try {
-    return runForceAtlas2(data, seeds, iterationsForOrder(data.nodes.length));
+    return runForceAtlas2(data, seeds, iterationsForOrder(data.nodes.length), settingsOverride);
   } catch {
     return seeds;
   }
@@ -67,6 +68,7 @@ function runForceAtlas2(
   data: GraphData,
   seeds: Map<string, { x: number; y: number }>,
   iterations: number,
+  settingsOverride?: ForceAtlas2Settings,
 ): Map<string, { x: number; y: number }> {
   const g = new Graph({ type: 'directed', allowSelfLoops: false });
   for (const n of data.nodes) {
@@ -81,7 +83,10 @@ function runForceAtlas2(
     if (!g.hasEdge(key)) g.addEdgeWithKey(key, l.source, l.target);
   }
 
-  const settings = forceAtlas2.inferSettings(g);
+  const settings: ForceAtlas2Settings = {
+    ...forceAtlas2.inferSettings(g),
+    ...settingsOverride,
+  };
   if (g.order > BARNES_HUT_ORDER) settings.barnesHutOptimize = true;
   const positions = forceAtlas2(g, { iterations, settings });
   const out = new Map<string, { x: number; y: number }>();

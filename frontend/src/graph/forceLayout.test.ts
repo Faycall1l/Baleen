@@ -175,6 +175,16 @@ describe('forceLayout', () => {
     expect(dist).toBeLessThan(200);
   });
 
+  it('honors settings overrides for future tuning', () => {
+    const plain = forceLayout(PAIR);
+    const strong = forceLayout(PAIR, undefined, { strongGravityMode: true, gravity: 5 });
+    expect([...strong.entries()]).not.toEqual([...plain.entries()]);
+    for (const { x, y } of strong.values()) {
+      expect(Number.isFinite(x)).toBe(true);
+      expect(Number.isFinite(y)).toBe(true);
+    }
+  });
+
   it('is deterministic for the same payload', () => {
     const first = forceLayout(PAIR);
     const second = forceLayout(PAIR);
@@ -192,8 +202,7 @@ describe('forceLayout', () => {
     expect(forceLayout({ nodes: [], links: [], node_count: 0, link_count: 0 }).size).toBe(0);
   });
 
-  it('lets live positions steer the result (staged upgrades keep the map)', () => {
-    // Seeds feed the engine: an asymmetric graph started from flung live
+  it('lets live positions steer the result (staged upgrades keep the map)', () => {    // Seeds feed the engine: an asymmetric graph started from flung live
     // spots must settle somewhere different than from radial seeds. (Exact
     // geometry is the engine's business; influence is what we own.)
     const star: GraphData = {
