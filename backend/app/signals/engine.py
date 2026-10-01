@@ -133,6 +133,40 @@ RETURN e.id AS event_id, ticker,
        e.amount_range AS amount, e.tweet_url AS source_url
 """
 
+TICKER_QUERY = """
+MATCH (t:Ticker {ticker: $sym})
+OPTIONAL MATCH (t)-[:IN_SECTOR]->(s:Sector)
+RETURN t.ticker AS ticker, s.name AS sector
+"""
+
+TICKER_TRADES_QUERY = """
+MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker {ticker: $sym})
+WHERE e.type IN ['congress_trade', 'insider_trade']
+OPTIONAL MATCH (e)-[:INVOLVES_POLITICIAN]->(p:Politician)
+OPTIONAL MATCH (e)-[:INVOLVES_INSIDER]->(i:Insider)
+WITH e, coalesce(p.name, i.name) AS who
+ORDER BY e.transaction_date DESC
+LIMIT 20
+RETURN e.id AS event_id, e.type AS kind, who,
+       e.transaction_type AS side, e.transaction_date AS date,
+       e.amount_range AS amount, e.tweet_url AS source_url
+"""
+
+TICKER_FLOW_QUERY = """
+MATCH (e:Event {type: 'options_flow'})-[:INVOLVES_TICKER]->(t:Ticker {ticker: $sym})
+WHERE e.first_seen_at IS NOT NULL
+WITH e,
+     CASE WHEN coalesce(e.open_interest, 0) > 0
+          THEN toFloat(e.volume) / toFloat(e.open_interest)
+          ELSE toFloat(e.volume)
+     END AS ratio
+ORDER BY e.first_seen_at DESC
+LIMIT 10
+RETURN e.id AS event_id, e.contract_type AS side, e.strike AS strike,
+       e.expiration AS expiration, e.volume AS volume,
+       e.open_interest AS open_interest, ratio, e.sentiment AS sentiment
+"""
+
 
 class SignalsEngine:
     """Read-only signal computation over the graph (+ filing returns in PG)."""
@@ -245,6 +279,30 @@ class SignalsEngine:
         person["committees"] = [c for c in person.get("committees", []) if c.get("id")]
         person["trades"] = [t for t in trades if t.get("event_id")]
         return person
+
+    def ticker(self, symbol: str) -> dict | None:
+        """One ticker's card: sector, latest flow prints, latest trades.
+
+        Returns None when the symbol is unknown so the route answers 404.
+        Both lists carry ``event_id`` so the UI joins its alert list
+        client-side without a second round-trip.
+        """
+        sym = (symbol or "").strip().upper()
+        if not sym:
+            return None
+        try:
+            rows = self.neo4j.run_read(TICKER_QUERY, sym=sym)
+            trades = self.neo4j.run_read(TICKER_TRADES_QUERY, sym=sym)
+            flow = self.neo4j.run_read(TICKER_FLOW_QUERY, sym=sym)
+        except Exception:
+            logger.exception("ticker query failed")
+            return None
+        if not rows:
+            return None
+        card = dict(rows[0])
+        card["trades"] = [t for t in trades if t.get("event_id")]
+        card["flow"] = [f for f in flow if f.get("event_id")]
+        return card
 
     def suspicious_timing(self, min_excess_pct: float = SUSPICIOUS_EXCESS_PCT) -> list[dict]:
         """Filings whose trade already beat the market hard — worth a look,

@@ -28,6 +28,7 @@ from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
 from app.api.feed_routes import router as feed_router
 from app.api.graph_routes import router as graph_router
+from app.api.market_routes import router as market_router
 from app.api.people_routes import router as people_router
 from app.api.query_routes import router as query_router
 from app.api.signals_routes import router as signals_router
@@ -38,6 +39,7 @@ router = APIRouter(prefix="/api")
 # module at call time so tests keep one monkeypatch surface.
 router.include_router(feed_router)
 router.include_router(graph_router)
+router.include_router(market_router)
 router.include_router(people_router)
 router.include_router(query_router)
 router.include_router(signals_router)

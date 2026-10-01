@@ -273,3 +273,55 @@ def test_person_returns_none_when_unknown_or_down():
 
     assert SignalsEngine(_EmptyNeo4j(), None).person("NOPE") is None
     assert _down_engine().person("W000817") is None
+
+
+def test_ticker_merges_sector_trades_and_flow():
+    """The ticker card joins sector, latest trades, and latest prints."""
+
+    class _FakeNeo4j:
+        def run_read(self, query, **params):
+            assert params == {"sym": "NVDA"}
+            if "IN_SECTOR" in query:
+                return [{"ticker": "NVDA", "sector": "Technology"}]
+            if "congress_trade" in query:
+                return [
+                    {
+                        "event_id": "evt_t",
+                        "kind": "congress_trade",
+                        "who": "Jane Doe",
+                        "side": "buy",
+                        "date": "2026-09-01",
+                        "amount": "$1 - $2",
+                        "source_url": "https://x.com/y",
+                    },
+                    {"event_id": None},
+                ]
+            return [
+                {
+                    "event_id": "evt_f",
+                    "side": "call",
+                    "strike": 130.0,
+                    "expiration": "2026-10-17",
+                    "volume": 5000,
+                    "open_interest": 1000,
+                    "ratio": 5.0,
+                    "sentiment": "bullish",
+                }
+            ]
+
+    card = SignalsEngine(_FakeNeo4j(), None).ticker("nvda")
+    assert card["ticker"] == "NVDA"
+    assert card["sector"] == "Technology"
+    assert [t["event_id"] for t in card["trades"]] == ["evt_t"]
+    assert [f["event_id"] for f in card["flow"]] == ["evt_f"]
+
+
+def test_ticker_returns_none_when_unknown_or_blank_or_down():
+    class _EmptyNeo4j:
+        def run_read(self, query, **params):
+            return []
+
+    engine = SignalsEngine(_EmptyNeo4j(), None)
+    assert engine.ticker("ZZZ") is None
+    assert engine.ticker("  ") is None
+    assert _down_engine().ticker("NVDA") is None
