@@ -12,6 +12,7 @@ interface Props {
   searchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
   matches: GraphNode[];
+  matchTotal: number;
   onChooseMatch: (node: GraphNode) => void;
   onFit: () => void;
   onResetView: () => void;
@@ -27,6 +28,7 @@ export default function GraphToolbar({
   searchOpen,
   onSearchOpenChange,
   matches,
+  matchTotal,
   onChooseMatch,
   onFit,
   onResetView,
@@ -86,6 +88,9 @@ export default function GraphToolbar({
           />
           {searchOpen && matches.length > 0 && (
             <div className="graph-search-results" role="listbox" aria-label="Matching nodes">
+              <div className="graph-search-count" aria-live="polite">
+                {matches.length} of {matchTotal} match{matchTotal === 1 ? '' : 'es'}
+              </div>
               {matches.map((m, i) => (
                 <button
                   key={m.id}

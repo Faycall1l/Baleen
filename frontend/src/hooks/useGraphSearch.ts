@@ -15,6 +15,7 @@ export interface Search {
   open: boolean;
   setOpen: (o: boolean) => void;
   matches: GraphNode[];
+  matchTotal: number;
   choose: (m: GraphNode) => void;
 }
 
@@ -41,6 +42,13 @@ export function useGraphSearch({
     return data.nodes.filter((n) => n.title.toLowerCase().includes(q)).slice(0, 8);
   }, [query, data]);
 
+  // Total hits behind the capped dropdown (R34): "3 of 27" beats guessing.
+  const matchTotal = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!data || q.length < 2) return 0;
+    return data.nodes.reduce((n, node) => (node.title.toLowerCase().includes(q) ? n + 1 : n), 0);
+  }, [query, data]);
+
   const choose = (m: GraphNode) => {
     const kind = data?.nodes.find((n) => n.id === m.id)?.label;
     if (kind && hiddenTypes.has(kind)) showType(kind);
@@ -49,5 +57,5 @@ export function useGraphSearch({
     setOpen(false);
   };
 
-  return { query, setQuery, open, setOpen, matches, choose };
+  return { query, setQuery, open, setOpen, matches, matchTotal, choose };
 }

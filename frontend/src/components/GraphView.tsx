@@ -203,6 +203,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
         searchOpen={search.open}
         onSearchOpenChange={search.setOpen}
         matches={search.matches}
+        matchTotal={search.matchTotal}
         onChooseMatch={search.choose}
         onFit={handleFit}
         onResetView={handleResetView}

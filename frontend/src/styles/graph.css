@@ -163,6 +163,12 @@
   margin-right: 6px;
 }
 
+.graph-search-count {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .graph-fit-btn {
   padding: 7px 12px;
   font-size: 13px;
