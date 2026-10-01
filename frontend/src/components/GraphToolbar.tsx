@@ -14,6 +14,7 @@ interface Props {
   matches: GraphNode[];
   onChooseMatch: (node: GraphNode) => void;
   onFit: () => void;
+  onResetView: () => void;
 }
 
 export default function GraphToolbar({
@@ -28,6 +29,7 @@ export default function GraphToolbar({
   matches,
   onChooseMatch,
   onFit,
+  onResetView,
 }: Props) {
   // Keyboard navigation through results (R27): arrows move the highlight
   // (wrapping), Enter picks it, Escape clears. Resets on new matches.
@@ -102,6 +104,9 @@ export default function GraphToolbar({
         </div>
       <button className="graph-fit-btn" onClick={onFit} title="Fit the whole graph in view">
         Fit
+      </button>
+      <button className="graph-fit-btn" onClick={onResetView} title="Fit, clear selection, and show all types">
+        Reset
       </button>
     </div>
   );

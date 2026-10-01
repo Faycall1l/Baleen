@@ -138,6 +138,13 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     }
   };
 
+  // One-click escape hatch (R33): refit, drop the selection, show all types.
+  const handleResetView = () => {
+    clearTypes();
+    onSelect(null);
+    handleFit();
+  };
+
   // Zoom shortcuts (R29): instant ratio steps around the view center.
   // Instant, not animated: deterministic and safe under reduced motion.
   const zoomBy = (factor: number) => {
@@ -198,6 +205,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
         matches={search.matches}
         onChooseMatch={search.choose}
         onFit={handleFit}
+        onResetView={handleResetView}
       />
       <GraphLegend
         labels={SCHEMA_LABELS}
