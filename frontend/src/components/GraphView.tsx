@@ -131,6 +131,16 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     sigmaRef.current?.getCamera().animatedReset({ duration: 600 });
   };
 
+  // Zoom shortcuts (R29): instant ratio steps around the view center.
+  // Instant, not animated: deterministic and safe under reduced motion.
+  const zoomBy = (factor: number) => {
+    const sigma = sigmaRef.current;
+    if (!sigma) return;
+    const camera = sigma.getCamera();
+    const state = camera.getState();
+    camera.setState({ ...state, ratio: state.ratio * factor });
+  };
+
   // Spatial keyboard navigation (R28): arrows step selection to the
   // nearest node in that direction. Graph units map y-down onto the
   // screen, matching DOM convention.
@@ -204,6 +214,12 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
           if (dir) {
             e.preventDefault();
             moveSelection(dir[0], dir[1]);
+          } else if (e.key === '+' || e.key === '=') {
+            e.preventDefault();
+            zoomBy(0.8);
+          } else if (e.key === '-' || e.key === '_') {
+            e.preventDefault();
+            zoomBy(1.25);
           }
         }}
       />
