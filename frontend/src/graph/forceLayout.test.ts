@@ -167,6 +167,8 @@ describe('packComponents', () => {
     // Single component: identical map back.
     const one: GraphData = { ...two, links: two.links.slice(0, 1) };
     expect(packComponents(seeds, one)).toEqual(seeds);
+    // Jittered but deterministic: same input twice, same output.
+    expect(packComponents(seeds, two)).toEqual(packComponents(seeds, two));
   });
 });
 

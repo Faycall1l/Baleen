@@ -149,8 +149,13 @@ export function packComponents(
   const rows = Math.ceil(boxes.length / cols);
   const out = new Map(positions);
   boxes.forEach((box, i) => {
-    const tx = ((i % cols) - (cols - 1) / 2) * cell - box.cx;
-    const ty = (Math.floor(i / cols) - (rows - 1) / 2) * cell - box.cy;
+    // Deterministic jitter inside the cell: a perfect grid reads artificial
+    // (every row evenly spaced dots), while ±35% of a cell keeps components
+    // separated but breaks the rigid rows.
+    const jx = (hashStr(`${box.ids[0]}:jx`) - 0.5) * 0.7 * cell;
+    const jy = (hashStr(`${box.ids[0]}:jy`) - 0.5) * 0.7 * cell;
+    const tx = ((i % cols) - (cols - 1) / 2) * cell - box.cx + jx;
+    const ty = (Math.floor(i / cols) - (rows - 1) / 2) * cell - box.cy + jy;
     for (const id of box.ids) {
       const p = out.get(id)!;
       out.set(id, { x: p.x + tx, y: p.y + ty });
