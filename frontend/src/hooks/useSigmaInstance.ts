@@ -82,8 +82,10 @@ export function useSigmaInstance(
       labelWeight: '500',
       labelColor: { color: theme.textDim },
       labelFont: 'system-ui, sans-serif',
-      labelRenderedSizeThreshold: 5,
-      labelDensity: 0.15,
+      // Labels are the top overlap offender in dense pockets: only hubs
+      // clear the bar at overview zoom, the rest appear on zoom/select.
+      labelRenderedSizeThreshold: 7,
+      labelDensity: 0.12,
       // Label gate: size / sqrt(ratio) >= threshold after the LabelGrid
       // pre-selects ceil(density / ratio^2) biggest candidates per cell.
       // Hub labels visible from the open view; zoom/select reveal the rest.
