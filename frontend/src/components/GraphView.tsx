@@ -6,6 +6,7 @@ import type { GraphData, GraphNode } from '../types';
 import { applyVisibility } from '../graph/visibility';
 import { nearestInDirection, type PointNode } from '../graph/spatial';
 import { SCHEMA_LABELS } from '../graph/schema';
+import { loadHiddenTypes, saveHiddenTypes } from '../uiPrefs';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';
@@ -51,19 +52,27 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
   dataRef.current = data;
   // Labels hidden from the view (legend toggles + toolbar pills). There is
   // exactly one canvas — no modes — so every filter is visible as a pill
-  // and reversible in one click.
-  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  // and reversible in one click. Persisted across visits (R40).
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
+    () => new Set(loadHiddenTypes()),
+  );
 
   const toggleType = useCallback((label: string) => {
     setHiddenTypes((prev) => {
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
+      saveHiddenTypes(next);
       return next;
     });
   }, []);
 
-  const clearTypes = useCallback(() => setHiddenTypes(new Set()), []);
+  const clearTypes = useCallback(() => {
+    setHiddenTypes(() => {
+      saveHiddenTypes([]);
+      return new Set();
+    });
+  }, []);
 
   const selectNodeByKey = useGraphSelection({ graphRef, onSelect });
 
