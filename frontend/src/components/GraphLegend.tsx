@@ -6,9 +6,10 @@ interface Props {
   hiddenTypes: Set<string>;
   interactive: boolean;
   onToggleType: (label: string) => void;
+  onSoloType?: (label: string) => void;
 }
 
-export default function GraphLegend({ labels, counts, hiddenTypes, interactive, onToggleType }: Props) {
+export default function GraphLegend({ labels, counts, hiddenTypes, interactive, onToggleType, onSoloType }: Props) {
   return (
     <div className="graph-legend">
       {labels.map((label) => {
@@ -18,8 +19,12 @@ export default function GraphLegend({ labels, counts, hiddenTypes, interactive, 
           <span
             key={label}
             className={`graph-legend-item${hidden ? ' off' : ''}${interactive ? ' clickable' : ''}`}
-            onClick={interactive ? () => onToggleType(label) : undefined}
-            title={interactive ? `Toggle ${label} nodes` : `${count} in view`}
+            onClick={
+              interactive
+                ? (e) => (e.altKey && onSoloType ? onSoloType(label) : onToggleType(label))
+                : undefined
+            }
+            title={interactive ? `Toggle ${label} nodes (Alt-click isolates)` : `${count} in view`}
           >
             <span
               className="graph-legend-dot"

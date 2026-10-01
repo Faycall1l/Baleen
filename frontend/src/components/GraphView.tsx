@@ -7,6 +7,7 @@ import { applyVisibility } from '../graph/visibility';
 import { nearestInDirection, type PointNode } from '../graph/spatial';
 import { SCHEMA_LABELS } from '../graph/schema';
 import { loadHiddenTypes, saveHiddenTypes } from '../uiPrefs';
+import { soloHidden } from '../typeFilters';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';
@@ -72,6 +73,16 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
     setHiddenTypes(() => {
       saveHiddenTypes([]);
       return new Set();
+    });
+  }, []);
+
+  // Alt-click a legend type isolates it (R43): everything else hides;
+  // alt-clicking the soloed type restores all.
+  const soloType = useCallback((label: string) => {
+    setHiddenTypes((prev) => {
+      const next = soloHidden(SCHEMA_LABELS, label, prev);
+      saveHiddenTypes(next);
+      return next;
     });
   }, []);
 
@@ -226,6 +237,7 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
         hiddenTypes={hiddenTypes}
         interactive
         onToggleType={toggleType}
+        onSoloType={soloType}
       />
       <div ref={containerRef} className="graph-canvas"
         tabIndex={0}
