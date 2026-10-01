@@ -25,6 +25,7 @@ describe('person view', () => {
   it('joins trades to alerts by event id, keeping unalerted trades', () => {
     const joined = matchAlerts([trade('e1'), trade('e2')], [alert(1, 'e1'), alert(2, 'e1')]);
     expect(joined[0].alerts.map((a) => a.id)).toEqual([1, 2]);
+    expect(joined[0].row.event_id).toBe('e1');
     expect(joined[1].alerts).toEqual([]);
   });
 

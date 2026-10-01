@@ -162,6 +162,34 @@ export interface PersonCard {
   trades: PersonTrade[];
 }
 
+export interface TickerFlowPrint {
+  event_id: string;
+  side: string | null;
+  strike: number | null;
+  expiration: string | null;
+  volume: number | null;
+  open_interest: number | null;
+  ratio: number;
+  sentiment: string | null;
+}
+
+export interface TickerTrade {
+  event_id: string;
+  kind: string | null;
+  who: string | null;
+  side: string | null;
+  date: string | null;
+  amount: string | null;
+  source_url: string | null;
+}
+
+export interface TickerCard {
+  ticker: string;
+  sector: string | null;
+  trades: TickerTrade[];
+  flow: TickerFlowPrint[];
+}
+
 export interface UncoveredRow {
   politician: string;
   sector: string;

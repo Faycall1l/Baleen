@@ -45,7 +45,7 @@ export default function PoliticianDetail({ node, person, personError, alerts, on
           <div className="node-links">
             <div className="node-links-title">Trades · {joined.length}</div>
             {joined.length === 0 && <div className="empty-hint">No disclosed trades in the graph.</div>}
-            {joined.map(({ trade, alerts: tradeAlerts }) => (
+            {joined.map(({ row: trade, alerts: tradeAlerts }) => (
               <div className="alert-item" key={trade.event_id}>
                 <div className="alert-title">
                   <b>{trade.ticker ?? '—'}</b> · {trade.side ?? '—'}

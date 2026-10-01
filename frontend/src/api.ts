@@ -1,7 +1,7 @@
 // Thin client for the Baleen API surfaces.
 
 import { buildFlowQuery } from './flow';
-import type { Alert, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, PersonCard, QueryResponse, Report, SignalsBundle } from './types';
+import type { Alert, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, PersonCard, QueryResponse, Report, SignalsBundle, TickerCard } from './types';
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -80,4 +80,8 @@ export function fetchFlow(filters: FlowFilters, signal?: AbortSignal): Promise<F
 
 export function fetchPerson(politicianId: string): Promise<{ person: PersonCard }> {
   return json<{ person: PersonCard }>(`/api/politicians/${encodeURIComponent(politicianId)}`);
+}
+
+export function fetchTicker(symbol: string): Promise<{ ticker: TickerCard }> {
+  return json<{ ticker: TickerCard }>(`/api/tickers/${encodeURIComponent(symbol)}`);
 }

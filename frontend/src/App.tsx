@@ -10,12 +10,14 @@ import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
 import PoliticianDetail from './components/PoliticianDetail';
+import TickerDetail from './components/TickerDetail';
 import { useFeeds } from './hooks/useFeeds';
 import { useAlertsInbox } from './hooks/useAlertsInbox';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
 import { usePerson } from './hooks/usePerson';
+import { useTicker } from './hooks/useTicker';
 import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
@@ -100,6 +102,15 @@ export default function App() {
     : null;
   const { person, error: personError } = usePerson(politicianId);
 
+  // Ticker view (R24b): same card pattern as politicians.
+  const tickerSymbol =
+    selected?.label === 'Ticker'
+      ? (typeof selected.props.ticker === 'string' && selected.props.ticker) ||
+        selected.id.split(':').slice(1).join(':') ||
+        null
+      : null;
+  const { card: tickerCard, error: tickerError } = useTicker(tickerSymbol);
+
   return (
     <div className="app">
       <CommandBar health={health} />
@@ -178,6 +189,15 @@ export default function App() {
                 node={selected}
                 person={person}
                 personError={personError}
+                alerts={alerts}
+                onClose={() => setSelected(null)}
+                onAlertClick={openAlertNode}
+              />
+            ) : tickerSymbol ? (
+              <TickerDetail
+                node={selected}
+                card={tickerCard}
+                cardError={tickerError}
                 alerts={alerts}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
