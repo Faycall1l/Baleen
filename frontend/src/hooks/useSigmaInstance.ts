@@ -34,6 +34,7 @@ interface Callbacks {
   onNodeClick: (id: string) => void;
   onStageClick: () => void;
   onNodeDragged: (id: string, x: number, y: number) => void;
+  onEdgeHover: (rel: string | null) => void;
 }
 
 /**
@@ -104,6 +105,14 @@ export function useSigmaInstance(
       cbsRef.current.onNodeClick(node);
     });
     fresh.on('clickStage', () => cbsRef.current.onStageClick());
+    // Edge readout (R35): hovering a relationship names it in the status
+    // bar. Labels stay off the canvas — the mesh stays clean.
+    fresh.on('enterEdge', ({ edge }) => {
+      const g = getGraph();
+      const rel = g && g.hasEdge(edge) ? g.getEdgeAttribute(edge, 'label') : null;
+      cbsRef.current.onEdgeHover(typeof rel === 'string' && rel ? rel : null);
+    });
+    fresh.on('leaveEdge', () => cbsRef.current.onEdgeHover(null));
     fresh.on('downNode', (e) => {
       dragRef.current = e.node;
       fresh.getCamera().disable();

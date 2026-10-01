@@ -29,6 +29,9 @@ export default function App() {
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
   const [drawer, setDrawer] = useState<Drawer>(null);
+  // Hovered relationship readout (R35) lives here so it can join the
+  // status bar next to the counts.
+  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   // First-run tour (R11): shown until dismissed, persisted across visits.
   const [showTour, setShowTour] = useState(() => !loadOnboarded());
   const dismissTour = () => {
@@ -139,6 +142,7 @@ export default function App() {
               error={graphError}
               selectedId={selected?.id ?? null}
               onSelect={handleSelect}
+              onHoverEdgeChange={setHoverEdge}
               loadingHint={
                 graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
               }
@@ -179,6 +183,7 @@ export default function App() {
             {graph?.truncated && graph.event_count
               ? ` · recent ${graph.node_count} of ${graph.event_count} events`
               : ''}
+            {hoverEdge ? ` · rel: ${hoverEdge}` : ''}
           </div>
         </main>
 
