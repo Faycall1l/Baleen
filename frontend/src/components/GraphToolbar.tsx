@@ -4,6 +4,7 @@ import type { GraphNode } from '../types';
 
 interface Props {
   hiddenTypes: Set<string>;
+  typeCounts: Map<string, number>;
   onToggleType: (label: string) => void;
   onClearTypes: () => void;
   query: string;
@@ -17,6 +18,7 @@ interface Props {
 
 export default function GraphToolbar({
   hiddenTypes,
+  typeCounts,
   onToggleType,
   onClearTypes,
   query,
@@ -43,10 +45,10 @@ export default function GraphToolbar({
               key={label}
               className="type-pill"
               onClick={() => onToggleType(label)}
-              aria-label={`Show ${label} nodes`}
+              aria-label={`Show ${label} nodes (${typeCounts.get(label) ?? 0} hidden)`}
               title={`Show ${label} nodes`}
             >
-              {label} ×
+              {label} · {typeCounts.get(label) ?? 0} ×
             </button>
           ))}
           <button className="type-clear" onClick={onClearTypes}>

@@ -88,7 +88,7 @@ await step('type filter pills hide and restore', async () => {
   // Hiding a type via the legend must surface as an explicit, reversible
   // pill — no silent filter state (R18).
   await page.getByText(/Event · \d+/).click({ timeout: 10000 });
-  const pill = page.getByRole('button', { name: 'Show Event nodes' });
+  const pill = page.getByRole('button', { name: /Show Event nodes/ });
   await pill.waitFor({ timeout: 10000 });
   await page.screenshot({ path: path.join(outdir, '03-filtered.png') });
   await page.getByRole('button', { name: 'Show all' }).click();

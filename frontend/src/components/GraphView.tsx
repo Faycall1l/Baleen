@@ -188,6 +188,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     <div className="graph-wrap">
       <GraphToolbar
         hiddenTypes={hiddenTypes}
+        typeCounts={typeCounts}
         onToggleType={toggleType}
         onClearTypes={clearTypes}
         query={search.query}
