@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import type { GraphNode } from '../types';
 
 interface Props {
@@ -25,6 +27,12 @@ export default function GraphToolbar({
   onChooseMatch,
   onFit,
 }: Props) {
+  // Keyboard navigation through results (R27): arrows move the highlight
+  // (wrapping), Enter picks it, Escape clears. Resets on new matches.
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [matches]);
   return (
     <div className="graph-toolbar">
       {hiddenTypes.size > 0 && (
@@ -56,8 +64,15 @@ export default function GraphToolbar({
             onFocus={() => onSearchOpenChange(true)}
             onBlur={() => setTimeout(() => onSearchOpenChange(false), 150)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && matches.length > 0) onChooseMatch(matches[0]);
-              if (e.key === 'Escape') {
+              if (e.key === 'ArrowDown' && matches.length > 0) {
+                e.preventDefault();
+                setActiveIndex((i) => (i + 1) % matches.length);
+              } else if (e.key === 'ArrowUp' && matches.length > 0) {
+                e.preventDefault();
+                setActiveIndex((i) => (i - 1 + matches.length) % matches.length);
+              } else if (e.key === 'Enter' && matches.length > 0) {
+                onChooseMatch(matches[Math.min(activeIndex, matches.length - 1)]);
+              } else if (e.key === 'Escape') {
                 onQueryChange('');
                 onSearchOpenChange(false);
               }
@@ -66,9 +81,17 @@ export default function GraphToolbar({
             aria-label="Find a node"
           />
           {searchOpen && matches.length > 0 && (
-            <div className="graph-search-results">
-              {matches.map((m) => (
-                <button key={m.id} onMouseDown={(e) => e.preventDefault()} onClick={() => onChooseMatch(m)}>
+            <div className="graph-search-results" role="listbox" aria-label="Matching nodes">
+              {matches.map((m, i) => (
+                <button
+                  key={m.id}
+                  role="option"
+                  aria-selected={i === activeIndex}
+                  className={i === activeIndex ? 'active' : undefined}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => onChooseMatch(m)}
+                >
                   <span className="graph-search-label">{m.label}</span> {m.title}
                 </button>
               ))}

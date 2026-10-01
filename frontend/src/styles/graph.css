@@ -150,6 +150,11 @@
   border: none;
 }
 
+.graph-search-results button.active {
+  background: var(--surface-2);
+  border: none;
+}
+
 .graph-search-label {
   color: var(--text-muted);
   font-size: 11px;
