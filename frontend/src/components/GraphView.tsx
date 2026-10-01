@@ -232,7 +232,11 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
         onResetView={handleResetView}
       />
       <GraphLegend
-        labels={SCHEMA_LABELS}
+        // Biggest types first (R44): the eye lands on what dominates the
+        // view. Stable sort keeps SCHEMA_LABELS order on ties.
+        labels={[...SCHEMA_LABELS].sort(
+          (a, b) => (typeCounts.get(b) ?? 0) - (typeCounts.get(a) ?? 0),
+        )}
         counts={typeCounts}
         hiddenTypes={hiddenTypes}
         interactive
