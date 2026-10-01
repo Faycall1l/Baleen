@@ -180,6 +180,10 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
   // NOTE: fetch errors overlay the last-good canvas (see below) instead of
   // replacing it: unmounting on error then remounting on recovery replayed
   // the full layout each time, which read as an endless big bang.
+  const allHidden =
+    data !== null &&
+    data.nodes.length > 0 &&
+    data.nodes.every((n) => hiddenTypes.has(n.label));
   return (
     <div className="graph-wrap">
       <GraphToolbar
@@ -201,9 +205,7 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
         interactive
         onToggleType={toggleType}
       />
-      <div
-        ref={containerRef}
-        className="graph-canvas"
+      <div ref={containerRef} className="graph-canvas"
         tabIndex={0}
         role="application"
         aria-label="Knowledge graph canvas. Focus and use arrow keys to move selection between nodes."
@@ -230,6 +232,14 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
           }
         }}
       />
+      {allHidden && (
+        <div className="graph-empty-filter" role="status">
+          <div>Every type is hidden — the canvas is empty by filter, not by data.</div>
+          <button type="button" onClick={clearTypes}>
+            Show all types
+          </button>
+        </div>
+      )}
       {warming && (
         <div className="graph-error" title="Showing the quick first window; the full graph is still loading">
           Warming up — full graph loading…

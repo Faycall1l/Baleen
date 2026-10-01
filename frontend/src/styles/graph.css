@@ -169,6 +169,30 @@
   background: rgba(35, 35, 40, 0.92);
 }
 
+/* Empty-by-filter overlay (R31): centered card, distinct from the
+   loading/empty-data states so "I hid everything" never reads as
+   "there is no data". */
+.graph-empty-filter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  max-width: 340px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.graph-empty-filter button {
+  margin-top: 10px;
+}
+
 /* Type filter pills (R18): every hidden type is visible here and reversible
    in one click — no silent filter state anywhere. */
 .type-filters {
