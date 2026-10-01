@@ -22,6 +22,7 @@ export function useInspectorLinks(
   openAlertNode: (a: Alert) => boolean;
   openReportNode: (r: Report) => void;
   openLeaderNode: (l: LeaderboardEntry) => void;
+  openTickerNode: (ticker: string) => boolean;
   inspectorLinks: { label: string; onOpen: () => void }[];
 } {
   const findEventNode = useCallback(
@@ -83,6 +84,13 @@ export function useInspectorLinks(
     [findTickerNode, reveal],
   );
 
+  const openTickerNode = useCallback(
+    (ticker: string): boolean => {
+      return reveal(findTickerNode(ticker));
+    },
+    [findTickerNode, reveal],
+  );
+
   // What fired on / mentions the selected node, as specific items — not
   // a count pointing at the general drawer (R21). Each item opens its
   // exact subject; overflow falls back to the drawer.
@@ -111,5 +119,5 @@ export function useInspectorLinks(
     return links;
   }, [selected, alerts, briefs, reports, setDrawer, openAlertNode, openReportNode]);
 
-  return { openAlertNode, openReportNode, openLeaderNode, inspectorLinks };
+  return { openAlertNode, openReportNode, openLeaderNode, openTickerNode, inspectorLinks };
 }

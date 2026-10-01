@@ -15,9 +15,10 @@ interface Props {
   filters: FlowFilters;
   onFiltersChange: (filters: FlowFilters) => void;
   onRetry: () => void;
+  onSelectTicker?: (ticker: string) => void;
 }
 
-export default function FlowTape({ flow, count, error, filters, onFiltersChange, onRetry }: Props) {
+export default function FlowTape({ flow, count, error, filters, onFiltersChange, onRetry, onSelectTicker }: Props) {
   return (
     <>
       <h2>Flow tape</h2>
@@ -102,7 +103,12 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
             </thead>
             <tbody>
               {flow.map((print) => (
-                <tr key={print.event_id} className={sentimentClass(print.sentiment)}>
+                <tr
+                  key={print.event_id}
+                  className={`${sentimentClass(print.sentiment)}${onSelectTicker ? ' clickable' : ''}`}
+                  onClick={onSelectTicker ? () => onSelectTicker(print.ticker) : undefined}
+                  title={onSelectTicker ? `Show ${print.ticker} on the canvas` : undefined}
+                >
                   <td className="ticker">{print.ticker}</td>
                   <td>{print.side === 'call' ? 'CALL' : 'PUT'}</td>
                   <td className="num">{formatStrike(print.strike)}</td>

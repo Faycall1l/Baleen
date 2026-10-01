@@ -71,6 +71,10 @@
   background: rgba(122, 184, 232, 0.08);
 }
 
+.flow-tape tbody tr.clickable {
+  cursor: pointer;
+}
+
 .flow-tape .ticker {
   color: var(--accent);
   font-weight: 700;

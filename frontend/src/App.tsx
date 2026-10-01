@@ -88,7 +88,7 @@ export default function App() {
   // the rail badge and the drawer share one source of truth.
   const inbox = useAlertsInbox(alerts, drawer === 'alerts');
 
-  const { openAlertNode, openReportNode, openLeaderNode, inspectorLinks } = useInspectorLinks(
+  const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, inspectorLinks } = useInspectorLinks(
     graph,
     alerts,
     briefs,
@@ -141,6 +141,7 @@ export default function App() {
             filters={flowFilters}
             onFiltersChange={setFlowFilters}
             onRetry={reloadFlow}
+            onSelectTicker={openTickerNode}
           />
         </aside>
         <main className="graph-area">
@@ -166,6 +167,7 @@ export default function App() {
             flowFilters={flowFilters}
             onFlowFiltersChange={setFlowFilters}
             onFlowRetry={reloadFlow}
+            onFlowSelectTicker={openTickerNode}
             alerts={inbox.visible}
             alertsTotal={alerts.length}
             alertsRules={inbox.rules}

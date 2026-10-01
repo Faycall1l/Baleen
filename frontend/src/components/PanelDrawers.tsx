@@ -16,6 +16,7 @@ interface Props {
   flowFilters: FlowFilters;
   onFlowFiltersChange: (filters: FlowFilters) => void;
   onFlowRetry: () => void;
+  onFlowSelectTicker: (ticker: string) => void;
   alerts: Alert[];
   alertsTotal: number;
   alertsRules: string[];
@@ -59,6 +60,7 @@ export default function PanelDrawers({
   flowFilters,
   onFlowFiltersChange,
   onFlowRetry,
+  onFlowSelectTicker,
   alerts,
   alertsTotal,
   alertsRules,
@@ -89,6 +91,7 @@ export default function PanelDrawers({
           filters={flowFilters}
           onFiltersChange={onFlowFiltersChange}
           onRetry={onFlowRetry}
+          onSelectTicker={onFlowSelectTicker}
         />
       </Shell>
     );
