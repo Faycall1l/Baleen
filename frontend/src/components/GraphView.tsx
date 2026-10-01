@@ -21,6 +21,7 @@ interface Props {
   selectedId: string | null;
   onSelect: (node: GraphNode | null) => void;
   onHoverEdgeChange?: (rel: string | null) => void;
+  onRetry?: () => void;
   loadingHint?: string;
   warming?: boolean;
 }
@@ -44,7 +45,7 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, loadingHint, warming }: Props) {
+export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, onRetry, loadingHint, warming }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
@@ -267,9 +268,15 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
         </div>
       )}
       {error && (
-        <div className="graph-error" title={error}>
-          Refresh failed — showing last good data
-        </div>
+        onRetry ? (
+          <button type="button" className="graph-error graph-error-action" title={error} onClick={onRetry}>
+            Refresh failed — showing last good data · Retry
+          </button>
+        ) : (
+          <div className="graph-error" title={error}>
+            Refresh failed — showing last good data
+          </div>
+        )
       )}
     </div>
   );

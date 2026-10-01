@@ -30,6 +30,16 @@
   pointer-events: none;
 }
 
+button.graph-error-action {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: 420px;
+}
+
+button.graph-error-action:hover {
+  border-color: rgba(248, 81, 73, 0.8);
+}
+
 .panel-detail {
   width: 320px;
   border-right: none;

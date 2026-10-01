@@ -163,6 +163,7 @@ export default function App() {
               selectedId={selected?.id ?? null}
               onSelect={handleSelect}
               onHoverEdgeChange={setHoverEdge}
+              onRetry={loadGraph}
               loadingHint={
                 graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
               }
