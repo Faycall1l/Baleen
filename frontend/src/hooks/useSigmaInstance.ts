@@ -4,6 +4,7 @@ import { createNodeBorderProgram } from '@sigma/node-border';
 import type Graph from 'graphology';
 import Sigma from 'sigma';
 
+import { SquareNodeProgram } from '../graph/nodeSquare';
 import { theme } from '../theme';
 
 function drawLabelWithHalo(
@@ -95,7 +96,7 @@ export function useSigmaInstance(
       // Generous click-vs-drag tolerance: hand tremor emits well over the
       // default 3 mousemove events, which silently ate real clicks.
       draggedEventsTolerance: 14,
-      nodeProgramClasses: { bordered: BorderedNodeProgram },
+      nodeProgramClasses: { bordered: BorderedNodeProgram, square: SquareNodeProgram },
     });
     fresh.getCamera().setState({ x: 0, y: 0, angle: 0, ratio: 1.6 });
     fresh.on('clickNode', ({ node }) => {
