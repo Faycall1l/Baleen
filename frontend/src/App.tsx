@@ -10,6 +10,7 @@ import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
 import PoliticianDetail from './components/PoliticianDetail';
+import ShortcutsHelp from './components/ShortcutsHelp';
 import TickerDetail from './components/TickerDetail';
 import { useFeeds } from './hooks/useFeeds';
 import { useAlertsInbox } from './hooks/useAlertsInbox';
@@ -29,6 +30,8 @@ export default function App() {
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
   const [drawer, setDrawer] = useState<Drawer>(null);
+  // Shortcut help (R39): `?` outside inputs toggles it.
+  const [showHelp, setShowHelp] = useState(false);
   // Hovered relationship readout (R35) lives here so it can join the
   // status bar next to the counts.
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
@@ -71,18 +74,25 @@ export default function App() {
   }, [graphTick, loadGraph]);
 
   // Esc closes the open drawer from anywhere (R15); with no drawer it
-  // clears the inspector selection (R16).
+  // clears the inspector selection (R16). `?` outside inputs opens help.
   useEffect(() => {
-    if (!drawer && !selected) return;
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === '?' && !typing) {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+        return;
+      }
       if (e.key === 'Escape') {
-        if (drawer) setDrawer(null);
+        if (showHelp) setShowHelp(false);
+        else if (drawer) setDrawer(null);
         else setSelected(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer, selected]);
+  }, [drawer, showHelp]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.
@@ -126,6 +136,7 @@ export default function App() {
     <div className="app">
       <CommandBar health={health} />
       {showTour && <OnboardingTour onDone={dismissTour} />}
+      {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
 
       <div className="app-body">
         <PanelRail

@@ -195,3 +195,32 @@
   color: var(--text-muted);
 }
 
+/* Shortcut help reuses the tour card; rows pair keys with actions. */
+.shortcuts-list {
+  margin: 0 0 14px;
+}
+
+.shortcut-row {
+  display: flex;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-row dt {
+  flex: 0 0 130px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.shortcut-row dd {
+  margin: 0;
+  color: var(--text-muted);
+}
+
