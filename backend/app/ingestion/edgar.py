@@ -32,6 +32,7 @@ from app.ingestion.edgar_parse import (
     USER_AGENT,
     _record,
     _xml_href,
+    clean_ticker,
     parse_atom,
     parse_ownership,
 )
@@ -163,7 +164,8 @@ def enrich_insider_trade(tweet: RawTweet, event: InsiderTradeEvent) -> InsiderTr
 
     ticker = str(meta.get("ticker") or "").strip().upper()
     if 1 <= len(ticker) <= 10:
-        updates["ticker"] = ticker
+        if clean_ticker(ticker):
+            updates["ticker"] = ticker
     txn_day = meta.get("transaction_date")
     if txn_day:
         try:

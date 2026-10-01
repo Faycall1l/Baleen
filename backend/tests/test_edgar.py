@@ -186,6 +186,15 @@ def test_enrichment_grounds_cik_and_facts():
     assert enriched.confidence == 0.9
 
 
+def test_enrichment_ignores_placeholder_filing_ticker():
+    """A filing ticker of NONE must not clobber the event's ticker."""
+    tweet = _tweet()
+    tweet.raw_json = {**tweet.raw_json, "ticker": "NONE"}
+    enriched = enrich_insider_trade(tweet, _event())
+
+    assert enriched.ticker == "WRONG"
+
+
 def test_enrichment_unknown_filer_gets_slug():
     tweet = _tweet()
     tweet.raw_json = dict(tweet.raw_json, insider_cik=None, filer_name="Jane Unknown")
@@ -394,6 +403,36 @@ def test_record_requires_ticker_and_owner_name():
     assert "100 shares @ $25.00" in record.text
     assert _record("r2", "https://x", now, owner, txn, "", now) is None
     assert _record("r3", "https://x", now, {"name": ""}, txn, "JPM", now) is None
+
+
+def test_placeholder_trading_symbols_become_missing_tickers():
+    """Filers put NONE/N/A in issuerTradingSymbol when there is no listed
+    symbol (seen live). That must read as missing — never as a "NONE"
+    Ticker node in the graph."""
+    from app.ingestion.edgar_parse import clean_ticker, parse_ownership
+
+    assert clean_ticker("NONE") == ""
+    assert clean_ticker(" n/a ") == ""
+    assert clean_ticker("UNKNOWN") == ""
+    assert clean_ticker("NVDA") == "NVDA"
+    assert clean_ticker("") == ""
+    assert clean_ticker(None) == ""
+
+    xml = """<ownershipDocument><issuer><issuerCik>1</issuerCik>
+    <issuerName>Some Plan</issuerName><issuerTradingSymbol>NONE</issuerTradingSymbol>
+    </issuer><reportingOwner><reportingOwnerId><rptOwnerCik>2</rptOwnerCik>
+    <rptOwnerName>Jane Doe</rptOwnerName></reportingOwnerId></reportingOwner>
+    <nonDerivativeTable><nonDerivativeTransaction>
+    <securityTitle><value>Common Stock</value></securityTitle>
+    <transactionDate><value>2026-09-28</value></transactionDate>
+    <transactionCoding><transactionFormType>4</transactionFormType>
+    <transactionCode>P</transactionCode>
+    <equitySwapInvolved><value>0</value></equitySwapInvolved></transactionCoding>
+    <transactionAmounts><transactionShares><value>10</value></transactionShares>
+    <transactionPricePerShare><value>5</value></transactionPricePerShare>
+    <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+    </transactionAmounts></nonDerivativeTransaction></nonDerivativeTable></ownershipDocument>"""
+    assert parse_ownership(xml)["ticker"] == ""
 
 
 def test_parse_ts_tolerates_garbage():

@@ -37,6 +37,20 @@ SEEN_CAP = 2000
 #: Emission window floor: filings trickle 24/7, so always cover the last day.
 LOOKBACK_SECONDS = 86400
 
+#: Placeholder trading symbols filers put in ``issuerTradingSymbol`` when
+# there is no listed symbol (seen live: a retiree benefits plan filing with
+# "NONE"). Treated as missing everywhere — a "NONE" Ticker node in the
+# graph is worse than no ticker link at all.
+PLACEHOLDER_TICKERS = frozenset({"NONE", "N/A", "NA", "NULL", "NAN", "UNKNOWN", "-", "--"})
+
+
+def clean_ticker(raw: str | None) -> str:
+    """Normalize a parsed trading symbol; placeholders become ``""``."""
+    ticker = (raw or "").strip().upper()
+    if not ticker or ticker in PLACEHOLDER_TICKERS:
+        return ""
+    return ticker
+
 #: Open-market codes only — the classic insider signal. Everything else
 #: (grants, gifts, exercises) is a different economic event.
 OPEN_MARKET_CODES = {"P", "S"}
@@ -165,7 +179,7 @@ def parse_ownership(xml_text: str) -> dict:
                 }
             )
     return {
-        "ticker": (_text(issuer, "issuerTradingSymbol") or "").strip().upper() if issuer is not None else "",
+        "ticker": clean_ticker(_text(issuer, "issuerTradingSymbol")) if issuer is not None else "",
         "issuer_name": _text(issuer, "issuerName") if issuer is not None else None,
         "owners": owners,
         "transactions": transactions,
