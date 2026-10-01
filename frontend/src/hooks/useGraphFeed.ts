@@ -26,11 +26,16 @@ export function useGraphFeed(): {
   graph: GraphData | null;
   graphError: string | null;
   graphStage: GraphStage;
+  updatedAt: number | null;
   loadGraph: () => void;
 } {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphStage, setGraphStage] = useState<GraphStage>('first');
+  // Last successful fetch time (R38): honesty about freshness in the
+  // status bar. Stamped on fetch success, not on merge — an unchanged
+  // snapshot is still fresh data.
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const graphRef = useRef(graph);
   graphRef.current = graph;
@@ -104,7 +109,10 @@ export function useGraphFeed(): {
     const cursor = graphCursor(graphRef.current);
     const full = pollCountRef.current % 10 === 1 || cursor === null;
     fetchGraph(150, ctrl.signal, full ? undefined : cursor ?? undefined)
-      .then((data) => applyGraphPayload(data, !full))
+      .then((data) => {
+        setUpdatedAt(Date.now());
+        applyGraphPayload(data, !full);
+      })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setGraphError(err.message);
@@ -124,12 +132,14 @@ export function useGraphFeed(): {
     fetchGraph(25, ctrl.signal)
       .then((data) => {
         if (cancelled) return;
+        setUpdatedAt(Date.now());
         applyGraphPayload(data, false);
         setGraphStage('partial');
         return fetchGraph(150, ctrl.signal);
       })
       .then((data) => {
         if (cancelled || !data) return;
+        setUpdatedAt(Date.now());
         applyGraphPayload(data, false);
         setGraphStage('full');
       })
@@ -146,5 +156,5 @@ export function useGraphFeed(): {
     };
   }, [applyGraphPayload, loadGraph]);
 
-  return { graph, graphError, graphStage, loadGraph };
+  return { graph, graphError, graphStage, updatedAt, loadGraph };
 }

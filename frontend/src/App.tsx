@@ -24,7 +24,7 @@ import { loadOnboarded, saveOnboarded } from './onboarding';
 import { personIdForNode } from './personView';
 
 export default function App() {
-  const { graph, graphError, graphStage, loadGraph } = useGraphFeed();
+  const { graph, graphError, graphStage, updatedAt, loadGraph } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
@@ -194,6 +194,7 @@ export default function App() {
               ? ` · recent ${graph.node_count} of ${graph.event_count} events`
               : ''}
             {hoverEdge ? ` · rel: ${hoverEdge}` : ''}
+            {updatedAt ? ` · sync ${new Date(updatedAt).toLocaleTimeString()}` : ''}
           </div>
         </main>
 
