@@ -230,7 +230,8 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
       <div ref={containerRef} className="graph-canvas"
         tabIndex={0}
         role="application"
-        aria-label="Knowledge graph canvas. Focus and use arrow keys to move selection between nodes."
+        aria-label="Knowledge graph canvas"
+        aria-describedby="graph-canvas-help"
         onKeyDown={(e) => {
           const dir =
             e.key === 'ArrowRight'
@@ -278,6 +279,11 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
           </div>
         )
       )}
+      <p id="graph-canvas-help" className="visually-hidden">
+        Focus the canvas, then use arrow keys to move selection between
+        nodes, plus and minus to zoom. Use the Find a node search to jump
+        to a node by name. Type filters in the legend hide node types.
+      </p>
     </div>
   );
 }
