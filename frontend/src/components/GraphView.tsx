@@ -128,7 +128,14 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
   });
 
   const handleFit = () => {
-    sigmaRef.current?.getCamera().animatedReset({ duration: 600 });
+    const camera = sigmaRef.current?.getCamera();
+    if (!camera) return;
+    // Reduced motion (R30): jump instead of animating.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      camera.setState({ x: 0.5, y: 0.5, angle: 0, ratio: 1 });
+    } else {
+      camera.animatedReset({ duration: 600 });
+    }
   };
 
   // Zoom shortcuts (R29): instant ratio steps around the view center.
