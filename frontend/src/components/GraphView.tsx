@@ -4,6 +4,7 @@ import Graph from 'graphology';
 
 import type { GraphData, GraphNode } from '../types';
 import { applyVisibility } from '../graph/visibility';
+import { nearestInDirection, type PointNode } from '../graph/spatial';
 import { SCHEMA_LABELS } from '../graph/schema';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
@@ -130,6 +131,22 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
     sigmaRef.current?.getCamera().animatedReset({ duration: 600 });
   };
 
+  // Spatial keyboard navigation (R28): arrows step selection to the
+  // nearest node in that direction. Graph units map y-down onto the
+  // screen, matching DOM convention.
+  const moveSelection = (dx: number, dy: number) => {
+    const g = graphRef.current;
+    if (!g || !selectedId || !g.hasNode(selectedId)) return;
+    const nodes: PointNode[] = [];
+    g.forEachNode((id) => {
+      const x = g.getNodeAttribute(id, 'x') as number;
+      const y = g.getNodeAttribute(id, 'y') as number;
+      if (Number.isFinite(x) && Number.isFinite(y)) nodes.push({ id, x, y });
+    });
+    const next = nearestInDirection(nodes, selectedId, dx, dy);
+    if (next) selectNodeByKey(next);
+  };
+
   if (!data) {
     return <div className="empty-hint">{loadingHint ?? 'Loading graph…'}</div>;
   }
@@ -167,7 +184,29 @@ export default function GraphView({ data, error, selectedId, onSelect, loadingHi
         interactive
         onToggleType={toggleType}
       />
-      <div ref={containerRef} className="graph-canvas" />
+      <div
+        ref={containerRef}
+        className="graph-canvas"
+        tabIndex={0}
+        role="application"
+        aria-label="Knowledge graph canvas. Focus and use arrow keys to move selection between nodes."
+        onKeyDown={(e) => {
+          const dir =
+            e.key === 'ArrowRight'
+              ? [1, 0]
+              : e.key === 'ArrowLeft'
+                ? [-1, 0]
+                : e.key === 'ArrowUp'
+                  ? [0, -1]
+                  : e.key === 'ArrowDown'
+                    ? [0, 1]
+                    : null;
+          if (dir) {
+            e.preventDefault();
+            moveSelection(dir[0], dir[1]);
+          }
+        }}
+      />
       {warming && (
         <div className="graph-error" title="Showing the quick first window; the full graph is still loading">
           Warming up — full graph loading…
