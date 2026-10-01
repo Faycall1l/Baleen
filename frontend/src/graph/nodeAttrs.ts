@@ -26,12 +26,6 @@ export function bankPos(
   }
 }
 
-/** Ontology shape: entities render as squares (boxes, like the DB schema
- * diagrams), occurrences as discs. One rule, no per-type exceptions. */
-export function nodeShape(label: string): 'square' | 'bordered' {
-  return label === 'Event' ? 'bordered' : 'square';
-}
-
 /** Shared attrs for a payload node: survivor refresh and first add agree. */
 export function instanceAttrs(
   n: GraphData['nodes'][number],
@@ -40,7 +34,7 @@ export function instanceAttrs(
   const color = nodeColor(n.label);
   const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
   return {
-    type: nodeShape(n.label),
+    type: 'bordered',
     kind: n.label,
     label: display,
     key: n.key,
