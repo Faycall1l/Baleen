@@ -190,6 +190,32 @@ export interface TickerCard {
   flow: TickerFlowPrint[];
 }
 
+export interface CommitteeMember {
+  id: string;
+  name: string | null;
+  chamber: string | null;
+  party: string | null;
+}
+
+export interface CommitteeTrade {
+  event_id: string;
+  who: string | null;
+  politician_id: string | null;
+  ticker: string | null;
+  side: string | null;
+  date: string | null;
+  amount: string | null;
+  source_url: string | null;
+}
+
+export interface CommitteeCard {
+  id: string;
+  name: string | null;
+  sectors: string[];
+  members: CommitteeMember[];
+  trades: CommitteeTrade[];
+}
+
 export interface UncoveredRow {
   politician: string;
   sector: string;

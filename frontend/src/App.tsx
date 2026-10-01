@@ -9,6 +9,7 @@ import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
+import CommitteeDetail from './components/CommitteeDetail';
 import PoliticianDetail from './components/PoliticianDetail';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import TickerDetail from './components/TickerDetail';
@@ -17,6 +18,7 @@ import { useAlertsInbox } from './hooks/useAlertsInbox';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
+import { useCommittee } from './hooks/useCommittee';
 import { usePerson } from './hooks/usePerson';
 import { useTicker } from './hooks/useTicker';
 import { usePollingTick } from './hooks/usePollingTick';
@@ -98,7 +100,7 @@ export default function App() {
   // the rail badge and the drawer share one source of truth.
   const inbox = useAlertsInbox(alerts, drawer === 'alerts');
 
-  const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, inspectorLinks } = useInspectorLinks(
+  const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks } = useInspectorLinks(
     graph,
     alerts,
     briefs,
@@ -123,6 +125,15 @@ export default function App() {
         null
       : null;
   const { card: tickerCard, error: tickerError } = useTicker(tickerSymbol);
+
+  // Committee view (R45b): same card pattern as politicians and tickers.
+  const committeeId =
+    selected?.label === 'Committee'
+      ? (typeof selected.props.id === 'string' && selected.props.id) ||
+        selected.id.split(':').slice(1).join(':') ||
+        null
+      : null;
+  const { card: committeeCard, error: committeeError } = useCommittee(committeeId);
 
   // Cross-surface jump (R36): filter the tape to this ticker. The dock
   // shows it live on wide screens; on narrow screens the dock hides, so
@@ -230,6 +241,16 @@ export default function App() {
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
                 onViewInTape={viewTickerInTape}
+              />
+            ) : committeeId ? (
+              <CommitteeDetail
+                node={selected}
+                card={committeeCard}
+                cardError={committeeError}
+                alerts={alerts}
+                onClose={() => setSelected(null)}
+                onAlertClick={openAlertNode}
+                onMemberClick={openPoliticianNode}
               />
             ) : (
               <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />

@@ -23,6 +23,7 @@ export function useInspectorLinks(
   openReportNode: (r: Report) => void;
   openLeaderNode: (l: LeaderboardEntry) => void;
   openTickerNode: (ticker: string) => boolean;
+  openPoliticianNode: (politicianId: string) => boolean;
   inspectorLinks: { label: string; onOpen: () => void }[];
 } {
   const findEventNode = useCallback(
@@ -91,6 +92,19 @@ export function useInspectorLinks(
     [findTickerNode, reveal],
   );
 
+  const openPoliticianNode = useCallback(
+    (politicianId: string): boolean => {
+      if (!graph || !politicianId) return false;
+      const node = graph.nodes.find(
+        (n) =>
+          n.label === 'Politician' &&
+          (n.key === politicianId || (n.props.id as string) === politicianId),
+      );
+      return reveal(node);
+    },
+    [graph, reveal],
+  );
+
   // What fired on / mentions the selected node, as specific items — not
   // a count pointing at the general drawer (R21). Each item opens its
   // exact subject; overflow falls back to the drawer.
@@ -119,5 +133,5 @@ export function useInspectorLinks(
     return links;
   }, [selected, alerts, briefs, reports, setDrawer, openAlertNode, openReportNode]);
 
-  return { openAlertNode, openReportNode, openLeaderNode, openTickerNode, inspectorLinks };
+  return { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks };
 }
