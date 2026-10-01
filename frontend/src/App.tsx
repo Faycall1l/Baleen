@@ -114,6 +114,14 @@ export default function App() {
       : null;
   const { card: tickerCard, error: tickerError } = useTicker(tickerSymbol);
 
+  // Cross-surface jump (R36): filter the tape to this ticker. The dock
+  // shows it live on wide screens; on narrow screens the dock hides, so
+  // open the flow drawer instead (same 1280px breakpoint as the CSS).
+  const viewTickerInTape = (ticker: string) => {
+    setFlowFilters((f) => ({ ...f, tickers: [ticker] }));
+    if (window.matchMedia('(max-width: 1280px)').matches) setDrawer('flow');
+  };
+
   return (
     <div className="app">
       <CommandBar health={health} />
@@ -206,6 +214,7 @@ export default function App() {
                 alerts={alerts}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
+                onViewInTape={viewTickerInTape}
               />
             ) : (
               <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />

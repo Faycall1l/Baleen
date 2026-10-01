@@ -9,9 +9,10 @@ interface Props {
   alerts: Alert[];
   onClose: () => void;
   onAlertClick?: (alert: Alert) => void;
+  onViewInTape: (ticker: string) => void;
 }
 
-export default function TickerDetail({ node, card, cardError, alerts, onClose, onAlertClick }: Props) {
+export default function TickerDetail({ node, card, cardError, alerts, onClose, onAlertClick, onViewInTape }: Props) {
   const trades = card ? matchAlerts(card.trades, alerts) : [];
   const prints = card ? matchAlerts(card.flow, alerts) : [];
   return (
@@ -21,8 +22,13 @@ export default function TickerDetail({ node, card, cardError, alerts, onClose, o
         <div className="label">
           Ticker{card?.sector ? ` · ${card.sector}` : ` · ${node.id}`}
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
           <button onClick={onClose}>Close</button>
+          {card && (
+            <button onClick={() => onViewInTape(card.ticker)} title="Filter the flow tape to this ticker">
+              View in tape
+            </button>
+          )}
         </div>
       </div>
 
