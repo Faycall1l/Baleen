@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from 'react';
 
 import { resolveAlertNode } from '../alertNavigation';
+import { truncate } from '../graph/nodes';
+import { alertsForNode, reportsForNode } from '../mentions';
 import type { Alert, GraphData, GraphNode, LeaderboardEntry, Report } from '../types';
 import type { Drawer } from '../components/PanelDrawers';
 
@@ -81,47 +83,33 @@ export function useInspectorLinks(
     [findTickerNode, reveal],
   );
 
-  // What fired on / mentions the selected node.
+  // What fired on / mentions the selected node, as specific items — not
+  // a count pointing at the general drawer (R21). Each item opens its
+  // exact subject; overflow falls back to the drawer.
   const inspectorLinks = useMemo(() => {
     if (!selected) return [];
     const links: { label: string; onOpen: () => void }[] = [];
-    const eventId = selected.label === 'Event' ? (selected.props.id as string) : null;
-    const names = new Set<string>([selected.title]);
-    if (eventId) {
-      const nAlerts = alerts.filter((a) => a.event_id === eventId).length;
-      if (nAlerts > 0) {
-        links.push({
-          label: `${nAlerts} alert${nAlerts > 1 ? 's' : ''}`,
-          onOpen: () => setDrawer('alerts'),
-        });
-      }
-      const nBriefs = briefs.filter((r) => r.event_id === eventId).length;
-      if (nBriefs > 0) {
-        links.push({
-          label: `${nBriefs} brief${nBriefs > 1 ? 's' : ''}`,
-          onOpen: () => setDrawer('reports'),
-        });
-      }
-    } else {
-      const inRefs = (refs: string[] | undefined) =>
-        (refs ?? []).some((r) => names.has(r));
-      const nAlerts = alerts.filter((a) => inRefs(a.graph_refs)).length;
-      if (nAlerts > 0) {
-        links.push({
-          label: `${nAlerts} alert${nAlerts > 1 ? 's' : ''}`,
-          onOpen: () => setDrawer('alerts'),
-        });
-      }
-      const nReports = reports.filter((r) => inRefs(r.graph_refs)).length;
-      if (nReports > 0) {
-        links.push({
-          label: `${nReports} report${nReports > 1 ? 's' : ''}`,
-          onOpen: () => setDrawer('reports'),
-        });
-      }
+    const matchedAlerts = alertsForNode(selected, alerts);
+    const matchedReports = reportsForNode(
+      selected,
+      selected.label === 'Event' ? briefs : reports,
+      reports,
+    );
+    const MAX_ITEMS = 5;
+    for (const a of matchedAlerts.slice(0, MAX_ITEMS)) {
+      links.push({ label: `Alert: ${truncate(a.title, 42)}`, onOpen: () => void openAlertNode(a) });
+    }
+    for (const r of matchedReports.slice(0, MAX_ITEMS)) {
+      links.push({ label: `Report: ${truncate(r.title, 42)}`, onOpen: () => void openReportNode(r) });
+    }
+    if (matchedAlerts.length > MAX_ITEMS || matchedReports.length > MAX_ITEMS) {
+      links.push({
+        label: `all in Alerts/Reports (${matchedAlerts.length + matchedReports.length})`,
+        onOpen: () => setDrawer(matchedAlerts.length >= matchedReports.length ? 'alerts' : 'reports'),
+      });
     }
     return links;
-  }, [selected, alerts, briefs, reports, setDrawer]);
+  }, [selected, alerts, briefs, reports, setDrawer, openAlertNode, openReportNode]);
 
   return { openAlertNode, openReportNode, openLeaderNode, inspectorLinks };
 }
