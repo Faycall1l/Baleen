@@ -167,6 +167,32 @@ RETURN e.id AS event_id, e.contract_type AS side, e.strike AS strike,
        e.open_interest AS open_interest, ratio, e.sentiment AS sentiment
 """
 
+COMMITTEE_QUERY = """
+MATCH (c:Committee {id: $cid})
+OPTIONAL MATCH (c)-[:OVERSEES]->(s:Sector)
+RETURN c.id AS id, c.name AS name,
+       collect(DISTINCT {name: s.name}) AS sectors
+"""
+
+COMMITTEE_MEMBERS_QUERY = """
+MATCH (p:Politician)-[:MEMBER_OF]->(c:Committee {id: $cid})
+RETURN p.id AS id, p.name AS name, p.chamber AS chamber, p.party AS party
+ORDER BY p.name
+LIMIT 30
+"""
+
+COMMITTEE_TRADES_QUERY = """
+MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician)-[:MEMBER_OF]->(c:Committee {id: $cid})
+WHERE e.type = 'congress_trade'
+OPTIONAL MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)
+WITH e, p, t.ticker AS ticker
+ORDER BY e.transaction_date DESC
+LIMIT 20
+RETURN e.id AS event_id, p.name AS who, p.id AS politician_id, ticker,
+       e.transaction_type AS side, e.transaction_date AS date,
+       e.amount_range AS amount, e.tweet_url AS source_url
+"""
+
 
 class SignalsEngine:
     """Read-only signal computation over the graph (+ filing returns in PG)."""
@@ -302,6 +328,31 @@ class SignalsEngine:
         card = dict(rows[0])
         card["trades"] = [t for t in trades if t.get("event_id")]
         card["flow"] = [f for f in flow if f.get("event_id")]
+        return card
+
+    def committee(self, committee_id: str) -> dict | None:
+        """One committee's card: overseen sectors, members, member trades.
+
+        Returns None when the id is unknown so the route answers 404.
+        Trades carry ``event_id`` (and member ``politician_id``) so the UI
+        joins alerts and person cards client-side without round-trips.
+        """
+        cid = (committee_id or "").strip().upper()
+        if not cid:
+            return None
+        try:
+            rows = self.neo4j.run_read(COMMITTEE_QUERY, cid=cid)
+            members = self.neo4j.run_read(COMMITTEE_MEMBERS_QUERY, cid=cid)
+            trades = self.neo4j.run_read(COMMITTEE_TRADES_QUERY, cid=cid)
+        except Exception:
+            logger.exception("committee query failed")
+            return None
+        if not rows:
+            return None
+        card = dict(rows[0])
+        card["sectors"] = [s.get("name") for s in card.get("sectors", []) if s.get("name")]
+        card["members"] = [m for m in members if m.get("id")]
+        card["trades"] = [t for t in trades if t.get("event_id")]
         return card
 
     def suspicious_timing(self, min_excess_pct: float = SUSPICIOUS_EXCESS_PCT) -> list[dict]:

@@ -26,6 +26,7 @@ from app.query.agent import QueryAgent
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMClient
+from app.api.committee_routes import router as committee_router
 from app.api.feed_routes import router as feed_router
 from app.api.graph_routes import router as graph_router
 from app.api.market_routes import router as market_router
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 # Handlers live in themed sub-modules; they resolve shared clients from this
 # module at call time so tests keep one monkeypatch surface.
+router.include_router(committee_router)
 router.include_router(feed_router)
 router.include_router(graph_router)
 router.include_router(market_router)

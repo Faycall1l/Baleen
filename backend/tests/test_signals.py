@@ -325,3 +325,55 @@ def test_ticker_returns_none_when_unknown_or_blank_or_down():
     assert engine.ticker("ZZZ") is None
     assert engine.ticker("  ") is None
     assert _down_engine().ticker("NVDA") is None
+
+
+def test_committee_merges_sectors_members_and_trades():
+    """The committee card joins overseen sectors, roster, and member trades."""
+
+    class _FakeNeo4j:
+        def run_read(self, query, **params):
+            assert params == {"cid": "HSBA"}
+            if "OVERSEES" in query:
+                return [
+                    {
+                        "id": "HSBA",
+                        "name": "Financial Services",
+                        "sectors": [{"name": "Financials"}, {"name": None}],
+                    }
+                ]
+            # NB: the trades query also mentions MEMBER_OF, so it matches first.
+            if "congress_trade" in query:
+                return [
+                    {
+                        "event_id": "evt_c",
+                        "who": "Maxine Waters",
+                        "politician_id": "W000187",
+                        "ticker": "NVDA",
+                        "side": "buy",
+                        "date": "2026-09-01",
+                        "amount": "$1 - $2",
+                        "source_url": "https://x.com/y",
+                    },
+                    {"event_id": None},
+                ]
+            return [
+                {"id": "W000187", "name": "Maxine Waters", "chamber": "house", "party": "D"},
+                {"name": "Nameless"},
+            ]
+
+    card = SignalsEngine(_FakeNeo4j(), None).committee("hsba")
+    assert card["name"] == "Financial Services"
+    assert card["sectors"] == ["Financials"]
+    assert [m["id"] for m in card["members"]] == ["W000187"]
+    assert [t["event_id"] for t in card["trades"]] == ["evt_c"]
+
+
+def test_committee_returns_none_when_unknown_or_blank_or_down():
+    class _EmptyNeo4j:
+        def run_read(self, query, **params):
+            return []
+
+    engine = SignalsEngine(_EmptyNeo4j(), None)
+    assert engine.committee("ZZZ") is None
+    assert engine.committee("  ") is None
+    assert _down_engine().committee("HSBA") is None
