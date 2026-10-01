@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import Graph from 'graphology';
 
@@ -6,8 +6,6 @@ import type { GraphData, GraphNode } from '../types';
 import { applyVisibility } from '../graph/visibility';
 import { nearestInDirection, type PointNode } from '../graph/spatial';
 import { SCHEMA_LABELS } from '../graph/schema';
-import { loadHiddenTypes, saveHiddenTypes } from '../uiPrefs';
-import { soloHidden } from '../typeFilters';
 import GraphLegend from './GraphLegend';
 import GraphToolbar from './GraphToolbar';
 import { useGraphCamera } from '../hooks/useGraphCamera';
@@ -23,6 +21,10 @@ interface Props {
   onSelect: (node: GraphNode | null) => void;
   onHoverEdgeChange?: (rel: string | null) => void;
   onRetry?: () => void;
+  hiddenTypes: Set<string>;
+  onToggleType: (label: string) => void;
+  onSoloType: (label: string) => void;
+  onClearTypes: () => void;
   loadingHint?: string;
   warming?: boolean;
 }
@@ -46,45 +48,12 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, onRetry, loadingHint, warming }: Props) {
+export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, onRetry, hiddenTypes, onToggleType, onSoloType, onClearTypes, loadingHint, warming }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
   const dataRef = useRef(data);
   dataRef.current = data;
-  // Labels hidden from the view (legend toggles + toolbar pills). There is
-  // exactly one canvas — no modes — so every filter is visible as a pill
-  // and reversible in one click. Persisted across visits (R40).
-  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
-    () => new Set(loadHiddenTypes()),
-  );
-
-  const toggleType = useCallback((label: string) => {
-    setHiddenTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      saveHiddenTypes(next);
-      return next;
-    });
-  }, []);
-
-  const clearTypes = useCallback(() => {
-    setHiddenTypes(() => {
-      saveHiddenTypes([]);
-      return new Set();
-    });
-  }, []);
-
-  // Alt-click a legend type isolates it (R43): everything else hides;
-  // alt-clicking the soloed type restores all.
-  const soloType = useCallback((label: string) => {
-    setHiddenTypes((prev) => {
-      const next = soloHidden(SCHEMA_LABELS, label, prev);
-      saveHiddenTypes(next);
-      return next;
-    });
-  }, []);
 
   const selectNodeByKey = useGraphSelection({ graphRef, onSelect });
 
@@ -146,7 +115,7 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
   const search = useGraphSearch({
     data,
     hiddenTypes,
-    showType: toggleType,
+    showType: onToggleType,
     onSelect,
   });
 
@@ -163,7 +132,7 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
 
   // One-click escape hatch (R33): refit, drop the selection, show all types.
   const handleResetView = () => {
-    clearTypes();
+    onClearTypes();
     onSelect(null);
     handleFit();
   };
@@ -219,8 +188,8 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
       <GraphToolbar
         hiddenTypes={hiddenTypes}
         typeCounts={typeCounts}
-        onToggleType={toggleType}
-        onClearTypes={clearTypes}
+        onToggleType={onToggleType}
+        onClearTypes={onClearTypes}
         query={search.query}
         onQueryChange={search.setQuery}
         searchOpen={search.open}
@@ -240,8 +209,8 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
         counts={typeCounts}
         hiddenTypes={hiddenTypes}
         interactive
-        onToggleType={toggleType}
-        onSoloType={soloType}
+        onToggleType={onToggleType}
+        onSoloType={onSoloType}
       />
       <div ref={containerRef} className="graph-canvas"
         tabIndex={0}
@@ -274,7 +243,7 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
       {allHidden && (
         <div className="graph-empty-filter" role="status">
           <div>Every type is hidden — the canvas is empty by filter, not by data.</div>
-          <button type="button" onClick={clearTypes}>
+          <button type="button" onClick={onClearTypes}>
             Show all types
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import CommandBar from './components/CommandBar';
@@ -25,13 +25,51 @@ import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
 import { personIdForNode } from './personView';
+import { buildGraphUrl, parseGraphUrl } from './graphUrl';
+import { loadHiddenTypes, saveHiddenTypes } from './uiPrefs';
+import { soloHidden } from './typeFilters';
+import { SCHEMA_LABELS } from './graph/schema';
 
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
-  const [drawer, setDrawer] = useState<Drawer>(null);
+  // Deep-link state (R46): selection, hidden types, and drawer encoded in
+  // the URL so any view is shareable. Read once on mount; written back on
+  // every change below.
+  const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
+  const [drawer, setDrawer] = useState<Drawer>(initialUrl.drawer);
+  // Type filters live here (not in GraphView) so the URL writer below sees
+  // the whole view state in one place.
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
+    () => new Set(initialUrl.hidden.length > 0 ? initialUrl.hidden : loadHiddenTypes()),
+  );
+
+  const toggleType = useCallback((label: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      saveHiddenTypes(next);
+      return next;
+    });
+  }, []);
+
+  const clearTypes = useCallback(() => {
+    setHiddenTypes(() => {
+      saveHiddenTypes([]);
+      return new Set();
+    });
+  }, []);
+
+  const soloType = useCallback((label: string) => {
+    setHiddenTypes((prev) => {
+      const next = soloHidden(SCHEMA_LABELS, label, prev);
+      saveHiddenTypes(next);
+      return next;
+    });
+  }, []);
   // Shortcut help (R39): `?` outside inputs toggles it.
   const [showHelp, setShowHelp] = useState(false);
   // Hovered relationship readout (R35) lives here so it can join the
@@ -74,6 +112,32 @@ export default function App() {
   useEffect(() => {
     loadGraph();
   }, [graphTick, loadGraph]);
+
+  // Select the deep-linked node once it loads (R46). Consumed on first
+  // success — or on any manual selection — so clearing it stays cleared.
+  const urlNodeConsumed = useRef(false);
+  useEffect(() => {
+    if (urlNodeConsumed.current || !graph || !initialUrl.node) return;
+    if (selected) {
+      urlNodeConsumed.current = true;
+      return;
+    }
+    const node = graph.nodes.find((n) => n.id === initialUrl.node);
+    if (node) {
+      urlNodeConsumed.current = true;
+      handleSelect(node);
+    }
+  }, [graph, selected, initialUrl.node, handleSelect]);
+
+  // Write the view state back to the URL on every change (R46).
+  useEffect(() => {
+    const url = buildGraphUrl({
+      node: selected?.id ?? null,
+      hidden: [...hiddenTypes],
+      drawer,
+    });
+    window.history.replaceState(null, '', url);
+  }, [selected?.id, hiddenTypes, drawer]);
 
   // Esc closes the open drawer from anywhere (R15); with no drawer it
   // clears the inspector selection (R16). `?` outside inputs opens help.
@@ -175,6 +239,10 @@ export default function App() {
               onSelect={handleSelect}
               onHoverEdgeChange={setHoverEdge}
               onRetry={loadGraph}
+              hiddenTypes={hiddenTypes}
+              onToggleType={toggleType}
+              onSoloType={soloType}
+              onClearTypes={clearTypes}
               loadingHint={
                 graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
               }
