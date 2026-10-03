@@ -350,3 +350,93 @@ def test_graph_export_error_is_json_500(monkeypatch):
         res = c.get("/api/graph")
         assert res.status_code == 500
         assert res.json()["detail"].startswith("graph export failed")
+
+
+def test_graph_since_and_before_are_mutually_exclusive():
+    with _client() as c:
+        res = c.get("/api/graph?since=2026-01-01T00%3A00%3A00%2B00%3A00&before=2026-02-01T00%3A00%3A00%2B00%3A00")
+        assert res.status_code == 400
+        assert "mutually exclusive" in res.json()["detail"]
+
+
+def test_graph_before_binds_upper_bound_and_echoes(monkeypatch):
+    """The as-of bound reaches Cypher as a parameter (index-friendly text),
+    bypasses the cache, and echoes back for the UI frame label."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    seen: list[tuple[str, dict]] = []
+
+    class _RecordingNeo4j(_CountingNeo4j):
+        def run(self, query: str, **k):
+            seen.append((query, k))
+            if "count(e)" in query:
+                return [{"n": 0}]
+            return super().run(query, **k)
+
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: _RecordingNeo4j())
+    with _client() as c:
+        first = c.get("/api/graph?limit=20&before=2026-02-01T00%3A00%3A00%2B00%3A00").json()
+        second = c.get("/api/graph?limit=20&before=2026-02-01T00%3A00%3A00%2B00%3A00").json()
+
+    assert first["delta"] is False
+    assert first["before"] == "2026-02-01T00:00:00+00:00"
+    assert first == second  # same content…
+    keep_queries = [q for q, _ in seen if "ORDER BY e.event_time DESC" in q]
+    # …but rebuilt, not cache-served: one keep-pass per request.
+    assert len(keep_queries) == 2
+    assert all("e.event_time <= datetime($before)" in q for q in keep_queries)
+    params = [k for _, k in seen if "before" in k]
+    assert params and all(p["before"] == "2026-02-01T00:00:00+00:00" for p in params)
+
+
+def test_graph_before_returns_only_older_events(neo4j_store):
+    """Live: an as-of render excludes events after the bound."""
+
+    from app.graph.writer import GraphWriter
+
+    def _evt(tweet_id: str, pid: str, ticker: str, when: datetime) -> CongressTradeEvent:
+        return CongressTradeEvent(
+            tweet_id=tweet_id,
+            tweet_url=f"https://x.com/congress_trades/status/{tweet_id}",
+            confidence=0.95,
+            politician_name="Asa Archer",
+            politician_id=pid,
+            chamber="senate",
+            party="D",
+            committee_ids=[],
+            ticker=ticker,
+            transaction_type="buy",
+            amount_range="$1 - $2",
+            transaction_date=when.date(),
+            event_time=when,
+        )
+
+    writer = GraphWriter(neo4j_store)
+    old_id = writer.write_event(
+        _evt("g-asof-old", "A900", "ZZA1", datetime(2026, 1, 10, tzinfo=timezone.utc))
+    )
+    new_id = writer.write_event(
+        _evt("g-asof-new", "A901", "ZZA2", datetime(2026, 3, 10, tzinfo=timezone.utc))
+    )
+    try:
+        with _client() as c:
+            body = c.get("/api/graph?limit=100&before=2026-02-01T00%3A00%3A00%2B00%3A00").json()
+        assert body["delta"] is False
+        assert body["before"] == "2026-02-01T00:00:00+00:00"
+        ids = {n["id"] for n in body["nodes"]}
+        assert f"Event:{old_id}" in ids
+        assert f"Event:{new_id}" not in ids
+    finally:
+        neo4j_store.run(
+            "MATCH (e:Event) WHERE e.id IN $ids DETACH DELETE e",
+            ids=[old_id, new_id],
+        )
+        neo4j_store.run(
+            "MATCH (p:Politician) WHERE p.id IN $ids DETACH DELETE p",
+            ids=["A900", "A901"],
+        )
+        neo4j_store.run(
+            "MATCH (t:Ticker) WHERE t.ticker IN $ids DETACH DELETE t",
+            ids=["ZZA1", "ZZA2"],
+        )

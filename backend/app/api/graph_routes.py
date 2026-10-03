@@ -43,6 +43,7 @@ def _parse_since(since: str | None) -> datetime | None:
 def graph(
     limit: int = Query(default=500, ge=0, le=5000),
     since: str | None = Query(default=None),
+    before: str | None = Query(default=None),
 ) -> dict:
     """Serialize a subgraph for the graph UI.
 
@@ -69,29 +70,46 @@ def graph(
     ~0.1s. Do NOT add a LIMIT to the delta keep-pass without also wiring a
     truncation signal the UI resyncs on.
 
+    With ``before`` (ISO timestamp), the render is a snapshot as of that
+    time: only events at/before it (plus their neighborhoods), with
+    ``event_count``/``truncated`` computed against the as-of universe. This
+    powers the time scrubber. ``since`` and ``before`` are mutually
+    exclusive. As-of renders bypass the cache (a scrub drag fires many
+    distinct values; caching each would just bloat memory) and echo the
+    bound back as ``before`` so the UI can label the frozen frame.
+
     The payload is cached for ``graph_cache_ttl_seconds`` to keep UI polling
     cheap (``event_count``/``truncated`` tolerate a few seconds of staleness).
     """
     from app.api import routes
 
     since_dt = _parse_since(since)
+    before_dt = _parse_since(before)
+    if since_dt is not None and before_dt is not None:
+        raise HTTPException(
+            status_code=400, detail="since and before are mutually exclusive"
+        )
     ttl = routes.get_settings().graph_cache_ttl_seconds
-    if ttl > 0 and since_dt is None:
+    if ttl > 0 and since_dt is None and before_dt is None:
         with routes._graph_cache_lock:
             hit = routes._graph_cache.get(limit)
         if hit and hit[0] > time.monotonic():
             return hit[1]
 
     with routes.neo4j_read_slot():
-        payload = _render_graph(limit, since_dt)
+        payload = _render_graph(limit, since_dt, before_dt)
 
-    if ttl > 0 and since_dt is None:
+    if ttl > 0 and since_dt is None and before_dt is None:
         with routes._graph_cache_lock:
             routes._graph_cache[limit] = (time.monotonic() + ttl, payload)
+    if before_dt is not None:
+        payload = {**payload, "before": before_dt.isoformat()}
     return payload
 
 
-def _render_graph(limit: int, since_dt: datetime | None = None) -> dict:
+def _render_graph(
+    limit: int, since_dt: datetime | None = None, before_dt: datetime | None = None
+) -> dict:
     from app.api import routes
 
     neo4j = routes._get_neo4j()
@@ -99,13 +117,20 @@ def _render_graph(limit: int, since_dt: datetime | None = None) -> dict:
     try:
         # The total-events count is a full label scan; deltas skip it (the UI
         # keeps the last full total) so steady-state polls stay index-bound.
-        total = (
-            None
-            if delta
-            else neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
-        )
+        # As-of renders count their own universe so truncation stays honest.
+        if delta:
+            total = None
+        elif before_dt is not None:
+            total = neo4j.run(
+                "MATCH (e:Event) WHERE e.event_time <= datetime($before) RETURN count(e) AS n",
+                before=before_dt.isoformat(),
+            )[0]["n"]
+        else:
+            total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
         keep_ids = (
-            _keep_ids(neo4j, limit, since_dt, delta) if limit > 0 or delta else None
+            _keep_ids(neo4j, limit, since_dt, delta, before_dt)
+            if limit > 0 or delta
+            else None
         )
         rows = _fetch_nodes_and_links(neo4j, keep_ids)
     except Exception as exc:
@@ -115,7 +140,13 @@ def _render_graph(limit: int, since_dt: datetime | None = None) -> dict:
     return build_graph_payload(rows, total, limit, delta, keep_ids)
 
 
-def _keep_ids(neo4j, limit: int, since_dt: datetime | None, delta: bool) -> list[str]:
+def _keep_ids(
+    neo4j,
+    limit: int,
+    since_dt: datetime | None,
+    delta: bool,
+    before_dt: datetime | None = None,
+) -> list[str]:
     """Element ids of the events to keep, plus their direct neighbors.
 
     Two-pass approach: the COALESCE wrapper in the original query prevented
@@ -123,7 +154,9 @@ def _keep_ids(neo4j, limit: int, since_dt: datetime | None, delta: bool) -> list
     scan + sort. Splitting into two index-friendly paths (non-null event_time
     → ORDER BY + LIMIT; null event_time → LIMIT only) lets the planner use the
     B-tree index for the sorted path. Deltas filter the same indexed path by
-    the cursor instead of sorting the whole graph.
+    the cursor instead of sorting the whole graph. The as-of bound is baked
+    into the query text (not a nullable parameter) so the no-bound plan —
+    the hot polling path — is byte-identical to before.
     """
     if delta:
         assert since_dt is not None
@@ -138,6 +171,22 @@ def _keep_ids(neo4j, limit: int, since_dt: datetime | None, delta: bool) -> list
             RETURN DISTINCT elementId(kept) AS internal_id
             """,
             since=since_dt.isoformat(),
+        )
+    elif before_dt is not None:
+        rows = neo4j.run(
+            """
+            MATCH (e:Event)
+            WHERE e.event_time IS NOT NULL
+              AND e.event_time <= datetime($before)
+            WITH e ORDER BY e.event_time DESC
+            LIMIT $limit
+            OPTIONAL MATCH (e)--(n)
+            WITH collect(DISTINCT e) + collect(DISTINCT n) AS all_keep
+            UNWIND [x IN all_keep WHERE x IS NOT NULL] AS kept
+            RETURN DISTINCT elementId(kept) AS internal_id
+            """,
+            limit=limit,
+            before=before_dt.isoformat(),
         )
     else:
         rows = neo4j.run(
