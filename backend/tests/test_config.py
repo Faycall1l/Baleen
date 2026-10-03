@@ -93,3 +93,16 @@ def test_database_url_scheme_required():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, database_url="neo4j://localhost:7687")
     assert Settings(_env_file=None, database_url="postgresql+psycopg://u:p@localhost:5432/b").database_url == "postgresql+psycopg://u:p@localhost:5432/b"
+
+
+def test_postgres_dsn_prefers_explicit_database_url():
+    assert (
+        Settings(_env_file=None, database_url="postgresql+psycopg://u:p@h/db").postgres_dsn
+        == "postgresql+psycopg://u:p@h/db"
+    )
+    dsn = Settings(_env_file=None).postgres_dsn
+    assert dsn.startswith("postgresql+psycopg://")
+
+
+def test_x_handles_splits_and_trims():
+    assert Settings(_env_file=None, x_user_handles="a, b ,,c").x_handles == ["a", "b", "c"]

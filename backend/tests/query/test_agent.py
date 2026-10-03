@@ -287,3 +287,53 @@ def test_ask_returns_columns_and_followups_with_rows():
     assert result.followups == ["Show more activity for NVDA"]
     assert result.as_dict()["columns"] == result.columns
     assert result.as_dict()["followups"] == result.followups
+
+
+def test_columns_infer_kind_from_later_non_null_values():
+    """A leading None must not freeze the column kind: the first non-null
+    value decides."""
+    from app.query.agent import columns_for_rows
+
+    rows = [{"n": None, "v": None}, {"n": 7, "v": "x"}]
+    assert columns_for_rows(rows) == [
+        {"key": "n", "label": "n", "kind": "number"},
+        {"key": "v", "label": "v", "kind": "string"},
+    ]
+
+
+def test_ask_fails_when_llm_never_produces_cypher():
+    """An LLM that only answers (never calls generate_cypher) yields the
+    generation-failure path, not an empty crash."""
+
+    class _AnswerOnlyLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            return LLMResponse(content="forty-two")
+
+    agent = QueryAgent(llm=_AnswerOnlyLLM(), store=EmptyStore())
+    result = agent.ask("What is the answer?")
+
+    assert result.rows == []
+    assert result.answer.startswith("I couldn't answer this question confidently.")
+
+
+def test_ask_fails_when_bounded_query_empties_degenerate_cypher():
+    """A lone ``;`` passes the truthiness check and the allowlist (a single
+    trailing separator is tolerated), but bounded_query reduces it to
+    nothing: the agent must fail gracefully, not run empty Cypher."""
+
+    class _SemicolonLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            return LLMResponse(
+                tool_calls=[ToolCall("generate_cypher", {"cypher": ";"})]
+            )
+
+    class _LenientStore(EmptyStore):
+        def run_read(self, cypher, **params):
+            assert cypher == ""
+            return []
+
+    agent = QueryAgent(llm=_SemicolonLLM(), store=_LenientStore())
+    result = agent.ask("Anything at all?")
+
+    assert result.rows == []
+    assert "couldn't generate a query" in result.answer

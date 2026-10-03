@@ -353,3 +353,29 @@ def test_evaluate_event_survives_alert_persist_failure(monkeypatch, postgres_sto
     GraphWriter(neo4j_store).write_event(event)
 
     assert engine.evaluate_event(event) == []
+
+
+def test_rules_ignore_wrong_event_types():
+    """Each rule's type guard returns an untriggered result without touching
+    Neo4j — wrong-typed events short-circuit before any query."""
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    assert rules.evaluate(
+        "politician_trades_in_oversight_sector",
+        _insider_event("a-x-1", "buy", 5000.0, 250.0),
+    ).triggered is False
+    assert rules.evaluate(
+        "insider_large_buy", _options_event("a-x-2", 10_000, 1_000)
+    ).triggered is False
+    assert rules.evaluate(
+        "unusual_options_sweep",
+        _insider_event("a-x-3", "buy", 5000.0, 250.0),
+    ).triggered is False
+
+
+def test_options_sweep_ignores_below_threshold_volume():
+    rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
+
+    cold = rules.evaluate("unusual_options_sweep", _options_event("a-opt-2", 1500, 1_000))
+    assert cold.triggered is False
+    assert cold.facts == []
