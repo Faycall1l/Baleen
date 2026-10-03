@@ -4,6 +4,7 @@ import { createNodeBorderProgram } from '@sigma/node-border';
 import type Graph from 'graphology';
 import Sigma from 'sigma';
 
+import { truncate } from '../graph/nodes';
 import { theme } from '../theme';
 
 function drawLabelWithHalo(
@@ -20,31 +21,58 @@ function drawLabelWithHalo(
 ): void {
   if (!data.label) return;
   const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
-  const lx = data.x + data.size + 3;
-  const ly = data.y + size / 3;
-  // Table-card plate (R49): a dark backdrop behind header + field line so
-  // labeled nodes read as entity boxes, mermaid-style, instead of bare text
-  // floating over the mesh.
-  const lines = data.sublabel ? [data.label, data.sublabel] : [data.label];
-  context.font = `${weight} ${size}px ${font}`;
-  const widths = lines.map((l) => context.measureText(l).width);
-  const pad = 4;
-  const plateW = Math.max(...widths) + pad * 2;
-  const plateH = size * (lines.length === 1 ? 1.5 : 2.6);
-  context.fillStyle = 'rgba(20, 20, 24, 0.85)';
-  context.beginPath();
-  context.roundRect(lx - pad, ly - size - 2, plateW, plateH);
-  context.fill();
-  context.lineWidth = 3;
-  context.strokeStyle = theme.bg;
-  context.strokeText(data.label, lx, ly);
-  context.fillStyle = theme.text;
-  context.fillText(data.label, lx, ly);
-  if (data.sublabel) {
-    context.font = `${size - 2}px ${font}`;
-    context.fillStyle = theme.textDim;
-    context.fillText(data.sublabel, lx, ly + size - 1);
+  // ER-entity box (R50): header row plus field rows inside a bordered box,
+  // mermaid-style — not floating text. Single-line labels keep the old
+  // halo treatment.
+  const title = truncate(data.label, 30);
+  const fields = data.sublabel ? [data.sublabel] : [];
+  if (fields.length === 0) {
+    const lx = data.x + data.size + 3;
+    const ly = data.y + size / 3;
+    context.font = `${weight} ${size}px ${font}`;
+    context.lineWidth = 3;
+    context.strokeStyle = theme.bg;
+    context.strokeText(title, lx, ly);
+    context.fillStyle = theme.text;
+    context.fillText(title, lx, ly);
+    return;
   }
+  const titleFont = `${weight} ${size}px ${font}`;
+  const fieldFont = `${size - 2}px ${font}`;
+  context.font = titleFont;
+  const titleW = context.measureText(title).width;
+  context.font = fieldFont;
+  const fieldW = Math.max(...fields.map((f) => context.measureText(f).width));
+  const padX = 7;
+  const padTop = 6;
+  const rowGap = 3;
+  const boxW = Math.max(titleW, fieldW) + padX * 2;
+  const boxH = padTop + size + rowGap + (size - 2) * fields.length + padTop;
+  const bx = data.x + data.size + 4;
+  const by = data.y - size - 2;
+  context.fillStyle = 'rgba(22, 22, 27, 0.94)';
+  context.strokeStyle = data.color;
+  context.lineWidth = 1.2;
+  context.beginPath();
+  context.roundRect(bx, by, boxW, boxH);
+  context.fill();
+  context.stroke();
+  // Header divider, ER-table style.
+  const dividerY = by + padTop + size + rowGap / 2;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(bx + padX, dividerY);
+  context.lineTo(bx + boxW - padX, dividerY);
+  context.stroke();
+  context.font = titleFont;
+  context.fillStyle = theme.text;
+  context.fillText(title, bx + padX, by + padTop + size - 2);
+  context.font = fieldFont;
+  context.fillStyle = theme.textDim;
+  fields.forEach((field, i) => {
+    context.fillText(field, bx + padX, by + padTop + size + rowGap + (size - 2) * (i + 1) - 3);
+  });
 }
 
 // Nodes render as filled discs with a thin darker border; arrows show edge
