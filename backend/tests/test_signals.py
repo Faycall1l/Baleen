@@ -42,6 +42,8 @@ def _option(
     volume: int,
     open_interest: int,
 ) -> OptionsFlowEvent:
+    # Fixed event_time: deterministic_id hashes it, so `now()` here would
+    # make every call a different event (and the writer MERGE a duplicate).
     return OptionsFlowEvent(
         tweet_id=tweet_id,
         tweet_url=f"https://finance.yahoo.com/quote/{ticker}",
@@ -54,7 +56,7 @@ def _option(
         volume=volume,
         open_interest=open_interest,
         sentiment="bullish" if side == "call" else "bearish",
-        event_time=datetime.now(timezone.utc),
+        event_time=datetime(2026, 10, 2, tzinfo=timezone.utc),
     )
 
 
@@ -86,6 +88,9 @@ def test_momentum_counts_buys_and_sells(neo4j_store, postgres_store):
 
 
 def test_flow_returns_prints_ranked_by_volume_ratio(neo4j_store, postgres_store):
+    # Defensive pre-cleanup: an earlier aborted run may have left stale
+    # twins behind (cleanup below only runs on success).
+    _cleanup(neo4j_store, "sig-flow-high", "sig-flow-low")
     writer = GraphWriter(neo4j_store)
     writer.write_event(_option("sig-flow-high", "NVDA", "call", 5000, 1000))
     writer.write_event(_option("sig-flow-low", "NVDA", "call", 1200, 1000))
@@ -105,6 +110,7 @@ def test_flow_returns_prints_ranked_by_volume_ratio(neo4j_store, postgres_store)
 
 
 def test_flow_filters_by_side_and_ticker(neo4j_store, postgres_store):
+    _cleanup(neo4j_store, "sig-flow-call", "sig-flow-put")
     writer = GraphWriter(neo4j_store)
     writer.write_event(_option("sig-flow-call", "NVDA", "call", 5000, 1000))
     writer.write_event(_option("sig-flow-put", "NVDA", "put", 6000, 1000))
