@@ -323,7 +323,7 @@ class IdentityTombstoneMixin:
                     SELECT id, entity_type, candidate_id, canonical_id, confidence,
                            source, created_at, resolution_id
                     FROM entity_identities
-                    WHERE (:entity_type IS NULL OR entity_type = :entity_type)
+                    WHERE (CAST(:entity_type AS TEXT) IS NULL OR entity_type = :entity_type)
                     ORDER BY entity_type, candidate_id
                     """
                 ),

@@ -101,13 +101,10 @@ class EntityResolver:
             return canonical
 
         known = self._db.get_canonical(entity_type, mention)
-        if known is not None and known["canonical_id"] == canonical_id:
-            # Alias already points at this exact id; refresh the spelling.
-            self._db.ensure_alias(
-                entity_type, alias=mention, canonical_id=canonical_id,
-                canonical_name=known["canonical_name"], source="llm",
-            )
-            return known["canonical_name"]
+        # NOTE: the "same mention, same id" refresh case cannot occur here:
+        # any alias row carrying this canonical_id makes get_canonical_name
+        # above return non-None, so reaching this point with a matching row
+        # is impossible (verified by invariant, not by test).
         if known is not None and known["canonical_id"] != canonical_id:
             # Same spelling, two different ids. We cannot tell who is right from
             # spelling alone, so the *first-registered* id stays authoritative,
@@ -243,12 +240,12 @@ class EntityResolver:
             by_id[a["canonical_id"]] = a["canonical_name"]
 
         pairs = []
+        # ids comes from dict keys: unique by construction, so i < j always
+        # pairs distinct ids (no self-pair guard needed).
         ids = sorted(by_id)
         for i in range(len(ids)):
             for j in range(i + 1, len(ids)):
                 id_a, id_b = ids[i], ids[j]
-                if id_a == id_b:
-                    continue
                 # Human-readable spelling goes into the queue; the normalized
                 # key is only used to score similarity.
                 name_a = by_id[id_a]

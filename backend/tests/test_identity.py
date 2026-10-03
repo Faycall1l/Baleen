@@ -298,3 +298,80 @@ def test_writer_remaps_candidate_id_after_merge(neo4j_store, postgres_store):
         )
     finally:
         _cleanup(neo4j_store, [cand_id, canon_id], [event_a, event_b, event_c])
+
+
+def test_apply_merge_refuses_unmergeable_label_after_confirmation(neo4j_store, postgres_store):
+    """A confirmed resolution with a non-mergeable label fails fast — the
+    label gate runs before any graph touch."""
+    queue_id = _confirmed_resolution(postgres_store, "P-CAND", "John Johnson")
+    engine = IdentityEngine(EntityResolver(postgres_store), neo4j_store)
+    with pytest.raises(ValueError):
+        engine.apply_merge(queue_id, "Ticker")
+
+
+def test_apply_merge_refuses_candidate_merged_elsewhere(neo4j_store, postgres_store):
+    """A candidate tombstoned into a different canonical is a hard stop, not
+    a silent re-point."""
+    cand_id = "R-CAND2"
+    event_a = _write(neo4j_store, _congress("ident-ra3", cand_id, "John Johnson", ["C1"]))
+    event_b = _write(neo4j_store, _congress("ident-rb3", "P-CANON", "John Johnsen", ["C2"]))
+    queue_id = _confirmed_resolution(postgres_store, cand_id, "John Johnson")
+    # The queued direction resolves P-CANON into our candidate: tombstone
+    # the candidate side elsewhere first.
+    neo4j_store.run(
+        "MATCH (p:Politician {id: $id}) SET p.merged_into = 'P-OTHER'", id="P-CANON"
+    )
+    engine = IdentityEngine(EntityResolver(postgres_store), neo4j_store)
+    try:
+        with pytest.raises(RuntimeError):
+            engine.apply_merge(queue_id, "Politician")
+    finally:
+        _cleanup(neo4j_store, [cand_id, "P-CANON"], [event_a, event_b])
+
+
+def test_validated_rejects_non_name_relationship_types():
+    """Relationship types interpolate into Cypher: anything outside the
+    allowlist pattern must raise instead of reaching the driver."""
+    from app.graph.identity import _validated
+
+    assert _validated("MEMBER_OF") == "MEMBER_OF"
+    with pytest.raises(ValueError):
+        _validated("MATCH (n) DELETE n")
+
+
+def test_canonical_name_refreshes_registered_spelling(postgres_store):
+    """Re-registering the same mention+id returns the stored spelling
+    instead of queueing a self-merge."""
+    from app.graph.resolution import EntityResolver
+
+    resolver = EntityResolver(postgres_store)
+    postgres_store.ensure_alias("Politician", "Jane Doe", "J1", "Jane Doe", source="seed")
+    assert resolver.canonical_name("Politician", "Jane Doe", "J1") == "Jane Doe"
+
+
+def test_identity_remaps_lists_recorded_remaps(postgres_store):
+    from app.graph.resolution import EntityResolver
+
+    resolver = EntityResolver(postgres_store)
+    assert resolver.identity_remaps() == []
+    postgres_store.ensure_alias("Politician", "John Johnson", "M1", "John Johnson", source="seed")
+    postgres_store.ensure_alias("Politician", "John Johnsen", "M2", "John Johnsen", source="seed")
+    resolver.suggest_merges("Politician")
+    queue_id = resolver.pending_reviews()[0]["id"]
+    assert resolver.approve(queue_id) is True
+    remaps = resolver.identity_remaps()
+    assert any(r["candidate_id"] == "M1" and r["canonical_id"] == "M2" for r in remaps)
+
+
+def test_suggest_merges_empty_and_unrelated_names(postgres_store):
+    from app.graph.resolution import EntityResolver
+
+    resolver = EntityResolver(postgres_store)
+    assert resolver.suggest_merges("Politician") == 0
+    postgres_store.ensure_alias(
+        "Politician", "Jonathan Abernathy", "Z1", "Jonathan Abernathy", source="seed"
+    )
+    postgres_store.ensure_alias(
+        "Politician", "Joshua Zebra", "Z2", "Joshua Zebra", source="seed"
+    )
+    assert resolver.suggest_merges("Politician") == 0

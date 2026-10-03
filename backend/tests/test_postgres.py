@@ -130,3 +130,27 @@ def test_get_reports_filters_by_kind_and_digest_returns_latest(postgres_store):
     assert postgres_store.get_digest("2026-09-10")["body"] == "b2"
     assert postgres_store.get_digest("2026-09-11")["title"] == "d2"
     assert postgres_store.get_digest("2025-01-01") is None
+
+
+def test_rule_mute_cycle(postgres_store):
+    """get_rules lists muted state; set_rule_active flips it and reports
+    existence honestly."""
+    postgres_store.ensure_rule("cycle_rule", "a test rule", None)
+
+    assert {"name": "cycle_rule", "active": True} in postgres_store.get_rules()
+    assert postgres_store.set_rule_active("cycle_rule", False) is True
+    assert {"name": "cycle_rule", "active": False} in postgres_store.get_rules()
+    assert postgres_store.set_rule_active("cycle_rule", True) is True
+    assert postgres_store.set_rule_active("no_such_rule", False) is False
+
+
+def test_nul_scrubbing_reaches_nested_structures():
+    """NUL bytes are poison for Postgres text: the scrubber must reach
+    nested lists and dicts, not just top-level strings."""
+    from app.db.store.support import _scrub_nulls, _strip_nulls
+
+    assert _strip_nulls("a\x00b") == "ab"
+    assert _strip_nulls("clean") == "clean"
+    assert _scrub_nulls(["a\x00", {"k": "v\x00v"}]) == ["a", {"k": "vv"}]
+    assert _scrub_nulls({"k": ["x\x00"]}) == {"k": ["x"]}
+    assert _scrub_nulls(42) == 42
