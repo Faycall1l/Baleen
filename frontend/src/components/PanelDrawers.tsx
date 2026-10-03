@@ -4,6 +4,7 @@ import LeaderboardPanel from './LeaderboardPanel';
 import ReportsPanel from './ReportsPanel';
 import SignalsPanel from './SignalsPanel';
 import type { Alert, FlowFilters, FlowPrint, LeaderboardEntry, Report, SignalsBundle } from '../types';
+import type { AlertRule } from '../api';
 
 export type Drawer = 'flow' | 'alerts' | 'reports' | 'leaders' | 'signals' | null;
 
@@ -27,6 +28,8 @@ interface Props {
   alertQuery: string;
   onAlertQueryChange: (query: string) => void;
   alertSeenMax: number;
+  alertRules: AlertRule[];
+  onAlertRuleToggle: (name: string, active: boolean) => void;
   digest: Report | null;
   reports: Report[];
   reportsError: string | null;
@@ -71,6 +74,8 @@ export default function PanelDrawers({
   alertQuery,
   onAlertQueryChange,
   alertSeenMax,
+  alertRules,
+  onAlertRuleToggle,
   digest,
   reports,
   reportsError,
@@ -103,12 +108,14 @@ export default function PanelDrawers({
           alerts={alerts}
           total={alertsTotal}
           rules={alertsRules}
+          ruleStates={alertRules}
           error={alertsError}
           onAlertClick={onAlertClick}
           rule={alertRule}
           onRuleChange={onAlertRuleChange}
           query={alertQuery}
           onQueryChange={onAlertQueryChange}
+          onToggleRule={onAlertRuleToggle}
           seenMax={alertSeenMax}
         />
       </Shell>

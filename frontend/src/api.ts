@@ -75,6 +75,23 @@ export function fetchLeaderboard(limit = 10): Promise<{ leaders: LeaderboardEntr
   return json<{ leaders: LeaderboardEntry[]; count: number }>(`/api/leaderboard?limit=${limit}`);
 }
 
+export interface AlertRule {
+  name: string;
+  active: boolean;
+}
+
+export function fetchRules(): Promise<{ rules: AlertRule[]; count: number }> {
+  return json<{ rules: AlertRule[]; count: number }>('/api/rules');
+}
+
+export function setRuleActive(name: string, active: boolean): Promise<AlertRule> {
+  return json<AlertRule>(`/api/rules/${encodeURIComponent(name)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ active }),
+  });
+}
+
 export function fetchSignals(): Promise<SignalsBundle> {
   return json<SignalsBundle>('/api/signals?window_days=90');
 }

@@ -15,6 +15,7 @@ import ShortcutsHelp from './components/ShortcutsHelp';
 import TickerDetail from './components/TickerDetail';
 import { useFeeds } from './hooks/useFeeds';
 import { useAlertsInbox } from './hooks/useAlertsInbox';
+import { useAlertRules } from './hooks/useAlertRules';
 import { useFlow } from './hooks/useFlow';
 import { useGraphFeed } from './hooks/useGraphFeed';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
@@ -187,6 +188,7 @@ export default function App() {
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.
   const inbox = useAlertsInbox(alerts, drawer === 'alerts');
+  const { rules: alertRules, toggleRule: toggleAlertRule } = useAlertRules();
 
   const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks } = useInspectorLinks(
     graph,
@@ -296,6 +298,8 @@ export default function App() {
             alertQuery={inbox.query}
             onAlertQueryChange={inbox.setQuery}
             alertSeenMax={inbox.seenMax}
+            alertRules={alertRules}
+            onAlertRuleToggle={toggleAlertRule}
             digest={digest}
             reports={reports}
             reportsError={reportsError}

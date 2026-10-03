@@ -1,16 +1,19 @@
 import { shortRuleLabel } from '../alertsInbox';
 import type { Alert } from '../types';
+import type { AlertRule } from '../api';
 
 interface Props {
   alerts: Alert[];
   total: number;
   rules: string[];
+  ruleStates: AlertRule[];
   error: string | null;
   onAlertClick?: (alert: Alert) => void;
   rule: string;
   onRuleChange: (rule: string) => void;
   query: string;
   onQueryChange: (query: string) => void;
+  onToggleRule: (name: string, active: boolean) => void;
   seenMax: number;
 }
 
@@ -46,12 +49,14 @@ export default function AlertsPanel({
   alerts,
   total,
   rules,
+  ruleStates,
   error,
   onAlertClick,
   rule,
   onRuleChange,
   query,
   onQueryChange,
+  onToggleRule,
   seenMax,
 }: Props) {
   return (
@@ -78,6 +83,22 @@ export default function AlertsPanel({
           aria-label="Filter alerts by text"
           onChange={(e) => onQueryChange(e.target.value)}
         />
+        {ruleStates.length > 0 && (
+          <div className="inbox-rules" aria-label="Mute rules">
+            {ruleStates.map((r) => (
+              <button
+                key={r.name}
+                type="button"
+                className={`inbox-rule${r.active ? '' : ' muted'}`}
+                aria-pressed={r.active}
+                title={r.active ? `Mute ${r.name}` : `Unmute ${r.name}`}
+                onClick={() => onToggleRule(r.name, !r.active)}
+              >
+                {shortRuleLabel(r.name)} · {r.active ? 'on' : 'muted'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {error && (
         <div className="empty-hint">

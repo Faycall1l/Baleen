@@ -89,3 +89,23 @@
   vertical-align: baseline;
 }
 
+/* Rule mute switches (R52b): one per known rule, dimmed when muted. */
+.inbox-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inbox-rule {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.inbox-rule.muted {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
