@@ -1,4 +1,5 @@
 import {
+  FLOW_DEFAULTS,
   formatContracts,
   formatExpiry,
   formatRatio,
@@ -76,7 +77,14 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
         </div>
       )}
       {!error && flow.length === 0 && (
-        <div className="empty-hint">No unusual prints match these filters.</div>
+        <div className="empty-hint">
+          No unusual prints match these filters.
+          <div>
+            <button type="button" onClick={() => onFiltersChange({ ...FLOW_DEFAULTS })}>
+              Reset filters
+            </button>
+          </div>
+        </div>
       )}
       {flow.length > 0 && (
         <>
