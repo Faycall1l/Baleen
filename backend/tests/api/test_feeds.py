@@ -256,3 +256,61 @@ def test_reports_digest_leaderboard_success_paths(monkeypatch):
 
         leaders = c.get("/api/leaderboard").json()
         assert leaders["count"] == 1 and leaders["leaders"][0]["politician"] == "Zed Zed"
+
+
+def test_rules_list_and_mute_cycle(monkeypatch):
+    """GET lists rules with muted state; PATCH flips it; unknown 404s."""
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+    state = {"unusual_options_sweep": True}
+
+    class _Rules:
+        @staticmethod
+        def get_rules():
+            return [{"name": n, "active": a} for n, a in state.items()]
+
+        @staticmethod
+        def set_rule_active(name, active):
+            if name not in state:
+                return False
+            state[name] = active
+            return True
+
+    monkeypatch.setattr(routes, "_get_store", lambda: _Rules())
+    with _client() as c:
+        body = c.get("/api/rules").json()
+        assert body == {
+            "rules": [{"name": "unusual_options_sweep", "active": True}],
+            "count": 1,
+        }
+
+        muted = c.patch("/api/rules/unusual_options_sweep", json={"active": False}).json()
+        assert muted == {"name": "unusual_options_sweep", "active": False}
+        assert c.get("/api/rules").json()["rules"][0]["active"] is False
+
+        missing = c.patch("/api/rules/nope", json={"active": False})
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == "unknown rule"
+
+
+def test_rules_error_is_json_500(monkeypatch):
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+
+    class _RulesBoom:
+        @staticmethod
+        def get_rules():
+            raise RuntimeError("rules exploded")
+
+        @staticmethod
+        def set_rule_active(name, active):
+            raise RuntimeError("rules exploded")
+
+    monkeypatch.setattr(routes, "_get_store", lambda: _RulesBoom())
+    with _client() as c:
+        assert c.get("/api/rules").status_code == 500
+        res = c.patch("/api/rules/x", json={"active": True})
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("rule update failed")

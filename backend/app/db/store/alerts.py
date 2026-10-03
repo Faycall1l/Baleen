@@ -35,6 +35,23 @@ class AlertStoreMixin:
             ).mappings()
             return [dict(row) for row in rows]
 
+    def get_rules(self) -> list[dict]:
+        """All rules with their muted state, for the inbox filter bar."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT name, active FROM alert_rules ORDER BY name")
+            ).mappings()
+            return [dict(row) for row in rows]
+
+    def set_rule_active(self, name: str, active: bool) -> bool:
+        """Mute/unmute a rule by name. Returns whether the rule exists."""
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("UPDATE alert_rules SET active = :active WHERE name = :name"),
+                {"name": name, "active": active},
+            )
+            return result.rowcount > 0
+
     def insert_alert(
         self,
         rule_id: int,

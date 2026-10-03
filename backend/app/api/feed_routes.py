@@ -9,9 +9,14 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class RuleActive(BaseModel):
+    active: bool
 
 
 @router.get("/alerts")
@@ -65,3 +70,31 @@ def leaderboard(limit: int = Query(default=20, ge=1, le=100)) -> dict:
         logger.exception("leaderboard fetch failed")
         raise HTTPException(status_code=500, detail=f"leaderboard fetch failed: {exc}")
     return {"leaders": rows, "count": len(rows)}
+
+
+@router.get("/rules")
+def rules() -> dict:
+    """Alert rules with their muted state, for the inbox filter bar."""
+    from app.api import routes
+
+    try:
+        rows = routes._get_store().get_rules()
+    except Exception as exc:
+        logger.exception("rules fetch failed")
+        raise HTTPException(status_code=500, detail=f"rules fetch failed: {exc}")
+    return {"rules": rows, "count": len(rows)}
+
+
+@router.patch("/rules/{name}")
+def set_rule(name: str, body: RuleActive) -> dict:
+    """Mute/unmute an alert rule. Unknown names answer 404."""
+    from app.api import routes
+
+    try:
+        found = routes._get_store().set_rule_active(name, body.active)
+    except Exception as exc:
+        logger.exception("rule update failed")
+        raise HTTPException(status_code=500, detail=f"rule update failed: {exc}")
+    if not found:
+        raise HTTPException(status_code=404, detail="unknown rule")
+    return {"name": name, "active": body.active}
