@@ -29,6 +29,9 @@ import { buildGraphUrl, parseGraphUrl } from './graphUrl';
 import { loadHiddenTypes, saveHiddenTypes } from './uiPrefs';
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
+import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
+import { fetchGraph } from './api';
+import type { GraphData } from './types';
 
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph } = useGraphFeed();
@@ -87,6 +90,27 @@ export default function App() {
   // Ticks pause while the tab is hidden.
   const feedsTick = usePollingTick(30_000, 0);
   const graphTick = usePollingTick(30_000, 20_000);
+
+  // Time scrubber (R47b): days-ago offset, null for live. The frozen
+  // snapshot replaces the canvas data until cleared; live polls continue
+  // underneath so jumping back is instant.
+  const [scrubDaysAgo, setScrubDaysAgo] = useState<number | null>(null);
+  const [asOfData, setAsOfData] = useState<GraphData | null>(null);
+  useEffect(() => {
+    if (scrubDaysAgo === null) {
+      setAsOfData(null);
+      return;
+    }
+    let cancelled = false;
+    fetchGraph(500, undefined, undefined, daysAgoToISO(scrubDaysAgo, Date.now()))
+      .then((data) => {
+        if (!cancelled) setAsOfData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [scrubDaysAgo]);
 
   const {
     alerts,
@@ -233,7 +257,7 @@ export default function App() {
         <main className="graph-area">
           <GraphErrorBoundary>
             <GraphView
-              data={graph}
+              data={asOfData ?? graph}
               error={graphError}
               selectedId={selected?.id ?? null}
               onSelect={handleSelect}
@@ -243,6 +267,9 @@ export default function App() {
               onToggleType={toggleType}
               onSoloType={soloType}
               onClearTypes={clearTypes}
+              scrubDaysAgo={scrubDaysAgo}
+              scrubMaxDays={SCRUB_DAYS}
+              onScrubChange={setScrubDaysAgo}
               loadingHint={
                 graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
               }

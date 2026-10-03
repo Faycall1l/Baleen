@@ -16,6 +16,9 @@ interface Props {
   onChooseMatch: (node: GraphNode) => void;
   onFit: () => void;
   onResetView: () => void;
+  scrubDaysAgo: number | null;
+  scrubMaxDays: number;
+  onScrubChange: (daysAgo: number | null) => void;
 }
 
 export default function GraphToolbar({
@@ -32,6 +35,9 @@ export default function GraphToolbar({
   onChooseMatch,
   onFit,
   onResetView,
+  scrubDaysAgo,
+  scrubMaxDays,
+  onScrubChange,
 }: Props) {
   // Keyboard navigation through results (R27): arrows move the highlight
   // (wrapping), Enter picks it, Escape clears. Resets on new matches.
@@ -113,6 +119,28 @@ export default function GraphToolbar({
       <button className="graph-fit-btn" onClick={onResetView} title="Fit, clear selection, and show all types">
         Reset
       </button>
+      <div className="time-scrub" title="Freeze the canvas on an as-of snapshot">
+        <input
+          type="range"
+          className="time-scrub-slider"
+          min={0}
+          max={scrubMaxDays}
+          step={1}
+          value={scrubDaysAgo ?? 0}
+          aria-label="Days back in time (0 is live)"
+          onChange={(e) => {
+            const days = Number(e.target.value);
+            onScrubChange(days <= 0 ? null : days);
+          }}
+        />
+        {scrubDaysAgo === null ? (
+          <span className="time-scrub-label">LIVE</span>
+        ) : (
+          <button className="type-clear" onClick={() => onScrubChange(null)}>
+            {scrubDaysAgo}d ago · back to live
+          </button>
+        )}
+      </div>
     </div>
   );
 }

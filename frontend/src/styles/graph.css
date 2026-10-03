@@ -185,6 +185,29 @@ button.graph-error-action:hover {
   background: rgba(35, 35, 40, 0.92);
 }
 
+/* Time scrubber (R47b): range slider plus a live/frozen readout. */
+.time-scrub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(35, 35, 40, 0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.time-scrub-slider {
+  width: 110px;
+  accent-color: var(--accent);
+}
+
+.time-scrub-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #7ee787;
+}
+
 /* Empty-by-filter overlay (R31): centered card, distinct from the
    loading/empty-data states so "I hid everything" never reads as
    "there is no data". */
