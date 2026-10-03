@@ -1,4 +1,5 @@
 import { groupBriefsByDay } from '../reportsView';
+import { downloadMarkdown, reportFilename, reportToMarkdown } from '../reportExport';
 import type { Report } from '../types';
 
 interface Props {
@@ -31,6 +32,16 @@ function BriefRow({ report, onReportClick }: { report: Report; onReportClick?: (
             {ref}
           </span>
         ))}
+        <button
+          type="button"
+          className="node-link"
+          onClick={(e) => {
+            e.stopPropagation();
+            downloadMarkdown(reportFilename(report), reportToMarkdown(report));
+          }}
+        >
+          Export .md
+        </button>
       </div>
     </div>
   );
@@ -52,6 +63,15 @@ export default function ReportsPanel({ digest, reports, error, onReportClick }: 
           <div className="digest-kicker">DAILY DIGEST · {digest.period ?? ''}</div>
           <div className="digest-title">{digest.title}</div>
           <div className="alert-summary">{digest.body}</div>
+          <div className="alert-meta">
+            <button
+              type="button"
+              className="node-link"
+              onClick={() => downloadMarkdown(reportFilename(digest), reportToMarkdown(digest))}
+            >
+              Export .md
+            </button>
+          </div>
         </div>
       )}
       {!error && briefs.length === 0 && !digest && (
