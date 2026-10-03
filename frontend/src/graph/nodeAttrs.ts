@@ -1,7 +1,7 @@
 import type Graph from 'graphology';
 
 import type { GraphData } from '../types';
-import { eventTitle, nodeColor, nodeSize, shade } from './nodes';
+import { eventTitle, nodeColor, nodeSize, nodeSubline, shade } from './nodes';
 
 const POS_CACHE_CAP = 2000;
 
@@ -39,6 +39,7 @@ export function instanceAttrs(
     label: display,
     key: n.key,
     title: display,
+    sublabel: nodeSubline(n.label, n.props),
     props: n.props,
     tweet_url: n.tweet_url,
     color,

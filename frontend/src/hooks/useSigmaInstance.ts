@@ -8,17 +8,43 @@ import { theme } from '../theme';
 
 function drawLabelWithHalo(
   context: CanvasRenderingContext2D,
-  data: { x: number; y: number; size: number; label?: string | null; color: string },
+  data: {
+    x: number;
+    y: number;
+    size: number;
+    label?: string | null;
+    sublabel?: string | null;
+    color: string;
+  },
   settings: { labelSize: number; labelFont: string; labelWeight: string },
 ): void {
   if (!data.label) return;
   const { labelSize: size, labelFont: font, labelWeight: weight } = settings;
+  const lx = data.x + data.size + 3;
+  const ly = data.y + size / 3;
+  // Table-card plate (R49): a dark backdrop behind header + field line so
+  // labeled nodes read as entity boxes, mermaid-style, instead of bare text
+  // floating over the mesh.
+  const lines = data.sublabel ? [data.label, data.sublabel] : [data.label];
   context.font = `${weight} ${size}px ${font}`;
+  const widths = lines.map((l) => context.measureText(l).width);
+  const pad = 4;
+  const plateW = Math.max(...widths) + pad * 2;
+  const plateH = size * (lines.length === 1 ? 1.5 : 2.6);
+  context.fillStyle = 'rgba(20, 20, 24, 0.85)';
+  context.beginPath();
+  context.roundRect(lx - pad, ly - size - 2, plateW, plateH);
+  context.fill();
   context.lineWidth = 3;
   context.strokeStyle = theme.bg;
-  context.strokeText(data.label, data.x + data.size + 3, data.y + size / 3);
+  context.strokeText(data.label, lx, ly);
   context.fillStyle = theme.text;
-  context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
+  context.fillText(data.label, lx, ly);
+  if (data.sublabel) {
+    context.font = `${size - 2}px ${font}`;
+    context.fillStyle = theme.textDim;
+    context.fillText(data.sublabel, lx, ly + size - 1);
+  }
 }
 
 // Nodes render as filled discs with a thin darker border; arrows show edge
