@@ -45,7 +45,7 @@ export default function App() {
   // every change below.
   const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
   const [drawer, setDrawer] = useState<Drawer>(initialUrl.drawer);
-  // Type filters live here (not in GraphView) so the URL writer below sees
+  // Type filters live here (not in TimelineBoard) so the URL writer below sees
   // the whole view state in one place.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
     () => new Set(initialUrl.hidden.length > 0 ? initialUrl.hidden : loadHiddenTypes()),
