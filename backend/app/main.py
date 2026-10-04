@@ -125,7 +125,7 @@ def _check_neo4j() -> None:
 
 
 def _check_llm() -> None:
-    if not routes._get_llm().health():
+    if not routes._get_llm().healthy():
         raise RuntimeError(
             f"LLM endpoint unreachable (probe GET {routes._get_llm().base_url}/models)"
         )
