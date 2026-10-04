@@ -358,6 +358,17 @@ def test_graph_path_rejects_unknown_labels():
         assert res.status_code == 422
         res = c.get("/api/graph/path?from=Ticker%3A&to=Ticker%3ANVDA")
         assert res.status_code == 422
+        res = c.get("/api/graph/path?from=NoColonHere&to=Ticker%3ANVDA")
+        assert res.status_code == 422
+        assert "Label:key" in res.json()["detail"]
+
+
+def test_graph_path_error_is_json_500(monkeypatch):
+    _boom_app(monkeypatch)
+    with _client() as c:
+        res = c.get("/api/graph/path?from=Ticker%3ANVDA&to=Ticker%3AAMD")
+        assert res.status_code == 500
+        assert res.json()["detail"].startswith("graph path failed")
 
 
 def test_graph_path_shapes_a_found_path(monkeypatch):
