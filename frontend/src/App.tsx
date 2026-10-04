@@ -36,7 +36,7 @@ import { fetchGraph, fetchPath, type PathResponse } from './api';
 import type { GraphData, GraphNode } from './types';
 
 export default function App() {
-  const { graph, graphError, graphStage, updatedAt, loadGraph } = useGraphFeed();
+  const { graph, graphError, graphStage, updatedAt, loadGraph, showEvents, setShowEvents } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
@@ -312,6 +312,8 @@ export default function App() {
               scrubDaysAgo={scrubDaysAgo}
               scrubMaxDays={SCRUB_DAYS}
               onScrubChange={setScrubDaysAgo}
+              showEvents={showEvents}
+              onToggleEvents={() => setShowEvents((v) => !v)}
               loadingHint={
                 graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
               }

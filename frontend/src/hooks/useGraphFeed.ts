@@ -28,10 +28,15 @@ export function useGraphFeed(): {
   graphStage: GraphStage;
   updatedAt: number | null;
   loadGraph: () => void;
+  showEvents: boolean;
+  setShowEvents: React.Dispatch<React.SetStateAction<boolean>>;
 } {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphStage, setGraphStage] = useState<GraphStage>('first');
+  // Focused default (R54b): start with the entity layer only (no events) so
+  // the canvas is readable; the user opts into events via the toggle.
+  const [showEvents, setShowEvents] = useState(false);
   // Last successful fetch time (R38): honesty about freshness in the
   // status bar. Stamped on fetch success, not on merge — an unchanged
   // snapshot is still fresh data.
@@ -108,7 +113,7 @@ export function useGraphFeed(): {
     pollCountRef.current += 1;
     const cursor = graphCursor(graphRef.current);
     const full = pollCountRef.current % 10 === 1 || cursor === null;
-    fetchGraph(150, ctrl.signal, full ? undefined : cursor ?? undefined)
+    fetchGraph(150, ctrl.signal, full ? undefined : cursor ?? undefined, undefined, !showEvents)
       .then((data) => {
         setUpdatedAt(Date.now());
         applyGraphPayload(data, !full);
@@ -118,7 +123,7 @@ export function useGraphFeed(): {
         setGraphError(err.message);
       })
       .finally(() => clearTimeout(timer));
-  }, [applyGraphPayload]);
+  }, [applyGraphPayload, showEvents]);
 
   useEffect(() => {
     // Staged boot: paint a quick small window first (seconds even on a slow
@@ -129,13 +134,13 @@ export function useGraphFeed(): {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 120_000);
     setGraphError(null);
-    fetchGraph(25, ctrl.signal)
+    fetchGraph(25, ctrl.signal, undefined, undefined, !showEvents)
       .then((data) => {
         if (cancelled) return;
         setUpdatedAt(Date.now());
         applyGraphPayload(data, false);
         setGraphStage('partial');
-        return fetchGraph(150, ctrl.signal);
+        return fetchGraph(150, ctrl.signal, undefined, undefined, !showEvents);
       })
       .then((data) => {
         if (cancelled || !data) return;
@@ -154,7 +159,7 @@ export function useGraphFeed(): {
       cancelled = true;
       ctrl.abort();
     };
-  }, [applyGraphPayload, loadGraph]);
+  }, [applyGraphPayload, loadGraph, showEvents]);
 
-  return { graph, graphError, graphStage, updatedAt, loadGraph };
+  return { graph, graphError, graphStage, updatedAt, loadGraph, showEvents, setShowEvents };
 }

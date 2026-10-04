@@ -45,6 +45,7 @@ def graph(
     limit: int = Query(default=500, ge=0, le=5000),
     since: str | None = Query(default=None),
     before: str | None = Query(default=None),
+    without_events: bool = Query(default=False),
 ) -> dict:
     """Serialize a subgraph for the graph UI.
 
@@ -98,7 +99,7 @@ def graph(
             return hit[1]
 
     with routes.neo4j_read_slot():
-        payload = _render_graph(limit, since_dt, before_dt)
+        payload = _render_graph(limit, since_dt, before_dt, without_events)
 
     if ttl > 0 and since_dt is None and before_dt is None:
         with routes._graph_cache_lock:
@@ -184,7 +185,10 @@ def graph_path(
 
 
 def _render_graph(
-    limit: int, since_dt: datetime | None = None, before_dt: datetime | None = None
+    limit: int,
+    since_dt: datetime | None = None,
+    before_dt: datetime | None = None,
+    without_events: bool = False,
 ) -> dict:
     from app.api import routes
 
@@ -208,7 +212,7 @@ def _render_graph(
             if limit > 0 or delta
             else None
         )
-        rows = _fetch_nodes_and_links(neo4j, keep_ids)
+        rows = _fetch_nodes_and_links(neo4j, keep_ids, without_events)
     except Exception as exc:
         logger.exception("graph export failed")
         raise HTTPException(status_code=500, detail=f"graph export failed: {exc}")
@@ -300,7 +304,9 @@ def _keep_ids(
     return keep_ids
 
 
-def _fetch_nodes_and_links(neo4j, keep_ids: list[str] | None) -> list[dict]:
+def _fetch_nodes_and_links(
+    neo4j, keep_ids: list[str] | None, without_events: bool = False
+) -> list[dict]:
     """One round trip for nodes + links (previously two sequential scans):
     every kept node's outgoing edges ride along, and links touching a node
     outside the kept set (or a tombstoned node) are dropped in Python exactly
@@ -314,6 +320,8 @@ def _fetch_nodes_and_links(neo4j, keep_ids: list[str] | None) -> list[dict]:
         "(NOT n:Politician OR n.merged_into IS NULL)",
         "(NOT n:Insider OR n.merged_into IS NULL)",
     ]
+    if without_events:
+        node_conditions.append("(NOT n:Event)")
     return neo4j.run(
         f"""
         MATCH (n) WHERE {' AND '.join(node_conditions)}
