@@ -111,3 +111,22 @@ export function fetchTicker(symbol: string): Promise<{ ticker: TickerCard }> {
 export function fetchCommittee(committeeId: string): Promise<{ committee: CommitteeCard }> {
   return json<{ committee: CommitteeCard }>(`/api/committees/${encodeURIComponent(committeeId)}`);
 }
+
+export interface PathNode {
+  id: string;
+  label: string;
+  title: string;
+}
+
+export interface PathResponse {
+  from: string;
+  to: string;
+  nodes: PathNode[];
+  rels: string[];
+  length: number;
+}
+
+export function fetchPath(fromId: string, toId: string): Promise<PathResponse> {
+  const params = new URLSearchParams({ from: fromId, to: toId });
+  return json<PathResponse>(`/api/graph/path?${params.toString()}`);
+}

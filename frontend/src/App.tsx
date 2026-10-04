@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import CommandBar from './components/CommandBar';
@@ -9,6 +9,7 @@ import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail from './components/PanelRail';
+import PathFromButton from './components/PathFromButton';
 import CommitteeDetail from './components/CommitteeDetail';
 import PoliticianDetail from './components/PoliticianDetail';
 import ShortcutsHelp from './components/ShortcutsHelp';
@@ -31,8 +32,8 @@ import { loadHiddenTypes, saveHiddenTypes } from './uiPrefs';
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
 import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
-import { fetchGraph } from './api';
-import type { GraphData } from './types';
+import { fetchGraph, fetchPath, type PathResponse } from './api';
+import type { GraphData, GraphNode } from './types';
 
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph } = useGraphFeed();
@@ -164,6 +165,13 @@ export default function App() {
     window.history.replaceState(null, '', url);
   }, [selected?.id, hiddenTypes, drawer]);
 
+  // Path mode (R53b): armed from any inspector via PathFromButton; the next
+  // selected node completes the pair and opens the path drawer. Declared
+  // before the key handler below so Esc can disarm.
+  const [pathFrom, setPathFrom] = useState<GraphNode | null>(null);
+  const [pathResult, setPathResult] = useState<PathResponse | null>(null);
+  const [pathError, setPathError] = useState<string | null>(null);
+
   // Esc closes the open drawer from anywhere (R15); with no drawer it
   // clears the inspector selection (R16). `?` outside inputs opens help.
   useEffect(() => {
@@ -177,18 +185,50 @@ export default function App() {
       }
       if (e.key === 'Escape') {
         if (showHelp) setShowHelp(false);
+        else if (pathFrom) setPathFrom(null);
         else if (drawer) setDrawer(null);
         else setSelected(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer, showHelp]);
+  }, [drawer, showHelp, pathFrom]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.
   const inbox = useAlertsInbox(alerts, drawer === 'alerts');
   const { rules: alertRules, toggleRule: toggleAlertRule } = useAlertRules();
+
+  const loadedIds = useMemo(
+    () => new Set((graph?.nodes ?? []).map((n) => n.id)),
+    [graph],
+  );
+
+  const selectPathNode = (id: string) => {
+    const full = graph?.nodes.find((n) => n.id === id);
+    if (full) handleSelect(full);
+  };
+
+  const handleCanvasSelect = (node: GraphNode | null) => {
+    if (node && pathFrom && node.id !== pathFrom.id) {
+      const from = pathFrom;
+      setPathFrom(null);
+      setPathError(null);
+      fetchPath(from.id, node.id)
+        .then((res) => {
+          setPathResult(res);
+          setDrawer('path');
+        })
+        .catch((err: unknown) => {
+          setPathResult(null);
+          setPathError(err instanceof Error ? err.message : 'Path fetch failed');
+          setDrawer('path');
+        });
+    } else if (node && pathFrom && node.id === pathFrom.id) {
+      setPathFrom(null);
+    }
+    handleSelect(node);
+  };
 
   const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks } = useInspectorLinks(
     graph,
@@ -243,7 +283,7 @@ export default function App() {
         <PanelRail
           drawer={drawer}
           onSelect={setDrawer}
-          counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount }}
+          counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <aside className="tape-dock" aria-label="Options flow tape">
           <FlowTape
@@ -262,7 +302,7 @@ export default function App() {
               data={asOfData ?? graph}
               error={graphError}
               selectedId={selected?.id ?? null}
-              onSelect={handleSelect}
+              onSelect={handleCanvasSelect}
               onHoverEdgeChange={setHoverEdge}
               onRetry={loadGraph}
               hiddenTypes={hiddenTypes}
@@ -309,6 +349,10 @@ export default function App() {
             onLeaderClick={openLeaderNode}
             signals={signals}
             signalsError={signalsError}
+            pathResult={pathResult}
+            pathError={pathError}
+            onPathNodeClick={selectPathNode}
+            isPathNodeSelectable={(id) => loadedIds.has(id)}
           />
           <div className="graph-status">
             {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
@@ -354,6 +398,15 @@ export default function App() {
             ) : (
               <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
             )}
+            <PathFromButton
+              armed={pathFrom !== null}
+              onArm={() => {
+                setPathResult(null);
+                setPathError(null);
+                setPathFrom(selected);
+              }}
+              onCancel={() => setPathFrom(null)}
+            />
           </aside>
         )}
         <AlertStack alerts={alerts} onAlertClick={openAlertNode} />
