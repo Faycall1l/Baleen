@@ -4,7 +4,7 @@ import AlertStack from './components/AlertStack';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
-import GraphView from './components/GraphView';
+import TimelineBoard from './components/TimelineBoard';
 import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
@@ -298,7 +298,7 @@ export default function App() {
         </aside>
         <main className="graph-area">
           <GraphErrorBoundary>
-            <GraphView
+            <TimelineBoard
               data={asOfData ?? graph}
               error={graphError}
               selectedId={selected?.id ?? null}

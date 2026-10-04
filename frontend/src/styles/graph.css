@@ -320,3 +320,99 @@ button.graph-error-action:hover {
   display: inline-block;
 }
 
+/* Signal board (T1): time-aligned event lanes replacing the node canvas. */
+
+.tl-zoom {
+  display: flex;
+  gap: 6px;
+  padding: 60px 12px 0;
+}
+
+.graph-fit-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tl-body {
+  display: flex;
+  gap: 0;
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.tl-labels {
+  flex: 0 0 132px;
+  min-width: 132px;
+}
+
+.tl-axis-spacer {
+  height: 26px;
+}
+
+.tl-label {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 10px;
+  font-size: 12px;
+}
+
+.tl-ticker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.tl-plot {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tl-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.tl-rowline {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.tl-tick {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.tl-dot {
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.tl-dot:hover,
+.tl-dot:focus-visible {
+  stroke: #fff;
+  stroke-width: 1.5;
+  opacity: 1;
+  outline: none;
+}
+
+.tl-dot.selected {
+  stroke: #fff;
+  stroke-width: 2;
+  opacity: 1;
+}
+
