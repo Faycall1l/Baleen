@@ -21,6 +21,10 @@ class _BackupStub:
         self.error = error
         self.calls: list[dict] = []
         self.closed = False
+        self.probe_ok = True
+
+    def health(self):
+        return self.probe_ok
 
     def chat(self, messages, *, tools=None, tool_choice=None):
         self.calls.append({"messages": messages, "tools": tools, "tool_choice": tool_choice})
@@ -472,3 +476,32 @@ def test_json_mode_sends_response_format_by_default(monkeypatch):
     monkeypatch.setattr(client, "_post", _capture)
     client._chat_json([{"role": "user", "content": "hi"}], tools=[])
     assert seen.get("response_format") == {"type": "json_object"}
+
+
+def test_healthy_short_circuits_when_primary_ok(monkeypatch):
+    backup = _BackupStub()
+    client = LLMClient("http://x", "k", "m", backup=backup)
+    monkeypatch.setattr(client, "health", lambda: True)
+    monkeypatch.setattr(backup, "health", lambda: (_ for _ in ()).throw(AssertionError("must not probe backup")))
+    assert client.healthy() is True
+
+
+def test_healthy_falls_back_to_backup(monkeypatch):
+    backup = _BackupStub()
+    client = LLMClient("http://x", "k", "m", backup=backup)
+    monkeypatch.setattr(client, "health", lambda: False)
+    assert client.healthy() is True
+
+
+def test_healthy_false_when_both_down(monkeypatch):
+    backup = _BackupStub()
+    backup.probe_ok = False
+    client = LLMClient("http://x", "k", "m", backup=backup)
+    monkeypatch.setattr(client, "health", lambda: False)
+    assert client.healthy() is False
+
+
+def test_healthy_false_without_backup(monkeypatch):
+    client = LLMClient("http://x", "k", "m")
+    monkeypatch.setattr(client, "health", lambda: False)
+    assert client.healthy() is False

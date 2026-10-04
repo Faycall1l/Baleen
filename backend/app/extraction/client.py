@@ -194,6 +194,18 @@ class LLMClient:
         except httpx.HTTPError:
             return False
 
+    def healthy(self) -> bool:
+        """Primary-or-backup readiness. Never raises.
+
+        The /health endpoint uses this so a dead primary with a live backup
+        (e.g. Groq) reports ok — queries genuinely work in that state, and a
+        503 would be a lie. Backup probes are safe: :meth:`health` swallows
+        transport errors and both probes are cheap GETs.
+        """
+        if self.health():
+            return True
+        return self._backup is not None and self._backup.health()
+
     # ------------------------------------------------------------------
     # Mode implementations
     # ------------------------------------------------------------------

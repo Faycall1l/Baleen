@@ -39,6 +39,9 @@ def test_health_reports_llm_down_when_configured(monkeypatch):
         def health(self):
             return False
 
+        def healthy(self):
+            return False
+
     # A real model name is configured, so /health must probe the LLM.
     monkeypatch.setattr(
         main,
