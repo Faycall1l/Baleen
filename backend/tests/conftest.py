@@ -32,6 +32,14 @@ def _prefer_test_neo4j_if_available() -> None:
         with socket.create_connection(("127.0.0.1", 7690), timeout=1.0):
             os.environ.setdefault("NEO4J_URI", _TEST_NEO4J_BOLT)
             os.environ.setdefault("NEO4J_READ_URI", _TEST_NEO4J_BOLT)
+            # Promoting the URI alone builds a read driver with the default
+            # read-only-role credentials, which are not provisioned in dev —
+            # every run_read then dies on auth. Point the read role at the
+            # same credentials so reads keep working under pytest.
+            os.environ.setdefault("NEO4J_READ_USER", os.getenv("NEO4J_USER", "neo4j"))
+            os.environ.setdefault(
+                "NEO4J_READ_PASSWORD", os.getenv("NEO4J_PASSWORD", "baleen_dev_pass")
+            )
     except OSError:
         pass  # dev fallback: tests run against the regular 7687 instance
 
