@@ -34,7 +34,7 @@ export function instanceAttrs(
   const color = nodeColor(n.label);
   const display = n.label === 'Event' ? eventTitle(n.props) : n.title;
   return {
-    type: 'bordered',
+    type: 'square',
     kind: n.label,
     label: display,
     key: n.key,
