@@ -377,6 +377,53 @@ button.graph-error-action:hover {
 .tl-plot {
   flex: 1 1 auto;
   min-width: 0;
+  position: relative;
+}
+
+.tl-xhair {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.8;
+}
+
+.tl-xhair-label {
+  fill: var(--accent);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.tl-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--surface-2, #1c1e24);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  min-width: 180px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.tl-tip.flip {
+  transform: translateX(calc(-100% - 28px));
+}
+
+.tl-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.tl-tip-k {
+  color: var(--text-dim);
+}
+
+.tl-tip-v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
 }
 
 .tl-grid {
