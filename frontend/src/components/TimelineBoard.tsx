@@ -47,9 +47,48 @@ const SIDE_FILL: Record<TimelineDot['side'], string> = {
   other: '#8a8f98',
 };
 
+/** Floating hover card (T2): flips left when the anchor is past mid-plot
+ * so it never clips off the right edge. Pointer-transparent — dots stay
+ * clickable and hoverable through it.
+ */
+function TipCard({ dot, x, y, plotW }: { dot: TimelineDot; x: number; y: number; plotW: number }) {
+  const p = dot.node.props;
+  const strike = p.strike;
+  const rows: Array<[string, string]> = [];
+  rows.push(['Ticker', String(p.ticker ?? dot.node.title)]);
+  rows.push(['Side', dot.side === 'other' ? '—' : dot.side.toUpperCase()]);
+  if (strike !== undefined && strike !== null && strike !== '') {
+    rows.push(['Strike', `$${String(strike)}`]);
+  }
+  if (dot.volume > 0) rows.push(['Volume', dot.volume.toLocaleString()]);
+  rows.push(['Time', new Date(dot.time).toLocaleString()]);
+  const flip = x > plotW / 2;
+  return (
+    <div
+      className={`tl-tip${flip ? ' flip' : ''}`}
+      style={{ left: x + 14, top: Math.max(4, y - 10) }}
+      aria-hidden="true"
+    >
+      {rows.map(([k, v]) => (
+        <div key={k} className="tl-tip-row">
+          <span className="tl-tip-k">{k}</span>
+          <span className="tl-tip-v">{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function fmtDay(ms: number): string {
   const d = new Date(ms);
   return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function fmtTime(ms: number): string {
+  const d = new Date(ms);
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  return `${fmtDay(ms)} ${hh}:${mm}`;
 }
 
 /** Signal board (T1): options-flow events as dots on one row per ticker
@@ -77,7 +116,12 @@ export default function TimelineBoard({
 }: Props) {
   const [zoomDays, setZoomDays] = useState<number | null>(null);
   const plotRef = useRef<HTMLDivElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [plotW, setPlotW] = useState(720);
+  // Crosshair (T2): mouse x in svg coords; the time readout inverts it.
+  const [xhair, setXhair] = useState<number | null>(null);
+  // Rich hover tooltip (T2): dot + anchor in plot-container coords.
+  const [tip, setTip] = useState<{ dot: TimelineDot; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const el = plotRef.current;
@@ -120,6 +164,24 @@ export default function TimelineBoard({
   const x = (t: number): number => {
     if (!view || view[1] === view[0]) return PLOT_PAD + plotW / 2;
     return PLOT_PAD + ((t - view[0]) / (view[1] - view[0])) * plotW;
+  };
+
+  const tAt = (px: number): number | null => {
+    if (!view || plotW <= 0) return null;
+    const frac = Math.min(1, Math.max(0, (px - PLOT_PAD) / plotW));
+    return view[0] + frac * (view[1] - view[0]);
+  };
+
+  const svgX = (clientX: number): number | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    return clientX - svg.getBoundingClientRect().left;
+  };
+
+  const tipAnchor = (e: React.MouseEvent): { x: number; y: number } => {
+    const box = plotRef.current?.getBoundingClientRect();
+    if (!box) return { x: 0, y: 0 };
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
   };
 
   const ticks = useMemo(() => {
@@ -246,10 +308,19 @@ export default function TimelineBoard({
           </div>
           <div className="tl-plot" ref={plotRef}>
             <svg
+              ref={svgRef}
               width={plotW + PLOT_PAD * 2}
               height={rows.length * ROW_H + 26}
               role="img"
               aria-label="Options flow by ticker over time"
+              onMouseMove={(e) => {
+                const px = svgX(e.clientX);
+                setXhair(px);
+              }}
+              onMouseLeave={() => {
+                setXhair(null);
+                setTip(null);
+              }}
             >
               {ticks.map((t) => (
                 <g key={t}>
@@ -288,6 +359,8 @@ export default function TimelineBoard({
                         role="button"
                         aria-label={dotTitle(d)}
                         onClick={() => onSelect(d.node)}
+                        onMouseEnter={(e) => setTip({ dot: d, ...tipAnchor(e) })}
+                        onMouseLeave={() => setTip(null)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -301,7 +374,29 @@ export default function TimelineBoard({
                   })}
                 </g>
               ))}
+              {xhair !== null && view && (() => {
+                const t = tAt(xhair);
+                if (t === null) return null;
+                const cx = Math.min(PLOT_PAD + plotW, Math.max(PLOT_PAD, xhair));
+                return (
+                  <g pointerEvents="none">
+                    <line
+                      x1={cx}
+                      x2={cx}
+                      y1={18}
+                      y2={rows.length * ROW_H + 22}
+                      className="tl-xhair"
+                    />
+                    <text x={cx} y={12} textAnchor="middle" className="tl-xhair-label">
+                      {fmtTime(t)}
+                    </text>
+                  </g>
+                );
+              })()}
             </svg>
+            {tip && (
+              <TipCard dot={tip.dot} x={tip.x} y={tip.y} plotW={plotW} />
+            )}
           </div>
         </div>
       )}
