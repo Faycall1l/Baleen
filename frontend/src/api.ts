@@ -27,10 +27,12 @@ export function fetchGraph(
   signal?: AbortSignal,
   since?: string,
   before?: string,
+  withoutEvents = false,
 ): Promise<GraphData> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (since != null && since !== '') params.set('since', since);
   if (before != null && before !== '') params.set('before', before);
+  if (withoutEvents) params.set('without_events', 'true');
   return json<GraphData>(`/api/graph?${params.toString()}`, signal ? { signal } : undefined);
 }
 

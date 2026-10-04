@@ -19,6 +19,8 @@ interface Props {
   scrubDaysAgo: number | null;
   scrubMaxDays: number;
   onScrubChange: (daysAgo: number | null) => void;
+  showEvents: boolean;
+  onToggleEvents: () => void;
 }
 
 export default function GraphToolbar({
@@ -38,6 +40,8 @@ export default function GraphToolbar({
   scrubDaysAgo,
   scrubMaxDays,
   onScrubChange,
+  showEvents,
+  onToggleEvents,
 }: Props) {
   // Keyboard navigation through results (R27): arrows move the highlight
   // (wrapping), Enter picks it, Escape clears. Resets on new matches.
@@ -118,6 +122,14 @@ export default function GraphToolbar({
       </button>
       <button className="graph-fit-btn" onClick={onResetView} title="Fit, clear selection, and show all types">
         Reset
+      </button>
+      <button
+        className={`graph-fit-btn${showEvents ? ' active' : ''}`}
+        onClick={onToggleEvents}
+        title={showEvents ? 'Hide event nodes (focused view)' : 'Show event nodes (full view)'}
+        aria-pressed={showEvents}
+      >
+        {showEvents ? 'Events on' : 'Events off'}
       </button>
       <div className="time-scrub" title="Freeze the canvas on an as-of snapshot">
         <input

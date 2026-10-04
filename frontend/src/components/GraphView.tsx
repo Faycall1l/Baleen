@@ -28,6 +28,8 @@ interface Props {
   scrubDaysAgo: number | null;
   scrubMaxDays: number;
   onScrubChange: (daysAgo: number | null) => void;
+  showEvents: boolean;
+  onToggleEvents: () => void;
   loadingHint?: string;
   warming?: boolean;
 }
@@ -51,7 +53,7 @@ interface Props {
 // (neighborhood stays bright, rest dims), toolbar to reset, legend always
 // visible, detail panel on the right for the selected node.
 // ---------------------------------------------------------------------------
-export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, onRetry, hiddenTypes, onToggleType, onSoloType, onClearTypes, scrubDaysAgo, scrubMaxDays, onScrubChange, loadingHint, warming }: Props) {
+export default function GraphView({ data, error, selectedId, onSelect, onHoverEdgeChange, onRetry, hiddenTypes, onToggleType, onSoloType, onClearTypes, scrubDaysAgo, scrubMaxDays, onScrubChange, showEvents, onToggleEvents, loadingHint, warming }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const posCacheRef = useRef(new Map<string, { x: number; y: number }>());
@@ -205,6 +207,8 @@ export default function GraphView({ data, error, selectedId, onSelect, onHoverEd
         scrubDaysAgo={scrubDaysAgo}
         scrubMaxDays={scrubMaxDays}
         onScrubChange={onScrubChange}
+        showEvents={showEvents}
+        onToggleEvents={onToggleEvents}
       />
       <GraphLegend
         // Biggest types first (R44): the eye lands on what dominates the
