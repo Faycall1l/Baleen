@@ -355,8 +355,33 @@ button.graph-error-action:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   padding-right: 10px;
+  padding-left: 6px;
   font-size: 12px;
+  border-left: 2px solid transparent;
+}
+
+.tl-sec-flow {
+  border-left-color: #6fbf73;
+}
+
+.tl-sec-insider {
+  border-left-color: var(--accent);
+}
+
+.tl-sec-congress {
+  border-left-color: #7aa8e8;
+}
+
+.tl-sectag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
 }
 
 .tl-ticker {
