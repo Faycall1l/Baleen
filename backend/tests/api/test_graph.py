@@ -352,6 +352,106 @@ def test_graph_export_error_is_json_500(monkeypatch):
         assert res.json()["detail"].startswith("graph export failed")
 
 
+def test_graph_path_rejects_unknown_labels():
+    with _client() as c:
+        res = c.get("/api/graph/path?from=Bogus%3AX&to=Ticker%3ANVDA")
+        assert res.status_code == 422
+        res = c.get("/api/graph/path?from=Ticker%3A&to=Ticker%3ANVDA")
+        assert res.status_code == 422
+
+
+def test_graph_path_shapes_a_found_path(monkeypatch):
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+
+    class _PathNeo4j:
+        def run_read(self, query, **k):
+            assert "shortestPath" in query
+            assert k == {"from_key": "NVDA", "to_key": "evt_1"}
+            return [
+                {
+                    "nodes": [
+                        {"labels": ["Ticker"], "props": {"ticker": "NVDA"}},
+                        {
+                            "labels": ["Event"],
+                            "props": {"id": "evt_1", "type": "options_flow"},
+                        },
+                    ],
+                    "rels": ["INVOLVES_TICKER"],
+                }
+            ]
+
+        def run(self, *a, **k):
+            raise AssertionError("path reads must use run_read")
+
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: _PathNeo4j())
+    with _client() as c:
+        body = c.get("/api/graph/path?from=Ticker%3ANVDA&to=Event%3Aevt_1").json()
+    assert body["length"] == 1
+    assert body["rels"] == ["INVOLVES_TICKER"]
+    assert [n["id"] for n in body["nodes"]] == ["Ticker:NVDA", "Event:evt_1"]
+    assert body["nodes"][0]["title"] == "NVDA"
+
+
+def test_graph_path_empty_when_disconnected(monkeypatch):
+    import app.api.routes as routes
+
+    _quiet_settings(monkeypatch)
+
+    class _EmptyNeo4j:
+        def run_read(self, query, **k):
+            return []
+
+    monkeypatch.setattr(routes, "_get_neo4j", lambda: _EmptyNeo4j())
+    with _client() as c:
+        body = c.get("/api/graph/path?from=Ticker%3ANVDA&to=Ticker%3AAMD").json()
+    assert body == {
+        "from": "Ticker:NVDA",
+        "to": "Ticker:AMD",
+        "nodes": [],
+        "rels": [],
+        "length": 0,
+    }
+
+
+def test_graph_path_finds_live_connection(neo4j_store):
+    """Live: a fresh event links its ticker in one hop."""
+    from datetime import date
+    from app.graph.writer import GraphWriter
+    from app.models.events import CongressTradeEvent
+
+    event = CongressTradeEvent(
+        tweet_id="g-path-1",
+        tweet_url="https://x.com/congress_trades/status/g-path-1",
+        confidence=0.95,
+        politician_name="Path Person",
+        politician_id="PP1",
+        chamber="house",
+        party="D",
+        committee_ids=[],
+        ticker="ZZPQ",
+        transaction_type="buy",
+        amount_range="$1 - $2",
+        transaction_date=date(2026, 1, 1),
+        event_time=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+    event_id = GraphWriter(neo4j_store).write_event(event)
+    try:
+        with _client() as c:
+            body = c.get("/api/graph/path?from=Ticker%3AZZPQ&to=Event%3A" + event_id).json()
+        assert body["length"] == 1
+        assert body["rels"] == ["INVOLVES_TICKER"]
+        assert body["nodes"][-1]["id"] == f"Event:{event_id}"
+    finally:
+        neo4j_store.run(
+            "MATCH (e:Event) WHERE e.id = $id DETACH DELETE e", id=event_id
+        )
+        neo4j_store.run(
+            "MATCH (t:Ticker) WHERE t.ticker = 'ZZPQ' DETACH DELETE t"
+        )
+
+
 def test_graph_since_and_before_are_mutually_exclusive():
     with _client() as c:
         res = c.get("/api/graph?since=2026-01-01T00%3A00%3A00%2B00%3A00&before=2026-02-01T00%3A00%3A00%2B00%3A00")

@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.api.graph_payload import build_graph_payload
+from app.api.graph_payload import build_graph_payload, json_safe, node_key
+from app.graph.schema import ALLOWED_LABELS, LABEL_KEYS
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -105,6 +106,81 @@ def graph(
     if before_dt is not None:
         payload = {**payload, "before": before_dt.isoformat()}
     return payload
+
+
+def _split_node_ref(ref: str) -> tuple[str, str] | None:
+    """Split a ``Label:key`` node reference, validated against the schema.
+
+    Labels interpolate into Cypher (parameters cannot), so anything outside
+    the allowlist is rejected here — the same gating the writer relies on.
+    """
+    if ":" not in ref:
+        return None
+    label, _, key = ref.partition(":")
+    if label not in ALLOWED_LABELS or not key:
+        return None
+    return label, key
+
+
+@router.get("/graph/path", dependencies=[Depends(_require_api_key)])
+def graph_path(
+    from_node: str = Query(alias="from", min_length=1),
+    to_node: str = Query(alias="to", min_length=1),
+) -> dict:
+    """Shortest relationship path between two nodes (R53a).
+
+    Powers "how is A connected to B" — the relationship-noticing workflow
+    the full-graph hairball cannot answer. Undirected, max 6 hops; no path
+    answers 200 with empty lists (probing is normal use, not an error).
+    """
+    from app.api import routes
+
+    parsed_from = _split_node_ref(from_node)
+    parsed_to = _split_node_ref(to_node)
+    if parsed_from is None or parsed_to is None:
+        raise HTTPException(
+            status_code=422, detail="from/to must be Label:key with a known label"
+        )
+    (from_label, from_key), (to_label, to_key) = parsed_from, parsed_to
+
+    try:
+        with routes.neo4j_read_slot():
+            rows = routes._get_neo4j().run_read(
+                f"""
+                MATCH (a:{from_label} {{{LABEL_KEYS[from_label]}: $from_key}}),
+                      (b:{to_label} {{{LABEL_KEYS[to_label]}: $to_key}})
+                MATCH p = shortestPath((a)-[*..6]-(b))
+                RETURN [x IN nodes(p) | {{labels: labels(x), props: properties(x)}}] AS nodes,
+                       [r IN relationships(p) | type(r)] AS rels
+                """,
+                from_key=from_key,
+                to_key=to_key,
+            )
+    except Exception as exc:
+        logger.exception("graph path failed")
+        raise HTTPException(status_code=500, detail=f"graph path failed: {exc}")
+    if not rows:
+        return {"from": from_node, "to": to_node, "nodes": [], "rels": [], "length": 0}
+    path = rows[0]
+    nodes = []
+    for entry in path["nodes"]:
+        label = entry["labels"][0]
+        props = json_safe(entry["props"])
+        key = node_key(label, props)
+        nodes.append(
+            {
+                "id": f"{label}:{key}",
+                "label": label,
+                "title": props.get("name") or props.get("ticker") or props.get("id") or key,
+            }
+        )
+    return {
+        "from": from_node,
+        "to": to_node,
+        "nodes": nodes,
+        "rels": list(path["rels"]),
+        "length": len(path["rels"]),
+    }
 
 
 def _render_graph(
