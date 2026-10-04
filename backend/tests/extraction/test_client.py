@@ -10,6 +10,26 @@ import pytest
 
 from app.extraction.client import LLMClient
 from app.extraction.extractor import EventExtractor, build_tool_definitions
+from app.extraction.protocol import LLMError, LLMResponse, LLMTransportError
+
+
+class _BackupStub:
+    """Stand-in backup: records the relayed call, replays a canned reply."""
+
+    def __init__(self, reply: LLMResponse | None = None, error: Exception | None = None):
+        self.reply = reply if reply is not None else LLMResponse(content="backup-ok")
+        self.error = error
+        self.calls: list[dict] = []
+        self.closed = False
+
+    def chat(self, messages, *, tools=None, tool_choice=None):
+        self.calls.append({"messages": messages, "tools": tools, "tool_choice": tool_choice})
+        if self.error is not None:
+            raise self.error
+        return self.reply
+
+    def close(self):
+        self.closed = True
 
 
 EXTRACTOR = EventExtractor(client=LLMClient("http://x", "k", "m"), max_tries=2)
@@ -383,3 +403,72 @@ def test_post_non_json_body_raises_transport(monkeypatch):
 
     with pytest.raises(LLMTransportError, match="non-JSON"):
         client._post({"messages": []})
+
+
+def _dead_primary(monkeypatch, **kwargs):
+    """Primary whose transport always fails; backup injectable via kwargs."""
+    client = LLMClient("http://dead", "k", "m", **kwargs)
+
+    def _boom(payload):
+        raise LLMTransportError("connection refused")
+
+    monkeypatch.setattr(client, "_post", _boom)
+    return client
+
+
+def test_chat_falls_back_to_backup_on_primary_failure(monkeypatch):
+    backup = _BackupStub()
+    client = _dead_primary(monkeypatch, backup=backup)
+    response = client.chat([{"role": "user", "content": "hi"}])
+    assert response.content == "backup-ok"
+    assert len(backup.calls) == 1
+    assert backup.calls[0]["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_chat_reraises_without_backup(monkeypatch):
+    client = _dead_primary(monkeypatch)
+    with pytest.raises(LLMTransportError, match="connection refused"):
+        client.chat([{"role": "user", "content": "hi"}])
+
+
+def test_chat_backup_failure_propagates(monkeypatch):
+    backup = _BackupStub(error=LLMError("backup quota exhausted"))
+    client = _dead_primary(monkeypatch, backup=backup)
+    with pytest.raises(LLMError, match="backup quota exhausted"):
+        client.chat([{"role": "user", "content": "hi"}])
+
+
+def test_close_closes_backup():
+    backup = _BackupStub()
+    client = LLMClient("http://x", "k", "m", backup=backup)
+    client.close()
+    assert backup.closed is True
+
+
+def test_json_mode_skips_response_format_when_disabled(monkeypatch):
+    """Providers that flake on an explicit json_object constraint (Groq
+    gpt-oss) get a plain prompt; the strict parser still guards output."""
+    seen: dict = {}
+    client = LLMClient("http://x", "k", "m", use_response_format=False)
+
+    def _capture(payload):
+        seen.update(payload)
+        return {"choices": [{"message": {"role": "assistant", "content": '{"a": 1}'}}]}
+
+    monkeypatch.setattr(client, "_post", _capture)
+    response = client._chat_json([{"role": "user", "content": "hi"}], tools=[])
+    assert "response_format" not in seen
+    assert response.content == '{"a": 1}'
+
+
+def test_json_mode_sends_response_format_by_default(monkeypatch):
+    seen: dict = {}
+    client = LLMClient("http://x", "k", "m")
+
+    def _capture(payload):
+        seen.update(payload)
+        return {"choices": [{"message": {"role": "assistant", "content": '{"a": 1}'}}]}
+
+    monkeypatch.setattr(client, "_post", _capture)
+    client._chat_json([{"role": "user", "content": "hi"}], tools=[])
+    assert seen.get("response_format") == {"type": "json_object"}

@@ -75,6 +75,8 @@ class LLMClient:
         timeout_seconds: float = 90.0,
         seed: int | None = 42,
         max_tokens: int | None = 1024,
+        backup: LLMClient | None = None,
+        use_response_format: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -82,6 +84,10 @@ class LLMClient:
         self.tool_mode = tool_mode
         self.max_retries = max_retries
         self.timeout = timeout_seconds
+        # Backup provider (e.g. Groq): only consulted when the primary
+        # raises. Backup clients are leaves — they never carry their own
+        # backup, so fallback cannot recurse.
+        self._backup = backup
         # Determinism guards (vLLM honors both on OpenAI-compatible routes):
         # a fixed seed makes sampling repeatable across identical requests
         # (temperature 0 alone does not guarantee that under batched serving),
@@ -90,6 +96,10 @@ class LLMClient:
         # our longest outputs (digests, extraction JSON).
         self.seed = seed
         self.max_tokens = max_tokens
+        # Some providers (Groq's gpt-oss) reject or flake on an explicit
+        # ``response_format: json_object``; the backup skips the constraint
+        # and relies on the strict output parser instead.
+        self.use_response_format = use_response_format
         # One shared session: connection reuse (keep-alive) across the
         # hundreds of sequential calls a processing batch makes. Module-level
         # httpx one-shots would pay a fresh TCP+TLS handshake per call.
@@ -98,6 +108,8 @@ class LLMClient:
     def close(self) -> None:
         """Release the pooled connections (app shutdown)."""
         self._http.close()
+        if self._backup is not None:
+            self._backup.close()
 
     # ------------------------------------------------------------------
     # Public API
@@ -114,7 +126,26 @@ class LLMClient:
 
         ``tools`` may be ``None`` (plain completion). For tool extraction use
         :meth:`chat_with_tools` which handles the fallback semantics.
+
+        When the primary raises :class:`LLMError` and a backup client is
+        configured, the same messages go to the backup once; its error (if
+        any) propagates to the caller.
         """
+        try:
+            return self._chat_inner(messages, tools=tools, tool_choice=tool_choice)
+        except LLMError as exc:
+            if self._backup is None:
+                raise
+            logger.warning("primary LLM failed (%s); retrying on backup", exc)
+            return self._backup.chat(messages, tools=tools, tool_choice=tool_choice)
+
+    def _chat_inner(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+        tool_choice: str | None = None,
+    ) -> LLMResponse:
         if tools:
             if self.tool_mode in ("auto", "tools"):
                 try:
@@ -238,7 +269,8 @@ class LLMClient:
         attempt = 0
         while True:
             try:
-                payload = self._payload(messages, response_format={"type": "json_object"})
+                fmt = {"type": "json_object"} if self.use_response_format else None
+                payload = self._payload(messages, response_format=fmt)
                 data = self._post(payload)
                 response = self._parse(data, parse_tools=False)
                 return LLMResponse(

@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     llm_tool_mode: Literal["auto", "tools", "json"] = "auto"
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_timeout_seconds: int = Field(default=90, ge=5, le=600)
+    # Groq backup (OpenAI-compatible): empty key = no backup. Used only
+    # when the primary LLM raises; see LLMClient backup fallback.
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_api_key: str = ""
+    groq_model_name: str = "openai/gpt-oss-20b"
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # --- PostgreSQL ---
