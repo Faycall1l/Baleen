@@ -68,3 +68,46 @@
   padding: 1px 6px;
 }
 
+/* Path mode (R53b): armed hint in the inspector, step list in the drawer. */
+.path-armed {
+  margin-top: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.path-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.path-length {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.path-step .node-link:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.path-rel {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  padding-left: 14px;
+  line-height: 1.2;
+}
+

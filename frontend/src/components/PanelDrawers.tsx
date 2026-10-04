@@ -1,12 +1,13 @@
 import AlertsPanel from './AlertsPanel';
 import FlowTape from './FlowTape';
 import LeaderboardPanel from './LeaderboardPanel';
+import PathPanel from './PathPanel';
 import ReportsPanel from './ReportsPanel';
 import SignalsPanel from './SignalsPanel';
 import type { Alert, FlowFilters, FlowPrint, LeaderboardEntry, Report, SignalsBundle } from '../types';
-import type { AlertRule } from '../api';
+import type { AlertRule, PathResponse } from '../api';
 
-export type Drawer = 'flow' | 'alerts' | 'reports' | 'leaders' | 'signals' | null;
+export type Drawer = 'flow' | 'alerts' | 'reports' | 'leaders' | 'signals' | 'path' | null;
 
 interface Props {
   drawer: Drawer;
@@ -39,6 +40,10 @@ interface Props {
   onLeaderClick: (leader: LeaderboardEntry) => void;
   signals: SignalsBundle | null;
   signalsError: string | null;
+  pathResult: PathResponse | null;
+  pathError: string | null;
+  onPathNodeClick: (id: string) => void;
+  isPathNodeSelectable: (id: string) => boolean;
 }
 
 function Shell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
@@ -85,6 +90,10 @@ export default function PanelDrawers({
   onLeaderClick,
   signals,
   signalsError,
+  pathResult,
+  pathError,
+  onPathNodeClick,
+  isPathNodeSelectable,
 }: Props) {
   if (drawer === 'flow') {
     return (
@@ -139,6 +148,18 @@ export default function PanelDrawers({
     return (
       <Shell onClose={onClose}>
         <SignalsPanel signals={signals} error={signalsError} />
+      </Shell>
+    );
+  }
+  if (drawer === 'path') {
+    return (
+      <Shell onClose={onClose}>
+        <PathPanel
+          result={pathResult}
+          error={pathError}
+          onNodeClick={onPathNodeClick}
+          isSelectable={isPathNodeSelectable}
+        />
       </Shell>
     );
   }
