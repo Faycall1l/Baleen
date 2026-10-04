@@ -103,7 +103,7 @@ void main(void) {
   } else if (dist > adjustedBorderSize_1 - aaBorder) {
     gl_FragColor = mix(borderColor_2, borderColor_1, (dist - adjustedBorderSize_1 + aaBorder) / aaBorder);
   } else {
-    gl_FragColor = borderColor_2;
+    gl_FragColor = transparent;
   }
   #endif
 }
