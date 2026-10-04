@@ -4,9 +4,8 @@ import type { GraphNode } from '../types';
 import { SCHEMA_LABELS } from '../graph/schema';
 import {
   buildTimelineRows,
-  dotRadius,
-  maxVolume,
   viewWindow,
+  type LaneKind,
   type TimelineDot,
 } from '../graph/timeline';
 import { useGraphSearch } from '../hooks/useGraphSearch';
@@ -44,7 +43,15 @@ const ZOOMS: Array<{ label: string; days: number | null }> = [
 const SIDE_FILL: Record<TimelineDot['side'], string> = {
   call: '#6fbf73',
   put: '#e06666',
+  buy: '#6fbf73',
+  sell: '#e06666',
   other: '#8a8f98',
+};
+
+const SECTION_TAG: Record<LaneKind, string> = {
+  flow: 'FLOW',
+  insider: 'INS',
+  congress: 'CONG',
 };
 
 /** Floating hover card (T2): flips left when the anchor is past mid-plot
@@ -53,14 +60,28 @@ const SIDE_FILL: Record<TimelineDot['side'], string> = {
  */
 function TipCard({ dot, x, y, plotW }: { dot: TimelineDot; x: number; y: number; plotW: number }) {
   const p = dot.node.props;
-  const strike = p.strike;
   const rows: Array<[string, string]> = [];
-  rows.push(['Ticker', String(p.ticker ?? dot.node.title)]);
-  rows.push(['Side', dot.side === 'other' ? '—' : dot.side.toUpperCase()]);
-  if (strike !== undefined && strike !== null && strike !== '') {
-    rows.push(['Strike', `$${String(strike)}`]);
+  if (dot.kind === 'insider') {
+    rows.push(['Insider', String(p.insider_name ?? dot.node.title)]);
+    rows.push(['Action', typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : '—']);
+    if (typeof p.ticker === 'string' && p.ticker !== '') rows.push(['Ticker', p.ticker.toUpperCase()]);
+    if (p.shares !== undefined && p.shares !== null && p.shares !== '') {
+      rows.push(['Shares', Number(p.shares).toLocaleString()]);
+    }
+  } else if (dot.kind === 'congress') {
+    rows.push(['Member', String(p.politician_name ?? dot.node.title)]);
+    rows.push(['Action', typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : '—']);
+    if (typeof p.ticker === 'string' && p.ticker !== '') rows.push(['Ticker', p.ticker.toUpperCase()]);
+    if (typeof p.amount_range === 'string' && p.amount_range !== '') rows.push(['Amount', p.amount_range]);
+  } else {
+    rows.push(['Ticker', String(p.ticker ?? dot.node.title)]);
+    rows.push(['Side', dot.side === 'other' ? '—' : dot.side.toUpperCase()]);
+    const strike = p.strike;
+    if (strike !== undefined && strike !== null && strike !== '') {
+      rows.push(['Strike', `$${String(strike)}`]);
+    }
+    if (dot.volume > 0) rows.push(['Volume', dot.volume.toLocaleString()]);
   }
-  if (dot.volume > 0) rows.push(['Volume', dot.volume.toLocaleString()]);
   rows.push(['Time', new Date(dot.time).toLocaleString()]);
   const flip = x > plotW / 2;
   return (
@@ -153,7 +174,6 @@ export default function TimelineBoard({
     return lo === Infinity ? null : ([lo, hi] as [number, number]);
   }, [rows]);
   const view = useMemo(() => viewWindow(domain, zoomDays), [domain, zoomDays]);
-  const vmax = useMemo(() => maxVolume(rows), [rows]);
 
   const typeCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -197,6 +217,16 @@ export default function TimelineBoard({
 
   const dotTitle = (d: TimelineDot): string => {
     const p = d.node.props;
+    if (d.kind === 'insider' || d.kind === 'congress') {
+      const who = d.kind === 'insider' ? p.insider_name : p.politician_name;
+      const parts = [
+        String(who ?? d.node.title),
+        typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : null,
+        typeof p.ticker === 'string' && p.ticker !== '' ? String(p.ticker).toUpperCase() : null,
+        new Date(d.time).toLocaleString(),
+      ].filter(Boolean);
+      return parts.join(' · ');
+    }
     const parts = [
       `${d.node.title}`,
       d.side === 'other' ? null : d.side.toUpperCase(),
@@ -266,7 +296,7 @@ export default function TimelineBoard({
           <div>
             {data === null
               ? (loadingHint ?? 'Loading…')
-              : 'No options-flow events in this window.'}
+              : 'No events in this window.'}
           </div>
           {data !== null && !showEvents && (
             <button type="button" onClick={onToggleEvents}>
@@ -300,8 +330,9 @@ export default function TimelineBoard({
           <div className="tl-labels" aria-hidden="true">
             <div className="tl-axis-spacer" />
             {rows.map((r) => (
-              <div key={r.key} className="tl-label" title={`${r.dots.length} events`}>
+              <div key={r.key} className={`tl-label tl-sec-${r.section}`} title={`${r.dots.length} events`}>
                 <span className="tl-ticker">{r.title}</span>
+                <span className="tl-sectag">{SECTION_TAG[r.section]}</span>
                 <span className="tl-count">{r.dots.length}</span>
               </div>
             ))}
@@ -352,7 +383,7 @@ export default function TimelineBoard({
                         key={d.node.id}
                         cx={x(d.time)}
                         cy={26 + ri * ROW_H + ROW_H / 2}
-                        r={dotRadius(d.volume, vmax)}
+                        r={d.r}
                         className={`tl-dot${selected ? ' selected' : ''}`}
                         fill={SIDE_FILL[d.side]}
                         tabIndex={0}

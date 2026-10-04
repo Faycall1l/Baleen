@@ -45,15 +45,37 @@ describe('buildTimelineRows', () => {
       data([flow('a', 'AMD', 1), flow('b', 'NVDA', 2), flow('c', 'AMD', 3)]),
       new Set(),
     );
-    expect(rows.map((r) => r.key)).toEqual(['AMD', 'NVDA']);
+    expect(rows.map((r) => r.key)).toEqual(['flow:AMD', 'flow:NVDA']);
+    expect(rows[0].section).toBe('flow');
     expect(rows[0].dots).toHaveLength(2);
     expect(rows[0].dots[0].time).toBeLessThan(rows[0].dots[1].time);
   });
 
-  it('skips non-flow events, bad timestamps, and honors hidden types', () => {
-    const congress = event('c1', { type: 'congress_trade', ticker: 'NVDA', event_time: new Date(T0).toISOString() });
+  it('groups insider and congress trades into their own lanes', () => {
+    const t = new Date(T0).toISOString();
+    const insider = event('i1', { type: 'insider_trade', insider_name: 'Jane Doe', ticker: 'AMD', transaction_type: 'buy', event_time: t });
+    const insider2 = event('i2', { type: 'insider_trade', insider_name: 'Jane Doe', ticker: 'NVDA', transaction_type: 'sell', event_time: t });
+    const cong = event('c1', { type: 'congress_trade', politician_name: 'John Smith', ticker: 'AMD', transaction_type: 'buy', event_time: t });
+    const rows = buildTimelineRows(data([insider, insider2, cong, flow('a', 'AMD', 1)]), new Set());
+    expect(rows.map((r) => r.key)).toEqual([
+      'flow:AMD',
+      'insider:Jane Doe',
+      'congress:John Smith',
+    ]);
+    const ins = rows.find((r) => r.section === 'insider')!;
+    expect(ins.dots.map((d) => d.side)).toEqual(['buy', 'sell']);
+    expect(ins.dots[0].r).toBe(4);
+    // Hidden Insider/Politician types drop their lanes.
+    const noIns = buildTimelineRows(data([insider]), new Set(['Insider']));
+    expect(noIns).toEqual([]);
+    const noPol = buildTimelineRows(data([cong]), new Set(['Politician']));
+    expect(noPol).toEqual([]);
+  });
+
+  it('skips unknown types, bad timestamps, and honors hidden types', () => {
+    const unknown = event('u1', { type: 'something_else', ticker: 'NVDA', event_time: new Date(T0).toISOString() });
     const timeless = flow('t', 'AMD', 1, { event_time: 'not-a-date' });
-    const rows = buildTimelineRows(data([congress, timeless, flow('a', 'AMD', 1)]), new Set());
+    const rows = buildTimelineRows(data([unknown, timeless, flow('a', 'AMD', 1)]), new Set());
     expect(rows).toHaveLength(1);
     expect(buildTimelineRows(data([flow('a', 'AMD', 1)]), new Set(['Event']))).toEqual([]);
     expect(buildTimelineRows(data([flow('a', 'AMD', 1)]), new Set(['Ticker']))).toEqual([]);
@@ -66,8 +88,8 @@ describe('buildTimelineRows', () => {
     const rows = buildTimelineRows(data(nodes), new Set(), 5);
     expect(rows).toHaveLength(5);
     const sides = new Map(rows.map((r) => [r.key, r.dots[0].side]));
-    expect(sides.get('T0')).toBe('put');
-    expect(sides.get('T1')).toBe('other');
+    expect(sides.get('flow:T0')).toBe('put');
+    expect(sides.get('flow:T1')).toBe('other');
   });
 });
 

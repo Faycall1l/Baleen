@@ -4,18 +4,25 @@ import type { GraphData, GraphNode } from '../types';
 // into one row per ticker, positioned on a shared time axis. Insider and
 // congress-trade lanes arrive in T3; the row model already supports them.
 
-export type FlowSide = 'call' | 'put' | 'other';
+export type FlowSide = 'call' | 'put' | 'buy' | 'sell' | 'other';
+
+export type LaneKind = 'flow' | 'insider' | 'congress';
 
 export interface TimelineDot {
   node: GraphNode;
   time: number;
   side: FlowSide;
   volume: number;
+  /** Pre-scaled radius px: log-scaled for flow, fixed for trade lanes. */
+  r: number;
+  kind: LaneKind;
 }
 
 export interface TimelineRow {
   key: string;
   title: string;
+  /** Lane section; the board groups rows under FLOW / INS / CONG tags. */
+  section: LaneKind;
   dots: TimelineDot[];
 }
 
@@ -40,28 +47,69 @@ export function buildTimelineRows(
 ): TimelineRow[] {
   if (!data || hiddenTypes.has('Event')) return [];
   const hideTickers = hiddenTypes.has('Ticker');
-  const byTicker = new Map<string, TimelineDot[]>();
+  const flows = new Map<string, TimelineDot[]>();
+  const insiders = new Map<string, TimelineDot[]>();
+  const congress = new Map<string, TimelineDot[]>();
   for (const n of data.nodes) {
-    if (n.label !== 'Event' || n.props.type !== 'options_flow') continue;
+    if (n.label !== 'Event') continue;
     const time = eventTimeMs(n);
     if (time === null) continue;
-    const raw = n.props.ticker;
-    const ticker = typeof raw === 'string' && raw !== '' ? raw.toUpperCase() : 'UNKNOWN';
-    if (ticker !== 'UNKNOWN' && hideTickers) continue;
-    const ct = n.props.contract_type;
-    const side: FlowSide = ct === 'call' ? 'call' : ct === 'put' ? 'put' : 'other';
-    const list = byTicker.get(ticker) ?? [];
-    list.push({ node: n, time, side, volume: numProp(n, 'volume') });
-    byTicker.set(ticker, list);
+    const kind = n.props.type;
+    if (kind === 'options_flow') {
+      const raw = n.props.ticker;
+      const ticker = typeof raw === 'string' && raw !== '' ? raw.toUpperCase() : 'UNKNOWN';
+      if (ticker !== 'UNKNOWN' && hideTickers) continue;
+      const ct = n.props.contract_type;
+      const side: FlowSide = ct === 'call' ? 'call' : ct === 'put' ? 'put' : 'other';
+      pushDot(flows, ticker, { node: n, time, side, volume: numProp(n, 'volume'), r: 0, kind: 'flow' });
+    } else if (kind === 'insider_trade') {
+      if (hiddenTypes.has('Insider')) continue;
+      const raw = n.props.insider_name;
+      const who = typeof raw === 'string' && raw !== '' ? raw : 'Unknown insider';
+      pushDot(insiders, who, { node: n, time, side: tradeSide(n), volume: 0, r: 4, kind: 'insider' });
+    } else if (kind === 'congress_trade') {
+      if (hiddenTypes.has('Politician')) continue;
+      const raw = n.props.politician_name;
+      const who = typeof raw === 'string' && raw !== '' ? raw : 'Unknown member';
+      pushDot(congress, who, { node: n, time, side: tradeSide(n), volume: 0, r: 4, kind: 'congress' });
+    }
   }
-  return [...byTicker.entries()]
-    .map(([key, dots]) => ({
-      key,
-      title: key,
-      dots: dots.sort((a, b) => a.time - b.time),
-    }))
-    .sort((a, b) => b.dots.length - a.dots.length || (a.key < b.key ? -1 : 1))
-    .slice(0, maxRows);
+  // Flow radii log-scale against the flow max so one huge print cannot
+  // flatten the rest of the lane; trade lanes stay a fixed readable size.
+  let vmax = 0;
+  for (const dots of flows.values()) for (const d of dots) if (d.volume > vmax) vmax = d.volume;
+  for (const dots of flows.values()) for (const d of dots) d.r = dotRadius(d.volume, vmax);
+  const section = (
+    groups: Map<string, TimelineDot[]>,
+    sec: LaneKind,
+    cap: number,
+  ): TimelineRow[] =>
+    [...groups.entries()]
+      .map(([key, dots]) => ({
+        key: `${sec}:${key}`,
+        title: key,
+        section: sec,
+        dots: dots.sort((a, b) => a.time - b.time),
+      }))
+      .sort((a, b) => b.dots.length - a.dots.length || (a.key < b.key ? -1 : 1))
+      .slice(0, cap);
+  const flowCap = Math.max(1, Math.min(maxRows, 14));
+  return [
+    ...section(flows, 'flow', flowCap),
+    ...section(insiders, 'insider', 8),
+    ...section(congress, 'congress', 8),
+  ];
+}
+
+function pushDot(map: Map<string, TimelineDot[]>, key: string, dot: TimelineDot): void {
+  const list = map.get(key) ?? [];
+  list.push(dot);
+  map.set(key, list);
+}
+
+function tradeSide(n: GraphNode): FlowSide {
+  const t = n.props.transaction_type;
+  return t === 'buy' ? 'buy' : t === 'sell' ? 'sell' : 'other';
 }
 
 /** Full time extent across rows; null when there is nothing to plot. */
