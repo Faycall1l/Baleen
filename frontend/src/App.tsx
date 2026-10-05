@@ -11,8 +11,8 @@ import GraphErrorBoundary from './components/GraphErrorBoundary';
 import TimelineBoard from './components/TimelineBoard';
 import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
-import PanelDrawers, { type Drawer } from './components/PanelDrawers';
 import PanelRail, { type RailKey } from './components/PanelRail';
+import PathPanel from './components/PathPanel';
 import TileDock from './components/TileDock';
 import PathFromButton from './components/PathFromButton';
 import CommitteeDetail from './components/CommitteeDetail';
@@ -41,25 +41,19 @@ import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
 import { fetchGraph, fetchPath, type PathResponse } from './api';
 import type { GraphData, GraphNode } from './types';
 
-/** Wide screens dock rail panels as side-by-side tiles; narrow screens
- * keep the single overlay drawer (same 1280px breakpoint as the CSS). */
-function isNarrowScreen(): boolean {
-  return window.matchMedia('(max-width: 1280px)').matches;
-}
-
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph, showEvents, setShowEvents } = useGraphFeed();
   const { selected, handleSelect, setSelected } = useSelection(graph);
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
-  // Deep-link state (R46): selection, hidden types, and drawer encoded in
-  // the URL so any view is shareable. Read once on mount; written back on
-  // every change below.
+  // Deep-link state (R46, tiles in P5): selection, hidden types, and open
+  // panels encoded in the URL so any view is shareable. Read once on mount;
+  // written back on every change below. An explicit tiles param beats prefs;
+  // otherwise the workspace restores the last layout.
   const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
-  const [drawer, setDrawer] = useState<Drawer>(initialUrl.drawer);
   // Tile dock (P1): rail-opened panels share the main area. Persisted like
   // other workspace prefs; the board is permanent (see tileState).
-  const [tiles, setTiles] = useState<TileId[]>(() => loadTiles());
+  const [tiles, setTiles] = useState<TileId[]>(() => initialUrl.tiles ?? loadTiles());
   const [enlarged, setEnlarged] = useState<TileId | null>(null);
   useEffect(() => {
     saveTiles(tiles);
@@ -174,15 +168,15 @@ export default function App() {
     }
   }, [graph, selected, initialUrl.node, handleSelect]);
 
-  // Write the view state back to the URL on every change (R46).
+  // Write the view state back to the URL on every change (R46, tiles P5).
   useEffect(() => {
     const url = buildGraphUrl({
       node: selected?.id ?? null,
       hidden: [...hiddenTypes],
-      drawer,
+      tiles,
     });
     window.history.replaceState(null, '', url);
-  }, [selected?.id, hiddenTypes, drawer]);
+  }, [selected?.id, hiddenTypes, tiles]);
 
   // Path mode (R53b): armed from any inspector via PathFromButton; the next
   // selected node completes the pair and opens the path drawer. Declared
@@ -191,8 +185,8 @@ export default function App() {
   const [pathResult, setPathResult] = useState<PathResponse | null>(null);
   const [pathError, setPathError] = useState<string | null>(null);
 
-  // Esc closes the open drawer from anywhere (R15); with no drawer it
-  // clears the inspector selection (R16). `?` outside inputs opens help.
+  // Esc restores an enlarged tile, disarms path mode, or clears the
+  // inspector selection (R15/R16). `?` outside inputs opens help.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -206,18 +200,16 @@ export default function App() {
         if (showHelp) setShowHelp(false);
         else if (enlarged) setEnlarged(null);
         else if (pathFrom) setPathFrom(null);
-        else if (drawer) setDrawer(null);
         else setSelected(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer, enlarged, showHelp, pathFrom]);
+  }, [enlarged, showHelp, pathFrom]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
-  // the rail badge and the drawer share one source of truth. Visible when
-  // the overlay drawer (narrow) or the tile (wide, P2) is open.
-  const inbox = useAlertsInbox(alerts, drawer === 'alerts' || tiles.includes('alerts'));
+  // the rail badge and the tile share one source of truth.
+  const inbox = useAlertsInbox(alerts, tiles.includes('alerts'));
   const { rules: alertRules, toggleRule: toggleAlertRule } = useAlertRules();
 
   const loadedIds = useMemo(
@@ -238,12 +230,12 @@ export default function App() {
       fetchPath(from.id, node.id)
         .then((res) => {
           setPathResult(res);
-          setDrawer('path');
+          setTiles((prev) => ensureTile(prev, 'path'));
         })
         .catch((err: unknown) => {
           setPathResult(null);
           setPathError(err instanceof Error ? err.message : 'Path fetch failed');
-          setDrawer('path');
+          setTiles((prev) => ensureTile(prev, 'path'));
         });
     } else if (node && pathFrom && node.id === pathFrom.id) {
       setPathFrom(null);
@@ -251,13 +243,23 @@ export default function App() {
     handleSelect(node);
   };
 
+  // Cross-surface panel opener for the inspector links: null restores an
+  // enlarged dock so the revealed node is visible; an id opens its tile.
+  const openTile = useCallback((id: TileId | null) => {
+    if (id === null) {
+      setEnlarged(null);
+      return;
+    }
+    setTiles((prev) => ensureTile(prev, id));
+  }, []);
+
   const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks } = useInspectorLinks(
     graph,
     alerts,
     briefs,
     reports,
     selected,
-    setDrawer,
+    openTile,
     handleSelect,
   );
 
@@ -286,30 +288,19 @@ export default function App() {
       : null;
   const { card: committeeCard, error: committeeError } = useCommittee(committeeId);
 
-  // Cross-surface jump (R36): filter the tape to this ticker. The tile
-  // shows it live on wide screens; on narrow screens tiles hide, so open
-  // the flow drawer instead (same 1280px breakpoint as the CSS).
+  // Cross-surface jump (R36): filter the tape to this ticker and make
+  // sure its tile is open.
   const viewTickerInTape = (ticker: string) => {
     setFlowFilters((f) => ({ ...f, tickers: [ticker] }));
-    if (isNarrowScreen()) setDrawer('flow');
-    else setTiles((prev) => ensureTile(prev, 'flow'));
+    setTiles((prev) => ensureTile(prev, 'flow'));
   };
 
-  // Rail toggle (P1): tiles on wide screens, the single overlay drawer on
-  // narrow ones. Board has no rail tab — its tile is permanent.
+  // Rail toggle (P5): every tab docks its tile. Board has no rail tab —
+  // its tile is permanent.
   const handleRailToggle = (key: RailKey) => {
-    if (isNarrowScreen()) {
-      setDrawer((prev) => (prev === key ? null : key));
-    } else {
-      setDrawer(null);
-      setTiles((prev) => toggleTile(prev, key));
-    }
+    setTiles((prev) => toggleTile(prev, key));
   };
-  const railOpen: RailKey[] = isNarrowScreen()
-    ? drawer
-      ? [drawer as RailKey]
-      : []
-    : tiles.filter((t): t is RailKey => t !== 'board');
+  const railOpen: RailKey[] = tiles.filter((t): t is RailKey => t !== 'board');
 
   const renderTileBody = (id: TileId) => {
     if (id === 'board') {
@@ -400,8 +391,18 @@ export default function App() {
         </div>
       );
     }
-    // Path still opens as the overlay drawer; its tile arrives in P5, which
-    // also deletes the drawer system.
+    if (id === 'path') {
+      return (
+        <div className="flow-tile-scroll">
+          <PathPanel
+            result={pathResult}
+            error={pathError}
+            onNodeClick={selectPathNode}
+            isSelectable={(pid) => loadedIds.has(pid)}
+          />
+        </div>
+      );
+    }
     return null;
   };
 
@@ -425,42 +426,6 @@ export default function App() {
             onMove={(id, dir) => setTiles((prev) => moveTile(prev, id, dir))}
             onEnlarge={setEnlarged}
             renderBody={renderTileBody}
-          />
-          <PanelDrawers
-            drawer={drawer}
-            onClose={() => setDrawer(null)}
-            flow={flow}
-            flowCount={flowCount}
-            flowError={flowError}
-            flowFilters={flowFilters}
-            onFlowFiltersChange={setFlowFilters}
-            onFlowRetry={reloadFlow}
-            onFlowSelectTicker={openTickerNode}
-            alerts={inbox.visible}
-            alertsTotal={alerts.length}
-            alertsRules={inbox.rules}
-            alertsError={alertsError}
-            onAlertClick={openAlertNode}
-            alertRule={inbox.rule}
-            onAlertRuleChange={inbox.setRule}
-            alertQuery={inbox.query}
-            onAlertQueryChange={inbox.setQuery}
-            alertSeenMax={inbox.seenMax}
-            alertRules={alertRules}
-            onAlertRuleToggle={toggleAlertRule}
-            digest={digest}
-            reports={reports}
-            reportsError={reportsError}
-            onReportClick={openReportNode}
-            leaders={leaders}
-            leadersError={leadersError}
-            onLeaderClick={openLeaderNode}
-            signals={signals}
-            signalsError={signalsError}
-            pathResult={pathResult}
-            pathError={pathError}
-            onPathNodeClick={selectPathNode}
-            isPathNodeSelectable={(id) => loadedIds.has(id)}
           />
           <div className="graph-status">
             {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}

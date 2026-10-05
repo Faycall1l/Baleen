@@ -158,8 +158,20 @@ button.graph-error-action:hover {
 }
 
 @media (max-width: 1280px) {
+  .tile-dock {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .tile-board {
+    flex: 0 0 55vh;
+    min-height: 420px;
+  }
+
   .tile-side {
-    display: none;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-height: 60vh;
   }
 }
 

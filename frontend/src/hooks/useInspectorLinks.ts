@@ -3,8 +3,8 @@ import { useCallback, useMemo } from 'react';
 import { resolveAlertNode } from '../alertNavigation';
 import { truncate } from '../graph/nodes';
 import { alertsForNode, reportsForNode } from '../mentions';
+import type { TileId } from '../tileState';
 import type { Alert, GraphData, GraphNode, LeaderboardEntry, Report } from '../types';
-import type { Drawer } from '../components/PanelDrawers';
 
 // Cross-links + inspector back-links (extracted from App, H5): resolve feed
 // rows to graph nodes so every surface leads somewhere. Event nodes match by
@@ -16,7 +16,7 @@ export function useInspectorLinks(
   briefs: Report[],
   reports: Report[],
   selected: GraphNode | null,
-  setDrawer: (d: Drawer) => void,
+  openPanel: (id: TileId | null) => void,
   handleSelect: (n: GraphNode | null) => void,
 ): {
   openAlertNode: (a: Alert) => boolean;
@@ -52,23 +52,23 @@ export function useInspectorLinks(
   const reveal = useCallback(
     (node: GraphNode | undefined): boolean => {
       if (!node) return false;
-      setDrawer(null);
+      openPanel(null);
       handleSelect(node);
       return true;
     },
-    [handleSelect, setDrawer],
+    [handleSelect, openPanel],
   );
 
   const openAlertNode = useCallback(
     (a: Alert): boolean => {
       // The alert feed leads the graph snapshot by up to a poll cycle: when
-      // the event (and every fallback) is missing, open the alerts drawer
+      // the event (and every fallback) is missing, open the alerts tile
       // so the click lands somewhere with context instead of dying.
       if (reveal(resolveAlertNode(a, graph))) return true;
-      setDrawer('alerts');
+      openPanel('alerts');
       return false;
     },
-    [graph, reveal, setDrawer],
+    [graph, reveal, openPanel],
   );
 
   const openReportNode = useCallback(
@@ -127,11 +127,11 @@ export function useInspectorLinks(
     if (matchedAlerts.length > MAX_ITEMS || matchedReports.length > MAX_ITEMS) {
       links.push({
         label: `all in Alerts/Reports (${matchedAlerts.length + matchedReports.length})`,
-        onOpen: () => setDrawer(matchedAlerts.length >= matchedReports.length ? 'alerts' : 'reports'),
+        onOpen: () => openPanel(matchedAlerts.length >= matchedReports.length ? 'alerts' : 'reports'),
       });
     }
     return links;
-  }, [selected, alerts, briefs, reports, setDrawer, openAlertNode, openReportNode]);
+  }, [selected, alerts, briefs, reports, openPanel, openAlertNode, openReportNode]);
 
   return { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks };
 }

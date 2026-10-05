@@ -1,16 +1,17 @@
-import type { Drawer } from './components/PanelDrawers';
+import { sanitizeTiles, type TileId } from './tileState';
 
-// Share-link deep URLs (R46): selection, hidden types, and drawer encoded
-// in the query string so any view is linkable. Pure parse/build pair so the
-// round-trip unit-tests without a browser. Unknown values read as absent.
+// Share-link deep URLs (R46, tiles in P5): selection, hidden types, and open
+// panels encoded in the query string so any view is linkable. Pure
+// parse/build pair so the round-trip unit-tests without a browser. Unknown
+// values read as absent. The legacy `drawer` param (single panel, pre-tiles)
+// still opens — it maps to a tile.
 
 export interface GraphViewState {
   node: string | null;
   hidden: string[];
-  drawer: Drawer;
+  /** Open tiles, or null when the URL says nothing about panels (prefs win). */
+  tiles: TileId[] | null;
 }
-
-const DRAWERS: Drawer[] = ['flow', 'alerts', 'reports', 'leaders', 'signals'];
 
 export function parseGraphUrl(search: string): GraphViewState {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
@@ -19,18 +20,24 @@ export function parseGraphUrl(search: string): GraphViewState {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const drawerParam = params.get('drawer');
-  const drawer: Drawer = DRAWERS.includes(drawerParam as Drawer)
-    ? (drawerParam as Drawer)
-    : null;
-  return { node: node && node.length > 0 ? node : null, hidden, drawer };
+  const hasPanels = params.has('tiles') || params.has('drawer');
+  if (!hasPanels) return { node: node && node.length > 0 ? node : null, hidden, tiles: null };
+  const listed = (params.get('tiles') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const legacy = params.get('drawer');
+  if (legacy && legacy.trim() !== '') listed.push(legacy.trim());
+  const tiles = sanitizeTiles(['board', ...listed]);
+  return { node: node && node.length > 0 ? node : null, hidden, tiles };
 }
 
 export function buildGraphUrl(state: GraphViewState): string {
   const params = new URLSearchParams();
   if (state.node) params.set('node', state.node);
   if (state.hidden.length > 0) params.set('hide', state.hidden.join(','));
-  if (state.drawer) params.set('drawer', state.drawer);
+  const extra = (state.tiles ?? []).filter((t) => t !== 'board');
+  if (extra.length > 0) params.set('tiles', extra.join(','));
   const query = params.toString();
   return query ? `?${query}` : window.location.pathname;
 }
