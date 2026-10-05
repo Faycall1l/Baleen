@@ -1,4 +1,5 @@
 import { FLOW_DEFAULTS } from './flow';
+import { sanitizeTiles, type TileId } from './tileState';
 import type { FlowFilters } from './types';
 
 // Workspace persistence (R40): the terminal greets return visits with
@@ -7,6 +8,7 @@ import type { FlowFilters } from './types';
 
 const HIDDEN_KEY = 'baleen.ui.hiddenTypes';
 const FLOW_KEY = 'baleen.ui.flowFilters';
+const TILES_KEY = 'baleen.ui.tiles';
 
 export const DEFAULT_FLOW: FlowFilters = { ...FLOW_DEFAULTS };
 
@@ -58,4 +60,12 @@ export function loadFlowFilters(): FlowFilters {
 
 export function saveFlowFilters(filters: FlowFilters): void {
   write(FLOW_KEY, filters);
+}
+
+export function loadTiles(): TileId[] {
+  return sanitizeTiles(read<unknown>(TILES_KEY, null));
+}
+
+export function saveTiles(tiles: TileId[]): void {
+  write(TILES_KEY, tiles);
 }

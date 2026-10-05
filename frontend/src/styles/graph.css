@@ -50,6 +50,117 @@ button.graph-error-action:hover {
   flex: 1 1 auto;
   position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tile dock (P1): rail-opened panels share the main area side-by-side.
+ * The board tile takes the wide share; content tiles take the narrow one.
+ * Enlarging hides siblings (they stay open underneath). Below 1280px only
+ * the board tile shows — everything else stays available as the overlay
+ * drawer, so narrow screens keep working.
+ */
+.tile-dock {
+  display: flex;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 8px 8px 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.tile-board {
+  flex: 3 1 0;
+  position: relative;
+}
+
+.tile-side {
+  flex: 1.2 1 0;
+  min-width: 300px;
+}
+
+.tile-dock.has-enlarged .tile:not(.enlarged) {
+  display: none;
+}
+
+.tile-dock.has-enlarged .tile.enlarged {
+  flex: 1 1 auto;
+}
+
+.tile-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, #1c1e24);
+}
+
+.tile-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tile-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.tile-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tile-btn:hover {
+  color: var(--text);
+  background: var(--surface-3, #26282f);
+}
+
+.tile-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-body > .graph-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.flow-tile-scroll {
+  overflow-y: auto;
+  height: 100%;
+  padding: 4px 14px 14px;
+}
+
+@media (max-width: 1280px) {
+  .tile-side {
+    display: none;
+  }
 }
 
 .graph-wrap {
