@@ -11,25 +11,28 @@ const ITEMS: { key: RailKey; label: string }[] = [
 ];
 
 // Left rail of panel toggles (extracted from App, H12). Counts come from the
-// feed hook; a zero count shows no badge.
+// feed hook; a zero count shows no badge. `open` is every currently visible
+// panel (tiles on wide screens, the overlay drawer on narrow ones); the App
+// owns toggle semantics.
 export default function PanelRail({
-  drawer,
-  onSelect,
+  open,
+  onToggle,
   counts,
 }: {
-  drawer: Drawer;
-  onSelect: (d: Drawer) => void;
+  open: RailKey[];
+  onToggle: (key: RailKey) => void;
   counts: Record<RailKey, number>;
 }) {
+  const openSet = new Set(open);
   return (
     <nav className="rail" aria-label="Panels">
       {ITEMS.map(({ key, label }) => (
         <button
           key={key}
-          className={`rail-btn${drawer === key ? ' active' : ''}`}
-          onClick={() => onSelect(drawer === key ? null : key)}
+          className={`rail-btn${openSet.has(key) ? ' active' : ''}`}
+          onClick={() => onToggle(key)}
           title={label}
-          aria-expanded={drawer === key}
+          aria-expanded={openSet.has(key)}
         >
           <span className="rail-label">{label}</span>
           {counts[key] > 0 && <span className="rail-badge">{counts[key]}</span>}

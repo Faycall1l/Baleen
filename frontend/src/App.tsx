@@ -8,7 +8,8 @@ import TimelineBoard from './components/TimelineBoard';
 import NodeDetail from './components/NodeDetail';
 import OnboardingTour from './components/OnboardingTour';
 import PanelDrawers, { type Drawer } from './components/PanelDrawers';
-import PanelRail from './components/PanelRail';
+import PanelRail, { type RailKey } from './components/PanelRail';
+import TileDock from './components/TileDock';
 import PathFromButton from './components/PathFromButton';
 import CommitteeDetail from './components/CommitteeDetail';
 import PoliticianDetail from './components/PoliticianDetail';
@@ -28,12 +29,19 @@ import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
 import { personIdForNode } from './personView';
 import { buildGraphUrl, parseGraphUrl } from './graphUrl';
-import { loadHiddenTypes, saveHiddenTypes } from './uiPrefs';
+import { loadHiddenTypes, loadTiles, saveHiddenTypes, saveTiles } from './uiPrefs';
+import { closeTile, ensureTile, moveTile, toggleTile, type TileId } from './tileState';
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
 import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
 import { fetchGraph, fetchPath, type PathResponse } from './api';
 import type { GraphData, GraphNode } from './types';
+
+/** Wide screens dock rail panels as side-by-side tiles; narrow screens
+ * keep the single overlay drawer (same 1280px breakpoint as the CSS). */
+function isNarrowScreen(): boolean {
+  return window.matchMedia('(max-width: 1280px)').matches;
+}
 
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph, showEvents, setShowEvents } = useGraphFeed();
@@ -45,6 +53,13 @@ export default function App() {
   // every change below.
   const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
   const [drawer, setDrawer] = useState<Drawer>(initialUrl.drawer);
+  // Tile dock (P1): rail-opened panels share the main area. Persisted like
+  // other workspace prefs; the board is permanent (see tileState).
+  const [tiles, setTiles] = useState<TileId[]>(() => loadTiles());
+  const [enlarged, setEnlarged] = useState<TileId | null>(null);
+  useEffect(() => {
+    saveTiles(tiles);
+  }, [tiles]);
   // Type filters live here (not in TimelineBoard) so the URL writer below sees
   // the whole view state in one place.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
@@ -185,6 +200,7 @@ export default function App() {
       }
       if (e.key === 'Escape') {
         if (showHelp) setShowHelp(false);
+        else if (enlarged) setEnlarged(null);
         else if (pathFrom) setPathFrom(null);
         else if (drawer) setDrawer(null);
         else setSelected(null);
@@ -192,7 +208,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawer, showHelp, pathFrom]);
+  }, [drawer, enlarged, showHelp, pathFrom]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the drawer share one source of truth.
@@ -265,12 +281,77 @@ export default function App() {
       : null;
   const { card: committeeCard, error: committeeError } = useCommittee(committeeId);
 
-  // Cross-surface jump (R36): filter the tape to this ticker. The dock
-  // shows it live on wide screens; on narrow screens the dock hides, so
-  // open the flow drawer instead (same 1280px breakpoint as the CSS).
+  // Cross-surface jump (R36): filter the tape to this ticker. The tile
+  // shows it live on wide screens; on narrow screens tiles hide, so open
+  // the flow drawer instead (same 1280px breakpoint as the CSS).
   const viewTickerInTape = (ticker: string) => {
     setFlowFilters((f) => ({ ...f, tickers: [ticker] }));
-    if (window.matchMedia('(max-width: 1280px)').matches) setDrawer('flow');
+    if (isNarrowScreen()) setDrawer('flow');
+    else setTiles((prev) => ensureTile(prev, 'flow'));
+  };
+
+  // Rail toggle (P1): tiles on wide screens, the single overlay drawer on
+  // narrow ones. Board has no rail tab — its tile is permanent.
+  const handleRailToggle = (key: RailKey) => {
+    if (isNarrowScreen()) {
+      setDrawer((prev) => (prev === key ? null : key));
+    } else {
+      setDrawer(null);
+      setTiles((prev) => toggleTile(prev, key));
+    }
+  };
+  const railOpen: RailKey[] = isNarrowScreen()
+    ? drawer
+      ? [drawer as RailKey]
+      : []
+    : tiles.filter((t): t is RailKey => t !== 'board');
+
+  const renderTileBody = (id: TileId) => {
+    if (id === 'board') {
+      return (
+        <GraphErrorBoundary>
+          <TimelineBoard
+            data={asOfData ?? graph}
+            error={graphError}
+            selectedId={selected?.id ?? null}
+            onSelect={handleCanvasSelect}
+            onHoverEdgeChange={setHoverEdge}
+            onRetry={loadGraph}
+            hiddenTypes={hiddenTypes}
+            onToggleType={toggleType}
+            onSoloType={soloType}
+            onClearTypes={clearTypes}
+            scrubDaysAgo={scrubDaysAgo}
+            scrubMaxDays={SCRUB_DAYS}
+            onScrubChange={setScrubDaysAgo}
+            showEvents={showEvents}
+            onToggleEvents={() => setShowEvents((v) => !v)}
+            loadingHint={
+              graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
+            }
+            warming={graphStage === 'partial'}
+          />
+        </GraphErrorBoundary>
+      );
+    }
+    if (id === 'flow') {
+      return (
+        <div className="flow-tile-scroll">
+          <FlowTape
+            flow={flow}
+            count={flowCount}
+            error={flowError}
+            filters={flowFilters}
+            onFiltersChange={setFlowFilters}
+            onRetry={reloadFlow}
+            onSelectTicker={openTickerNode}
+          />
+        </div>
+      );
+    }
+    // Alerts, reports, leaders, signals, and path still open as the overlay
+    // drawer (P1 migrates flow first); their tiles arrive in later slices.
+    return null;
   };
 
   return (
@@ -281,45 +362,19 @@ export default function App() {
 
       <div className="app-body">
         <PanelRail
-          drawer={drawer}
-          onSelect={setDrawer}
+          open={railOpen}
+          onToggle={handleRailToggle}
           counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
-        <aside className="tape-dock" aria-label="Options flow tape">
-          <FlowTape
-            flow={flow}
-            count={flowCount}
-            error={flowError}
-            filters={flowFilters}
-            onFiltersChange={setFlowFilters}
-            onRetry={reloadFlow}
-            onSelectTicker={openTickerNode}
-          />
-        </aside>
         <main className="graph-area">
-          <GraphErrorBoundary>
-            <TimelineBoard
-              data={asOfData ?? graph}
-              error={graphError}
-              selectedId={selected?.id ?? null}
-              onSelect={handleCanvasSelect}
-              onHoverEdgeChange={setHoverEdge}
-              onRetry={loadGraph}
-              hiddenTypes={hiddenTypes}
-              onToggleType={toggleType}
-              onSoloType={soloType}
-              onClearTypes={clearTypes}
-              scrubDaysAgo={scrubDaysAgo}
-              scrubMaxDays={SCRUB_DAYS}
-              onScrubChange={setScrubDaysAgo}
-              showEvents={showEvents}
-              onToggleEvents={() => setShowEvents((v) => !v)}
-              loadingHint={
-                graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
-              }
-              warming={graphStage === 'partial'}
-            />
-          </GraphErrorBoundary>
+          <TileDock
+            tiles={tiles}
+            enlarged={enlarged}
+            onClose={(id) => setTiles((prev) => closeTile(prev, id))}
+            onMove={(id, dir) => setTiles((prev) => moveTile(prev, id, dir))}
+            onEnlarge={setEnlarged}
+            renderBody={renderTileBody}
+          />
           <PanelDrawers
             drawer={drawer}
             onClose={() => setDrawer(null)}
