@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import AlertsPanel from './components/AlertsPanel';
+import ReportsPanel from './components/ReportsPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
@@ -371,8 +372,20 @@ export default function App() {
         </div>
       );
     }
-    // Alerts, reports, leaders, signals, and path still open as the overlay
-    // drawer (P2 migrates alerts next); their tiles arrive in later slices.
+    if (id === 'reports') {
+      return (
+        <div className="flow-tile-scroll">
+          <ReportsPanel
+            digest={digest}
+            reports={reports}
+            error={reportsError}
+            onReportClick={openReportNode}
+          />
+        </div>
+      );
+    }
+    // Reports, leaders, signals, and path still open as the overlay
+    // drawer; their tiles arrive in later slices.
     return null;
   };
 
