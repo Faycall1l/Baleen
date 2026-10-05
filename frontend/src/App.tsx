@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
+import AlertsPanel from './components/AlertsPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
@@ -211,8 +212,9 @@ export default function App() {
   }, [drawer, enlarged, showHelp, pathFrom]);
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
-  // the rail badge and the drawer share one source of truth.
-  const inbox = useAlertsInbox(alerts, drawer === 'alerts');
+  // the rail badge and the drawer share one source of truth. Visible when
+  // the overlay drawer (narrow) or the tile (wide, P2) is open.
+  const inbox = useAlertsInbox(alerts, drawer === 'alerts' || tiles.includes('alerts'));
   const { rules: alertRules, toggleRule: toggleAlertRule } = useAlertRules();
 
   const loadedIds = useMemo(
@@ -349,8 +351,28 @@ export default function App() {
         </div>
       );
     }
+    if (id === 'alerts') {
+      return (
+        <div className="flow-tile-scroll">
+          <AlertsPanel
+            alerts={inbox.visible}
+            total={alerts.length}
+            rules={inbox.rules}
+            ruleStates={alertRules}
+            error={alertsError}
+            onAlertClick={openAlertNode}
+            rule={inbox.rule}
+            onRuleChange={inbox.setRule}
+            query={inbox.query}
+            onQueryChange={inbox.setQuery}
+            onToggleRule={toggleAlertRule}
+            seenMax={inbox.seenMax}
+          />
+        </div>
+      );
+    }
     // Alerts, reports, leaders, signals, and path still open as the overlay
-    // drawer (P1 migrates flow first); their tiles arrive in later slices.
+    // drawer (P2 migrates alerts next); their tiles arrive in later slices.
     return null;
   };
 
