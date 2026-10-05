@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import AlertsPanel from './components/AlertsPanel';
+import LeaderboardPanel from './components/LeaderboardPanel';
 import ReportsPanel from './components/ReportsPanel';
+import SignalsPanel from './components/SignalsPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
@@ -384,8 +386,22 @@ export default function App() {
         </div>
       );
     }
-    // Reports, leaders, signals, and path still open as the overlay
-    // drawer; their tiles arrive in later slices.
+    if (id === 'leaders') {
+      return (
+        <div className="flow-tile-scroll">
+          <LeaderboardPanel leaders={leaders} error={leadersError} onLeaderClick={openLeaderNode} />
+        </div>
+      );
+    }
+    if (id === 'signals') {
+      return (
+        <div className="flow-tile-scroll">
+          <SignalsPanel signals={signals} error={signalsError} />
+        </div>
+      );
+    }
+    // Path still opens as the overlay drawer; its tile arrives in P5, which
+    // also deletes the drawer system.
     return null;
   };
 
