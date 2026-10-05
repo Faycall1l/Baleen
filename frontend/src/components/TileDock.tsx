@@ -11,11 +11,11 @@ interface Props {
   renderBody: (id: TileId) => ReactNode;
 }
 
-/** Bloomberg-style tile dock (P1): rail-opened panels share the main area
- * side-by-side instead of stacking as one overlay. Slim title bars carry
- * reorder, enlarge, and close; the board tile cannot close (the rail has
- * no board tab to bring it back). Narrow screens keep the overlay drawer —
- * tiles hide there except the board.
+/** Bloomberg-style tile dock (P1, unified in P5): rail-opened panels share
+ * the main area side-by-side instead of stacking as one overlay. Slim title
+ * bars carry reorder, enlarge, and close; the board tile cannot close (the
+ * rail has no board tab to bring it back). Narrow screens stack the tiles
+ * vertically with the board first.
  */
 export default function TileDock({ tiles, enlarged, onClose, onMove, onEnlarge, renderBody }: Props) {
   return (

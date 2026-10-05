@@ -1,6 +1,6 @@
-import type { Drawer } from './PanelDrawers';
+import type { TileId } from '../tileState';
 
-export type RailKey = Exclude<Drawer, null>;
+export type RailKey = Exclude<TileId, 'board'>;
 
 const ITEMS: { key: RailKey; label: string }[] = [
   { key: 'flow', label: 'Flow' },
