@@ -24,6 +24,9 @@ export function useFeeds() {
   const [signals, setSignals] = useState<SignalsBundle | null>(null);
   const [signalsError, setSignalsError] = useState<string | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  // First check completed (success or failure): before this the pill must
+  // not claim OFFLINE — nothing has been measured yet.
+  const [healthChecked, setHealthChecked] = useState(false);
 
   const loadAlerts = useCallback(() => {
     setAlertsError(null);
@@ -66,7 +69,13 @@ export function useFeeds() {
   useEffect(() => {
     // A hidden tab skips health polls like every other tick (R7).
     const checkHealth = () => {
-      if (!document.hidden) fetchHealth().then(setHealth);
+      if (document.hidden) return;
+      fetchHealth()
+        .then((h) => {
+          setHealth(h);
+          setHealthChecked(true);
+        })
+        .catch(() => setHealthChecked(true));
     };
     checkHealth();
     const id = setInterval(checkHealth, 15_000);
@@ -153,6 +162,7 @@ export function useFeeds() {
     signals,
     signalsError,
     health,
+    healthChecked,
     briefs,
     reportCount,
     signalsCount,

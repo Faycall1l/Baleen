@@ -136,6 +136,7 @@ export default function App() {
     signals,
     signalsError,
     health,
+    healthChecked,
     briefs,
     reportCount,
     signalsCount,
@@ -414,7 +415,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <CommandBar health={health} />
+      <CommandBar health={health} healthChecked={healthChecked} />
       {showTour && <OnboardingTour onDone={dismissTour} />}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
 
