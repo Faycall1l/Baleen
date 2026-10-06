@@ -1,12 +1,13 @@
 import type { TileId } from '../tileState';
 
-export type RailKey = Exclude<TileId, 'board'>;
+export type RailKey = TileId;
 
 const ITEMS: { key: RailKey; label: string }[] = [
+  { key: 'board', label: 'Board' },
   { key: 'flow', label: 'Flow' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'reports', label: 'Reports' },
-  { key: 'leaders', label: 'Board' },
+  { key: 'leaders', label: 'Leaders' },
   { key: 'signals', label: 'Signals' },
 ];
 

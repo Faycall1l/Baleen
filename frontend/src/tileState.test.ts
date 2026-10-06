@@ -11,29 +11,32 @@ import {
 } from './tileState';
 
 describe('sanitizeTiles', () => {
-  it('keeps valid tiles, drops garbage, dedupes, and guarantees the board', () => {
+  it('keeps valid tiles, drops garbage, and dedupes', () => {
     expect(sanitizeTiles(['board', 'flow', 'nope', 42, 'flow'])).toEqual(['board', 'flow']);
-    expect(sanitizeTiles(['alerts'])).toEqual(['board', 'alerts']);
+    expect(sanitizeTiles(['alerts'])).toEqual(['alerts']);
+    expect(sanitizeTiles([])).toEqual([]);
     expect(sanitizeTiles(null)).toEqual([...DEFAULT_TILES]);
     expect(sanitizeTiles('board')).toEqual([...DEFAULT_TILES]);
   });
 });
 
 describe('toggleTile', () => {
-  it('adds missing tiles and removes present ones, never the board', () => {
+  it('adds missing tiles and removes present ones, board included', () => {
     expect(toggleTile(['board'], 'flow')).toEqual(['board', 'flow']);
     expect(toggleTile(['board', 'flow'], 'flow')).toEqual(['board']);
-    expect(toggleTile(['board', 'flow'], 'board')).toEqual(['board', 'flow']);
+    expect(toggleTile(['board', 'flow'], 'board')).toEqual(['flow']);
+    expect(toggleTile(['flow'], 'board')).toEqual(['flow', 'board']);
   });
 });
 
 describe('ensureTile / closeTile', () => {
-  it('opens missing tiles exactly once and refuses to close the board', () => {
+  it('opens missing tiles exactly once and closes any tile', () => {
     const tiles: TileId[] = ['board'];
     expect(ensureTile(tiles, 'flow')).toEqual(['board', 'flow']);
     expect(ensureTile(['board', 'flow'], 'flow')).toEqual(['board', 'flow']);
     expect(closeTile(['board', 'flow'], 'flow')).toEqual(['board']);
-    expect(closeTile(['board', 'flow'], 'board')).toEqual(['board', 'flow']);
+    expect(closeTile(['board', 'flow'], 'board')).toEqual(['flow']);
+    expect(closeTile(['board'], 'board')).toEqual([]);
   });
 });
 

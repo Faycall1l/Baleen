@@ -7,21 +7,21 @@ describe('graphUrl', () => {
     expect(parseGraphUrl('?node=Ticker%3ANVDA&hide=Event%2CSector&tiles=flow%2Calerts')).toEqual({
       node: 'Ticker:NVDA',
       hidden: ['Event', 'Sector'],
-      tiles: ['board', 'flow', 'alerts'],
+      tiles: ['flow', 'alerts'],
     });
   });
 
-  it('reads blanks as absent and unknown tiles as board-only', () => {
+  it('reads blanks as absent and unknown tiles as empty', () => {
     expect(parseGraphUrl('')).toEqual({ node: null, hidden: [], tiles: null });
     expect(parseGraphUrl('?node=&hide=,,')).toEqual({ node: null, hidden: [], tiles: null });
-    expect(parseGraphUrl('?tiles=bogus')).toEqual({ node: null, hidden: [], tiles: ['board'] });
+    expect(parseGraphUrl('?tiles=bogus')).toEqual({ node: null, hidden: [], tiles: [] });
   });
 
   it('honors the legacy single-drawer param', () => {
     expect(parseGraphUrl('?drawer=alerts')).toEqual({
       node: null,
       hidden: [],
-      tiles: ['board', 'alerts'],
+      tiles: ['alerts'],
     });
   });
 
@@ -36,8 +36,8 @@ describe('graphUrl', () => {
     expect(parseGraphUrl(url)).toEqual(state);
   });
 
-  it('omits the tiles param for a board-only workspace', () => {
-    const url = buildGraphUrl({ node: 'Ticker:NVDA', hidden: [], tiles: ['board'] });
-    expect(url).toBe('?node=Ticker%3ANVDA');
+  it('round-trips a boardless workspace', () => {
+    const url = buildGraphUrl({ node: null, hidden: [], tiles: ['flow', 'alerts'] });
+    expect(parseGraphUrl(url).tiles).toEqual(['flow', 'alerts']);
   });
 });

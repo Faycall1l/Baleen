@@ -295,12 +295,11 @@ export default function App() {
     setTiles((prev) => ensureTile(prev, 'flow'));
   };
 
-  // Rail toggle (P5): every tab docks its tile. Board has no rail tab —
-  // its tile is permanent.
+  // Rail toggle (P5): every tab docks its tile, board included.
   const handleRailToggle = (key: RailKey) => {
     setTiles((prev) => toggleTile(prev, key));
   };
-  const railOpen: RailKey[] = tiles.filter((t): t is RailKey => t !== 'board');
+  const railOpen: RailKey[] = [...tiles];
 
   const renderTileBody = (id: TileId) => {
     if (id === 'board') {
@@ -416,7 +415,7 @@ export default function App() {
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
-          counts={{ flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
+          counts={{ board: 0, flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <main className="graph-area">
           <TileDock
@@ -425,6 +424,7 @@ export default function App() {
             onClose={(id) => setTiles((prev) => closeTile(prev, id))}
             onMove={(id, dir) => setTiles((prev) => moveTile(prev, id, dir))}
             onEnlarge={setEnlarged}
+            onOpen={(id) => setTiles((prev) => ensureTile(prev, id))}
             renderBody={renderTileBody}
           />
           <div className="graph-status">
