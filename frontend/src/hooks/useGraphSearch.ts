@@ -39,14 +39,19 @@ export function useGraphSearch({
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!data || q.length < 2) return [];
-    return data.nodes.filter((n) => n.title.toLowerCase().includes(q)).slice(0, 8);
+    return data.nodes
+      .filter((n) => (n.title ?? '').toLowerCase().includes(q))
+      .slice(0, 8);
   }, [query, data]);
 
   // Total hits behind the capped dropdown (R34): "3 of 27" beats guessing.
   const matchTotal = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!data || q.length < 2) return 0;
-    return data.nodes.reduce((n, node) => (node.title.toLowerCase().includes(q) ? n + 1 : n), 0);
+    return data.nodes.reduce(
+      (n, node) => ((node.title ?? '').toLowerCase().includes(q) ? n + 1 : n),
+      0,
+    );
   }, [query, data]);
 
   const choose = (m: GraphNode) => {
