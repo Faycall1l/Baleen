@@ -180,6 +180,42 @@ button.graph-error-action:hover {
   margin-top: 14px;
 }
 
+/* Ranked signal list (S1): kind tag plus a strength bar, one line per
+ * signal, everything tappable. Reuses the alert item frame. */
+.signal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signal-score {
+  display: inline-block;
+  width: 56px;
+  height: 5px;
+  margin-left: 8px;
+  vertical-align: middle;
+  background: var(--surface-3, #26282f);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.signal-score-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+
+.signal-headline {
+  font-weight: 600;
+  margin: 4px 0 2px;
+}
+
+.signal-headline .node-link {
+  font-weight: 600;
+  text-align: left;
+}
+
 @media (max-width: 1280px) {
   .tile-dock {
     flex-direction: column;
