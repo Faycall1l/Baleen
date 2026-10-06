@@ -32,8 +32,9 @@ export default function LeaderboardPanel({ leaders, error, onLeaderClick }: Prop
           <div className="alert-summary">
             {l.side} · {l.amount} · {l.date} ·{' '}
             <b>
-              {l.ret_pct > 0 ? '+' : ''}
-              {l.ret_pct.toFixed(1)}%
+              {l.ret_pct == null || Number.isNaN(l.ret_pct)
+                ? '—'
+                : `${l.ret_pct > 0 ? '+' : ''}${l.ret_pct.toFixed(1)}%`}
             </b>{' '}
             since trade
             {l.excess_pct != null && (

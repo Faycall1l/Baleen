@@ -8,8 +8,9 @@ interface State {
   failure: string | null;
 }
 
-// Catches render-time crashes in the graph subtree and turns a blank canvas
-// into a readable error with recovery, instead of silent nothing.
+// Catches render-time crashes in a tile subtree and turns a blank panel
+// into a readable error with recovery, instead of silent nothing. Keyed per
+// tile so closing and reopening the tile resets the boundary.
 export default class GraphErrorBoundary extends Component<Props, State> {
   state: State = { failure: null };
 
@@ -21,7 +22,7 @@ export default class GraphErrorBoundary extends Component<Props, State> {
     if (this.state.failure) {
       return (
         <div className="empty-hint">
-          <div className="error">Graph failed: {this.state.failure}</div>
+          <div className="error">Panel failed: {this.state.failure}</div>
           <div style={{ marginTop: 8 }}>
             <button onClick={() => window.location.reload()}>Reload</button>
           </div>
