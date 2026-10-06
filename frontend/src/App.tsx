@@ -91,9 +91,6 @@ export default function App() {
   }, []);
   // Shortcut help (R39): `?` outside inputs toggles it.
   const [showHelp, setShowHelp] = useState(false);
-  // Hovered relationship readout (R35) lives here so it can join the
-  // status bar next to the counts.
-  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   // First-run tour (R11): shown until dismissed, persisted across visits.
   const [showTour, setShowTour] = useState(() => !loadOnboarded());
   const dismissTour = () => {
@@ -321,7 +318,6 @@ export default function App() {
             error={graphError}
             selectedId={selected?.id ?? null}
             onSelect={handleCanvasSelect}
-            onHoverEdgeChange={setHoverEdge}
             onRetry={loadGraph}
             hiddenTypes={hiddenTypes}
             onToggleType={toggleType}
@@ -443,7 +439,6 @@ export default function App() {
             {graph?.truncated && graph.event_count
               ? ` · recent ${graph.node_count} of ${graph.event_count} events`
               : ''}
-            {hoverEdge ? ` · rel: ${hoverEdge}` : ''}
             {updatedAt ? ` · sync ${new Date(updatedAt).toLocaleTimeString()}` : ''}
           </div>
         </main>
