@@ -14,11 +14,13 @@
   <a href="docker-compose.yml"><img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" /></a>
 </p>
 
-Baleen turns a live stream of congressional trading disclosures and unusual
-options flow (in the style of [@unusual_whales](https://x.com/unusual_whales))
-into a queryable **Neo4j knowledge graph** — then lets you explore it in an
-Obsidian-style graph UI, ask questions in plain English, and get alerted when a
-politician trades in a sector their own committee oversees.
+Baleen turns congressional trading disclosures, insider filings, and unusual
+options flow into a queryable **Neo4j knowledge graph** — then serves it as a
+Bloomberg-style tile workspace for investigative journalists: ranked **story
+leads** first (unsupervised sector trades, market-beating filings, congress
+flow), a shared-evidence model where every number traces to a filing and every
+view copies as a link, plus plain-English questions answered with grounded
+tables.
 
 ```
           X API v2                     vLLM (open-weight LLM)
@@ -27,7 +29,7 @@ politician trades in a sector their own committee oversees.
                           dedup by tweet_id   structured extract   MERGE upserts
                                                 (confidence ≥ 0.6)      │
                                                                         ▼
-        frontend (React + force graph) ◄────────────────── NL query agent + alerts
+        frontend (React tile workspace) ◄───────────── NL query agent + alerts
 ```
 
 ## Highlights
