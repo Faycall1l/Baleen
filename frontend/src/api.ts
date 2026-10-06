@@ -102,16 +102,43 @@ export function fetchFlow(filters: FlowFilters, signal?: AbortSignal): Promise<F
   return json<FlowResponse>(buildFlowQuery(filters), signal ? { signal } : undefined);
 }
 
+function asArray<T>(v: T[] | null | undefined): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
 export function fetchPerson(politicianId: string): Promise<{ person: PersonCard }> {
-  return json<{ person: PersonCard }>(`/api/politicians/${encodeURIComponent(politicianId)}`);
+  return json<{ person: PersonCard }>(`/api/politicians/${encodeURIComponent(politicianId)}`).then(
+    (res) => ({
+      person: {
+        ...res.person,
+        committees: asArray(res.person?.committees),
+        trades: asArray(res.person?.trades),
+      },
+    }),
+  );
 }
 
 export function fetchTicker(symbol: string): Promise<{ ticker: TickerCard }> {
-  return json<{ ticker: TickerCard }>(`/api/tickers/${encodeURIComponent(symbol)}`);
+  return json<{ ticker: TickerCard }>(`/api/tickers/${encodeURIComponent(symbol)}`).then((res) => ({
+    ticker: {
+      ...res.ticker,
+      trades: asArray(res.ticker?.trades),
+      flow: asArray(res.ticker?.flow),
+    },
+  }));
 }
 
 export function fetchCommittee(committeeId: string): Promise<{ committee: CommitteeCard }> {
-  return json<{ committee: CommitteeCard }>(`/api/committees/${encodeURIComponent(committeeId)}`);
+  return json<{ committee: CommitteeCard }>(`/api/committees/${encodeURIComponent(committeeId)}`).then(
+    (res) => ({
+      committee: {
+        ...res.committee,
+        sectors: asArray(res.committee?.sectors),
+        members: asArray(res.committee?.members),
+        trades: asArray(res.committee?.trades),
+      },
+    }),
+  );
 }
 
 export interface PathNode {
