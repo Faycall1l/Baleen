@@ -27,10 +27,10 @@ export default function LeaderboardPanel({ leaders, error, onLeaderClick }: Prop
           onClick={onLeaderClick ? () => onLeaderClick(l) : undefined}
         >
           <div className="alert-title">
-            <span className="alert-badge">#{i + 1}</span> {l.politician} · {l.ticker}
+            <span className="alert-badge">#{i + 1}</span> {l.politician ?? 'A member'} · {l.ticker ?? '—'}
           </div>
           <div className="alert-summary">
-            {l.side} · {l.amount} · {l.date} ·{' '}
+            {l.side ?? '—'} · {l.amount ?? '—'} · {l.date ?? '—'} ·{' '}
             <b>
               {l.ret_pct == null || Number.isNaN(l.ret_pct)
                 ? '—'
@@ -45,9 +45,11 @@ export default function LeaderboardPanel({ leaders, error, onLeaderClick }: Prop
             )}
           </div>
           <div className="alert-meta">
-            <a href={l.source_url} target="_blank" rel="noreferrer">
-              filing ↗
-            </a>
+            {typeof l.source_url === 'string' && l.source_url !== '' ? (
+              <a href={l.source_url} target="_blank" rel="noreferrer">
+                filing ↗
+              </a>
+            ) : null}
           </div>
         </div>
       ))}
