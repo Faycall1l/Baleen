@@ -41,7 +41,7 @@ export function formatTapeTime(value: string | null | undefined): string {
   return value.slice(0, 16).replace('T', ' ');
 }
 
-export function sentimentClass(sentiment: string): 'up' | 'down' | 'flat' {
+export function sentimentClass(sentiment: string | null | undefined): 'up' | 'down' | 'flat' {
   if (sentiment === 'bullish') return 'up';
   if (sentiment === 'bearish') return 'down';
   return 'flat';
