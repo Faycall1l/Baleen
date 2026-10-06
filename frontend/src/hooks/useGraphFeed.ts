@@ -19,7 +19,7 @@ function graphCursor(g: GraphData | null): string | null {
   return best;
 }
 
-// Graph snapshot feed (extracted from App, H1): poll/merge/stage ownership.
+// Board snapshot feed (extracted from App, H1): poll/merge/stage ownership.
 // Steady-state polls ask for a delta off the newest event_time (cheap
 // index-bounded query); every 10th poll refetches full as the resync.
 export function useGraphFeed(): {
