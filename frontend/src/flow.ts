@@ -20,8 +20,8 @@ export function buildFlowQuery(filters: FlowFilters): string {
   return `/api/signals/flow?${params.toString()}`;
 }
 
-export function formatRatio(ratio: number): string {
-  return `${ratio.toFixed(1)}x`;
+export function formatRatio(ratio: number | null | undefined): string {
+  return ratio == null || Number.isNaN(ratio) ? '—' : `${ratio.toFixed(1)}x`;
 }
 
 export function formatContracts(value: number | null | undefined): string {

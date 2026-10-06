@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import GraphErrorBoundary from './GraphErrorBoundary';
 import { TILE_TITLES, type TileId } from '../tileState';
 
 interface Props {
@@ -86,7 +87,9 @@ export default function TileDock({ tiles, enlarged, onClose, onMove, onEnlarge, 
                 </button>
               </span>
             </header>
-            <div className="tile-body">{renderBody(id)}</div>
+            <div className="tile-body">
+              <GraphErrorBoundary key={id}>{renderBody(id)}</GraphErrorBoundary>
+            </div>
           </section>
         );
       })}

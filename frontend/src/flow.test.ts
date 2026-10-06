@@ -30,6 +30,9 @@ describe('options tape helpers', () => {
 
   it('formats terminal numerics without shifting meaning', () => {
     expect(formatRatio(5)).toBe('5.0x');
+    expect(formatRatio(null)).toBe('—');
+    expect(formatRatio(undefined)).toBe('—');
+    expect(formatRatio(NaN)).toBe('—');
     expect(formatContracts(5000)).toBe('5,000');
     expect(formatContracts(null)).toBe('—');
     expect(formatStrike(130)).toBe('$130');
