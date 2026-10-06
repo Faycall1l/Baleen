@@ -34,27 +34,31 @@ export default function CommitteeDetail({ node, card, cardError, alerts, onClose
           {card.sectors.length > 0 && (
             <div className="node-links">
               <div className="node-links-title">Oversees</div>
-              {card.sectors.map((s) => (
-                <span key={s} className="ref-chip">
-                  {s}
-                </span>
-              ))}
+              {card.sectors
+                .filter((s): s is string => typeof s === 'string' && s !== '')
+                .map((s) => (
+                  <span key={s} className="ref-chip">
+                    {s}
+                  </span>
+                ))}
             </div>
           )}
           {card.members.length > 0 && (
             <div className="node-links">
               <div className="node-links-title">Members · {card.members.length}</div>
-              {card.members.map((m) => (
-                <button
-                  key={m.id}
-                  className="node-link"
-                  onClick={onMemberClick ? () => onMemberClick(m.id) : undefined}
-                  disabled={!onMemberClick}
-                >
-                  {m.name ?? m.id}
-                  {m.party ? ` (${m.party})` : ''} ↗
-                </button>
-              ))}
+              {card.members
+                .filter((m) => typeof m.id === 'string' && m.id !== '')
+                .map((m) => (
+                  <button
+                    key={m.id}
+                    className="node-link"
+                    onClick={onMemberClick ? () => onMemberClick(m.id) : undefined}
+                    disabled={!onMemberClick}
+                  >
+                    {m.name ?? m.id}
+                    {m.party ? ` (${m.party})` : ''} ↗
+                  </button>
+                ))}
             </div>
           )}
           <div className="node-links">
