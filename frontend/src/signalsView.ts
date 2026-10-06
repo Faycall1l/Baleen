@@ -76,13 +76,14 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
   for (const c of bundle.clusters) {
     const ticker = tickerOf(c.ticker);
     if (!ticker) continue;
-    const n = c.insiders.length;
+    const insiders = Array.isArray(c.insiders) ? c.insiders : [];
+    const n = insiders.length;
     drafts.push({
       key: `cluster:${c.ticker}`,
       kind: 'cluster',
       strength: n * 1000 + (Number(c.buys) || 0),
       headline: `${n} insider${n === 1 ? '' : 's'} buying ${c.ticker}`,
-      detail: c.insiders.slice(0, 3).join(', ') + (n > 3 ? ` +${n - 3} more` : ''),
+      detail: insiders.slice(0, 3).join(', ') + (n > 3 ? ` +${n - 3} more` : ''),
       ticker: ticker,
       url: null,
       symbols: [],
