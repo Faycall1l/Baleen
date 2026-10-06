@@ -4,6 +4,7 @@
 
 export type TileId =
   | 'board'
+  | 'leads'
   | 'flow'
   | 'alerts'
   | 'reports'
@@ -13,6 +14,7 @@ export type TileId =
 
 const ALL_TILES: ReadonlySet<string> = new Set([
   'board',
+  'leads',
   'flow',
   'alerts',
   'reports',
@@ -21,10 +23,11 @@ const ALL_TILES: ReadonlySet<string> = new Set([
   'path',
 ]);
 
-export const DEFAULT_TILES: TileId[] = ['board', 'flow'];
+export const DEFAULT_TILES: TileId[] = ['leads', 'board'];
 
 export const TILE_TITLES: Record<TileId, string> = {
   board: 'Signal board',
+  leads: 'Story leads',
   flow: 'Flow tape',
   alerts: 'Alerts',
   reports: 'Reports',
