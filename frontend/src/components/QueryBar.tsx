@@ -61,7 +61,7 @@ export default function QueryBar({ onResult, onError, onFocusAsk, externalAsk, f
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         onFocus={onFocusAsk}
-        placeholder="Ask the graph… e.g. which sectors has Cassidy traded?"
+        placeholder="Ask Baleen… e.g. which sectors has Cassidy traded?"
       />
       <button onClick={() => submit()} disabled={busy || !question.trim()}>
         {busy ? '…' : 'Ask'}
