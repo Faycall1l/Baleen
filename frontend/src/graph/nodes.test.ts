@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nodeSubline } from './nodes';
+import { nodeSubline, truncate } from './nodes';
 
 describe('nodeSubline', () => {
   it('summarizes options flow with volume, ratio, and bias', () => {
@@ -41,5 +41,14 @@ describe('nodeSubline', () => {
     );
     expect(nodeSubline('Ticker', { ticker: 'NVDA' })).toBeNull();
     expect(nodeSubline('Event', { type: 'unparsed' })).toBeNull();
+  });
+});
+
+describe('truncate', () => {
+  it('reads nullish input as a dash instead of crashing', () => {
+    expect(truncate(null, 42)).toBe('—');
+    expect(truncate(undefined, 42)).toBe('—');
+    expect(truncate('', 42)).toBe('—');
+    expect(truncate('short', 42)).toBe('short');
   });
 });

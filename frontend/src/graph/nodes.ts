@@ -11,7 +11,8 @@ export function shade(hex: string, factor: number): string {
   return `#${v.toString(16).padStart(6, '0')}`;
 }
 
-export function truncate(s: string, n: number): string {
+export function truncate(s: string | null | undefined, n: number): string {
+  if (typeof s !== 'string' || s === '') return '—';
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
