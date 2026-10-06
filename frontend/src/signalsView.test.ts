@@ -71,4 +71,14 @@ describe('toSignalRows', () => {
       expect(kindTag(kind).length).toBeGreaterThan(0);
     }
   });
+
+  it('drops rows with missing tickers', () => {
+    const rows = toSignalRows(
+      bundle({
+        momentum: [{ ticker: null as unknown as string, buys: 99, sells: 0, actors: 9, names: [] }],
+        options_meter: [{ ticker: '', call_vol: 1, put_vol: 1, prints: 5 }],
+      }),
+    );
+    expect(rows).toEqual([]);
+  });
 });

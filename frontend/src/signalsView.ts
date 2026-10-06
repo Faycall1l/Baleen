@@ -57,19 +57,25 @@ function percentile<T>(items: T[], strength: (item: T) => number): Map<T, number
 export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRow[] {
   if (!bundle) return [];
   const drafts: Draft[] = [];
+  const tickerOf = (v: unknown): string | null =>
+    typeof v === 'string' && v !== '' ? v : null;
   for (const s of bundle.suspicious) {
+    const ticker = tickerOf(s.ticker);
+    if (!ticker) continue;
     drafts.push({
       key: `suspicious:${s.who}:${s.ticker}`,
       kind: 'suspicious',
       strength: Number(s.excess_pct) || 0,
       headline: `${s.who} · ${s.ticker} +${Number(s.excess_pct).toFixed(1)}% vs market`,
       detail: 'Trade beating the market — check the filing.',
-      ticker: s.ticker || null,
+      ticker: ticker,
       url: s.source_url || null,
       symbols: [],
     });
   }
   for (const c of bundle.clusters) {
+    const ticker = tickerOf(c.ticker);
+    if (!ticker) continue;
     const n = c.insiders.length;
     drafts.push({
       key: `cluster:${c.ticker}`,
@@ -77,12 +83,14 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
       strength: n * 1000 + (Number(c.buys) || 0),
       headline: `${n} insider${n === 1 ? '' : 's'} buying ${c.ticker}`,
       detail: c.insiders.slice(0, 3).join(', ') + (n > 3 ? ` +${n - 3} more` : ''),
-      ticker: c.ticker || null,
+      ticker: ticker,
       url: null,
       symbols: [],
     });
   }
   for (const m of bundle.momentum) {
+    const ticker = tickerOf(m.ticker);
+    if (!ticker) continue;
     const buys = Number(m.buys) || 0;
     const sells = Number(m.sells) || 0;
     drafts.push({
@@ -91,12 +99,14 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
       strength: (buys + sells) * Math.max(1, Number(m.actors) || 0),
       headline: `${m.ticker} ${buys} buys / ${sells} sells`,
       detail: `${Number(m.actors) || 0} members trading${m.names?.length ? `: ${m.names.slice(0, 3).join(', ')}` : ''}`,
-      ticker: m.ticker || null,
+      ticker: ticker,
       url: null,
       symbols: [],
     });
   }
   for (const o of bundle.options_meter) {
+    const ticker = tickerOf(o.ticker);
+    if (!ticker) continue;
     const calls = Number(o.call_vol) || 0;
     const puts = Number(o.put_vol) || 0;
     drafts.push({
@@ -105,7 +115,7 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
       strength: Number(o.prints) || 0,
       headline: `${o.ticker} ${Number(o.prints) || 0} unusual prints`,
       detail: `${calls.toLocaleString()} calls / ${puts.toLocaleString()} puts`,
-      ticker: o.ticker || null,
+      ticker: ticker,
       url: null,
       symbols: [],
     });
