@@ -330,7 +330,7 @@ export default function App() {
             showEvents={showEvents}
             onToggleEvents={() => setShowEvents((v) => !v)}
             loadingHint={
-              graphStage === 'first' ? 'Loading graph (quick view)…' : undefined
+              graphStage === 'first' ? 'Loading board (quick view)…' : undefined
             }
             warming={graphStage === 'partial'}
           />
