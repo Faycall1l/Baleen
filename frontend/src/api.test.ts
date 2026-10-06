@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchCommittee, fetchPerson, fetchTicker } from './api';
+import { fetchCommittee, fetchPerson, fetchTicker, askQuestion } from './api';
 
 function mockJson(body: unknown) {
   vi.stubGlobal(
@@ -39,5 +39,14 @@ describe('card fetches', () => {
     expect(res.committee.sectors).toEqual([]);
     expect(res.committee.members).toEqual([]);
     expect(res.committee.trades).toEqual([]);
+  });
+
+  it('normalizes null arrays on query responses', async () => {
+    mockJson({ question: 'q', columns: null, rows: null, followups: null, sources: null });
+    const res = await askQuestion('q');
+    expect(res.columns).toEqual([]);
+    expect(res.rows).toEqual([]);
+    expect(res.followups).toEqual([]);
+    expect(res.sources).toEqual([]);
   });
 });
