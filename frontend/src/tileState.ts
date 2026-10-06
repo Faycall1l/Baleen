@@ -1,6 +1,6 @@
-// Dockable workspace tiles (P1): the rail opens panels side-by-side in the
-// main area instead of one overlay at a time. `board` is permanent — every
-// other tile toggles, reorders, enlarges, and closes freely.
+// Dockable workspace tiles (P1, board freed in P6): the rail opens panels
+// side-by-side in the main area. Every tile — board included — toggles,
+// reorders, enlarges, and closes freely; an empty dock offers quick-open.
 
 export type TileId =
   | 'board'
@@ -41,14 +41,11 @@ function isTileId(v: unknown): v is TileId {
  * Non-array input (no prefs yet) yields the default workspace. */
 export function sanitizeTiles(raw: unknown): TileId[] {
   if (!Array.isArray(raw)) return [...DEFAULT_TILES];
-  const deduped = [...new Set(raw.filter(isTileId))];
-  if (!deduped.includes('board')) deduped.unshift('board');
-  return deduped;
+  return [...new Set(raw.filter(isTileId))];
 }
 
-/** Rail toggle: add at the end, or remove (never the board). */
+/** Rail toggle: add at the end, or remove. */
 export function toggleTile(tiles: TileId[], id: TileId): TileId[] {
-  if (id === 'board') return tiles;
   return tiles.includes(id) ? tiles.filter((t) => t !== id) : [...tiles, id];
 }
 
@@ -57,10 +54,8 @@ export function ensureTile(tiles: TileId[], id: TileId): TileId[] {
   return tiles.includes(id) ? tiles : [...tiles, id];
 }
 
-/** Close button: the board stays — closing it would strand users with no
- * way back (the rail has no board tab). */
+/** Close button: any tile can go; the dock shows quick-open when empty. */
 export function closeTile(tiles: TileId[], id: TileId): TileId[] {
-  if (id === 'board') return tiles;
   return tiles.filter((t) => t !== id);
 }
 
