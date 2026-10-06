@@ -17,12 +17,10 @@ interface Props {
   seenMax: number;
 }
 
-function fmtDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+function fmtDate(iso: string | null | undefined): string {
+  if (typeof iso !== 'string' || iso === '') return '—';
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? '—' : new Date(ms).toLocaleString();
 }
 
 // Short display labels + tints per rule. Unknown rules fall back to the raw
