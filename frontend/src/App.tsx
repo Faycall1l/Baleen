@@ -386,7 +386,13 @@ export default function App() {
     if (id === 'signals') {
       return (
         <div className="flow-tile-scroll">
-          <SignalsPanel signals={signals} error={signalsError} />
+          <SignalsPanel
+            signals={signals}
+            error={signalsError}
+            onTickerClick={(t) => {
+              if (!openTickerNode(t)) viewTickerInTape(t);
+            }}
+          />
         </div>
       );
     }
