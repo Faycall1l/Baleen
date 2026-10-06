@@ -33,7 +33,13 @@ export function fetchGraph(
   if (since != null && since !== '') params.set('since', since);
   if (before != null && before !== '') params.set('before', before);
   if (withoutEvents) params.set('without_events', 'true');
-  return json<GraphData>(`/api/graph?${params.toString()}`, signal ? { signal } : undefined);
+  return json<GraphData>(`/api/graph?${params.toString()}`, signal ? { signal } : undefined).then(
+    (res) => ({
+      ...res,
+      nodes: asArray(res.nodes),
+      links: asArray(res.links),
+    }),
+  );
 }
 
 export function askQuestion(question: string): Promise<QueryResponse> {
@@ -184,5 +190,9 @@ export interface PathResponse {
 
 export function fetchPath(fromId: string, toId: string): Promise<PathResponse> {
   const params = new URLSearchParams({ from: fromId, to: toId });
-  return json<PathResponse>(`/api/graph/path?${params.toString()}`);
+  return json<PathResponse>(`/api/graph/path?${params.toString()}`).then((res) => ({
+    ...res,
+    nodes: asArray(res.nodes),
+    rels: asArray(res.rels),
+  }));
 }

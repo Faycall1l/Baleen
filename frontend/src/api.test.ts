@@ -4,7 +4,9 @@ import { fetchCommittee, fetchPerson, fetchTicker, askQuestion } from './api';
 import {
   fetchAlerts,
   fetchFlow,
+  fetchGraph,
   fetchLeaderboard,
+  fetchPath,
   fetchReports,
   fetchRules,
   fetchSignals,
@@ -74,5 +76,16 @@ describe('card fetches', () => {
     expect(signals.suspicious).toEqual([]);
     mockJson({ flow: null, count: 0, filters: DEFAULT_FLOW });
     expect((await fetchFlow(DEFAULT_FLOW)).flow).toEqual([]);
+  });
+
+  it('normalizes null nodes, links, and path segments', async () => {
+    mockJson({ nodes: null, links: null, node_count: 0, link_count: 0 });
+    const graph = await fetchGraph();
+    expect(graph.nodes).toEqual([]);
+    expect(graph.links).toEqual([]);
+    mockJson({ from: 'a', to: 'b', nodes: null, rels: null, length: 0 });
+    const path = await fetchPath('a', 'b');
+    expect(path.nodes).toEqual([]);
+    expect(path.rels).toEqual([]);
   });
 });
