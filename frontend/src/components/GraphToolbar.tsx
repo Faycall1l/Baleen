@@ -111,7 +111,7 @@ export default function GraphToolbar({
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => onChooseMatch(m)}
                 >
-                  <span className="graph-search-label">{m.label}</span> {m.title}
+                  <span className="graph-search-label">{m.label}</span> {m.title ?? m.id}
                 </button>
               ))}
             </div>
