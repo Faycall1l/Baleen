@@ -51,7 +51,10 @@ export function askQuestion(question: string): Promise<QueryResponse> {
 }
 
 export function fetchAlerts(limit = 20): Promise<{ alerts: Alert[]; count: number }> {
-  return json<{ alerts: Alert[]; count: number }>(`/api/alerts?limit=${limit}`);
+  return json<{ alerts: Alert[]; count: number }>(`/api/alerts?limit=${limit}`).then((res) => ({
+    ...res,
+    alerts: asArray(res.alerts),
+  }));
 }
 
 export async function fetchHealth(): Promise<Health | null> {
@@ -72,7 +75,10 @@ export async function fetchHealth(): Promise<Health | null> {
 }
 
 export function fetchReports(limit = 20): Promise<{ reports: Report[]; count: number }> {
-  return json<{ reports: Report[]; count: number }>(`/api/reports?limit=${limit}`);
+  return json<{ reports: Report[]; count: number }>(`/api/reports?limit=${limit}`).then((res) => ({
+    ...res,
+    reports: asArray(res.reports),
+  }));
 }
 
 export function fetchDigest(): Promise<{ report: Report }> {
@@ -80,7 +86,9 @@ export function fetchDigest(): Promise<{ report: Report }> {
 }
 
 export function fetchLeaderboard(limit = 10): Promise<{ leaders: LeaderboardEntry[]; count: number }> {
-  return json<{ leaders: LeaderboardEntry[]; count: number }>(`/api/leaderboard?limit=${limit}`);
+  return json<{ leaders: LeaderboardEntry[]; count: number }>(`/api/leaderboard?limit=${limit}`).then(
+    (res) => ({ ...res, leaders: asArray(res.leaders) }),
+  );
 }
 
 export interface AlertRule {
@@ -89,7 +97,10 @@ export interface AlertRule {
 }
 
 export function fetchRules(): Promise<{ rules: AlertRule[]; count: number }> {
-  return json<{ rules: AlertRule[]; count: number }>('/api/rules');
+  return json<{ rules: AlertRule[]; count: number }>('/api/rules').then((res) => ({
+    ...res,
+    rules: asArray(res.rules),
+  }));
 }
 
 export function setRuleActive(name: string, active: boolean): Promise<AlertRule> {
@@ -101,11 +112,21 @@ export function setRuleActive(name: string, active: boolean): Promise<AlertRule>
 }
 
 export function fetchSignals(): Promise<SignalsBundle> {
-  return json<SignalsBundle>('/api/signals?window_days=90');
+  return json<SignalsBundle>('/api/signals?window_days=90').then((res) => ({
+    ...res,
+    momentum: asArray(res.momentum),
+    clusters: asArray(res.clusters),
+    options_meter: asArray(res.options_meter),
+    uncovered: asArray(res.uncovered),
+    suspicious: asArray(res.suspicious),
+  }));
 }
 
 export function fetchFlow(filters: FlowFilters, signal?: AbortSignal): Promise<FlowResponse> {
-  return json<FlowResponse>(buildFlowQuery(filters), signal ? { signal } : undefined);
+  return json<FlowResponse>(buildFlowQuery(filters), signal ? { signal } : undefined).then((res) => ({
+    ...res,
+    flow: asArray(res.flow),
+  }));
 }
 
 function asArray<T>(v: T[] | null | undefined): T[] {
