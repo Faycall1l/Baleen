@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { ONBOARDING_STEPS } from './onboarding';
 
 describe('onboarding tour', () => {
-  it('covers tape, ask, alerts, and graph in order', () => {
+  it('covers leads, ask, alerts, and tiles in order', () => {
     expect(ONBOARDING_STEPS.map((s) => s.id)).toEqual([
-      'flow',
+      'leads',
       'ask',
       'alerts',
-      'graph',
+      'tiles',
     ]);
   });
 
