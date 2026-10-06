@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AlertStack from './components/AlertStack';
 import AlertsPanel from './components/AlertsPanel';
 import LeaderboardPanel from './components/LeaderboardPanel';
+import LeadsPanel from './components/LeadsPanel';
 import ReportsPanel from './components/ReportsPanel';
 import SignalsPanel from './components/SignalsPanel';
 import CommandBar from './components/CommandBar';
@@ -302,6 +303,16 @@ export default function App() {
   const railOpen: RailKey[] = [...tiles];
 
   const renderTileBody = (id: TileId) => {
+    const openSignalTicker = (t: string) => {
+      if (!openTickerNode(t)) viewTickerInTape(t);
+    };
+    if (id === 'leads') {
+      return (
+        <div className="flow-tile-scroll">
+          <LeadsPanel signals={signals} error={signalsError} onTickerClick={openSignalTicker} />
+        </div>
+      );
+    }
     if (id === 'board') {
       return (
         <GraphErrorBoundary>
@@ -386,13 +397,7 @@ export default function App() {
     if (id === 'signals') {
       return (
         <div className="flow-tile-scroll">
-          <SignalsPanel
-            signals={signals}
-            error={signalsError}
-            onTickerClick={(t) => {
-              if (!openTickerNode(t)) viewTickerInTape(t);
-            }}
-          />
+          <SignalsPanel signals={signals} error={signalsError} onTickerClick={openSignalTicker} />
         </div>
       );
     }
@@ -421,7 +426,7 @@ export default function App() {
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
-          counts={{ board: 0, flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
+          counts={{ board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <main className="graph-area">
           <TileDock

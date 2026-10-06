@@ -216,6 +216,23 @@ button.graph-error-action:hover {
   text-align: left;
 }
 
+.lead-rank {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+.lead-window {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
 @media (max-width: 1280px) {
   .tile-dock {
     flex-direction: column;

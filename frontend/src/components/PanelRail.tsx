@@ -4,6 +4,7 @@ export type RailKey = TileId;
 
 const ITEMS: { key: RailKey; label: string }[] = [
   { key: 'board', label: 'Board' },
+  { key: 'leads', label: 'Leads' },
   { key: 'flow', label: 'Flow' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'reports', label: 'Reports' },
