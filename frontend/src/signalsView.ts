@@ -76,7 +76,9 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
   for (const c of bundle.clusters) {
     const ticker = tickerOf(c.ticker);
     if (!ticker) continue;
-    const insiders = Array.isArray(c.insiders) ? c.insiders : [];
+    const insiders = Array.isArray(c.insiders)
+      ? c.insiders.filter((w): w is string => typeof w === 'string' && w !== '')
+      : [];
     const n = insiders.length;
     drafts.push({
       key: `cluster:${c.ticker}`,
@@ -94,12 +96,15 @@ export function toSignalRows(bundle: SignalsBundle | null, limit = 15): SignalRo
     if (!ticker) continue;
     const buys = Number(m.buys) || 0;
     const sells = Number(m.sells) || 0;
+    const names = Array.isArray(m.names)
+      ? m.names.filter((w): w is string => typeof w === 'string' && w !== '')
+      : [];
     drafts.push({
       key: `momentum:${m.ticker}`,
       kind: 'momentum',
       strength: (buys + sells) * Math.max(1, Number(m.actors) || 0),
       headline: `${m.ticker} ${buys} buys / ${sells} sells`,
-      detail: `${Number(m.actors) || 0} members trading${m.names?.length ? `: ${m.names.slice(0, 3).join(', ')}` : ''}`,
+      detail: `${Number(m.actors) || 0} members trading${names.length ? `: ${names.slice(0, 3).join(', ')}` : ''}`,
       ticker: ticker,
       url: null,
       symbols: [],
