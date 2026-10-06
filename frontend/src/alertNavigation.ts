@@ -4,7 +4,7 @@ import type { Alert, GraphData, GraphNode } from './types';
 //
 // Order matters: the exact event first (full context), then the ticker,
 // then a person name. Returns undefined when the event hasn't reached the
-// loaded snapshot yet — callers must handle that (drawer fallback) instead
+// loaded snapshot yet — callers must handle that (tile fallback) instead
 // of silently dying, which is exactly what toasts used to do.
 export function resolveAlertNode(alert: Alert, graph: GraphData | null): GraphNode | undefined {
   if (!graph) return undefined;

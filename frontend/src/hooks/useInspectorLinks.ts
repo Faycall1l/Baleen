@@ -106,8 +106,8 @@ export function useInspectorLinks(
   );
 
   // What fired on / mentions the selected node, as specific items — not
-  // a count pointing at the general drawer (R21). Each item opens its
-  // exact subject; overflow falls back to the drawer.
+  // a count pointing at the general tile (R21). Each item opens its
+  // exact subject; overflow falls back to the tile.
   const inspectorLinks = useMemo(() => {
     if (!selected) return [];
     const links: { label: string; onOpen: () => void }[] = [];

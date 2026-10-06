@@ -105,7 +105,7 @@ export default function App() {
   const graphTick = usePollingTick(30_000, 20_000);
 
   // Time scrubber (R47b): days-ago offset, null for live. The frozen
-  // snapshot replaces the canvas data until cleared; live polls continue
+  // snapshot replaces the board data until cleared; live polls continue
   // underneath so jumping back is instant.
   const [scrubDaysAgo, setScrubDaysAgo] = useState<number | null>(null);
   const [asOfData, setAsOfData] = useState<GraphData | null>(null);
@@ -177,7 +177,7 @@ export default function App() {
   }, [selected?.id, hiddenTypes, tiles]);
 
   // Path mode (R53b): armed from any inspector via PathFromButton; the next
-  // selected node completes the pair and opens the path drawer. Declared
+  // selected node completes the pair and opens the path tile. Declared
   // before the key handler below so Esc can disarm.
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null);
   const [pathResult, setPathResult] = useState<PathResponse | null>(null);
@@ -220,7 +220,7 @@ export default function App() {
     if (full) handleSelect(full);
   };
 
-  const handleCanvasSelect = (node: GraphNode | null) => {
+  const handleBoardSelect = (node: GraphNode | null) => {
     if (node && pathFrom && node.id !== pathFrom.id) {
       const from = pathFrom;
       setPathFrom(null);
@@ -317,7 +317,7 @@ export default function App() {
             data={asOfData ?? graph}
             error={graphError}
             selectedId={selected?.id ?? null}
-            onSelect={handleCanvasSelect}
+            onSelect={handleBoardSelect}
             onRetry={loadGraph}
             hiddenTypes={hiddenTypes}
             onToggleType={toggleType}
