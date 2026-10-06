@@ -37,9 +37,9 @@ export default function PathPanel({ result, error, isSelectable, onNodeClick }: 
                 className="node-link"
                 disabled={!isSelectable(node.id)}
                 onClick={() => onNodeClick(node.id)}
-                title={isSelectable(node.id) ? `Select ${node.title}` : 'Not in the loaded view'}
+                title={isSelectable(node.id) ? `Select ${node.title ?? node.id}` : 'Not in the loaded view'}
               >
-                <span className="graph-search-label">{node.label}</span> {node.title} ↗
+                <span className="graph-search-label">{node.label}</span> {node.title ?? node.id} ↗
               </button>
             </div>
           ))}
