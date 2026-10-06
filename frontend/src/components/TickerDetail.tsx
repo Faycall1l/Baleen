@@ -53,8 +53,8 @@ export default function TickerDetail({ node, card, cardError, alerts, onClose, o
                   </tr>
                 </thead>
                 <tbody>
-                  {prints.map(({ row: f, alerts: printAlerts }) => (
-                    <tr key={f.event_id} className={sentimentClass(f.sentiment ?? 'neutral')}>
+                  {prints.map(({ row: f, alerts: printAlerts }, fi) => (
+                    <tr key={f.event_id ?? `flow-${fi}`} className={sentimentClass(f.sentiment ?? 'neutral')}>
                       <td>{f.side === 'call' ? 'CALL' : f.side === 'put' ? 'PUT' : '—'}</td>
                       <td className="num">{formatStrike(f.strike)}</td>
                       <td>{formatExpiry(f.expiration)}</td>
@@ -71,8 +71,8 @@ export default function TickerDetail({ node, card, cardError, alerts, onClose, o
           <div className="node-links">
             <div className="node-links-title">Trades · {trades.length}</div>
             {trades.length === 0 && <div className="empty-hint">No disclosed trades in the graph.</div>}
-            {trades.map(({ row: t, alerts: tradeAlerts }) => (
-              <div className="alert-item" key={t.event_id}>
+            {trades.map(({ row: t, alerts: tradeAlerts }, ti) => (
+              <div className="alert-item" key={t.event_id ?? `trade-${ti}`}>
                 <div className="alert-title">
                   <b>{t.who ?? '—'}</b> · {t.side ?? '—'}
                   {tradeAlerts.length > 0 && <span className="alert-badge">alert</span>}

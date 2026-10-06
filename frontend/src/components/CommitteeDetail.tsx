@@ -64,8 +64,8 @@ export default function CommitteeDetail({ node, card, cardError, alerts, onClose
           <div className="node-links">
             <div className="node-links-title">Member trades · {trades.length}</div>
             {trades.length === 0 && <div className="empty-hint">No member trades in the graph.</div>}
-            {trades.map(({ row: t, alerts: tradeAlerts }) => (
-              <div className="alert-item" key={t.event_id}>
+            {trades.map(({ row: t, alerts: tradeAlerts }, ci) => (
+              <div className="alert-item" key={t.event_id ?? `trade-${ci}`}>
                 <div className="alert-title">
                   <b>{t.who ?? '—'}</b> · {t.ticker ?? '—'} {t.side ?? ''}
                   {tradeAlerts.length > 0 && <span className="alert-badge">alert</span>}

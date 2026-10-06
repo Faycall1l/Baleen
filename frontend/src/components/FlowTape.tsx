@@ -110,12 +110,12 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
               </tr>
             </thead>
             <tbody>
-              {flow.map((print) => {
+              {flow.map((print, pi) => {
                 const ticker = print.ticker;
                 const clickable = onSelectTicker && ticker ? () => onSelectTicker(ticker) : undefined;
                 return (
                   <tr
-                    key={print.event_id}
+                    key={print.event_id ?? `print-${pi}`}
                     className={`${sentimentClass(print.sentiment)}${clickable ? ' clickable' : ''}`}
                     onClick={clickable}
                     title={ticker && onSelectTicker ? `Show ${ticker} on the canvas` : undefined}
