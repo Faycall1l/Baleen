@@ -87,6 +87,20 @@ def test_momentum_counts_buys_and_sells(neo4j_store, postgres_store):
     _cleanup(neo4j_store, "sig-mo-1", "sig-mo-2")
 
 
+def test_momentum_excludes_untagged_events(neo4j_store, postgres_store):
+    """Events without a ticker link must not surface as null-ticker rows."""
+    _cleanup(neo4j_store, "sig-mo-untagged")
+    neo4j_store.run(
+        "CREATE (e:Event {tweet_id: 'sig-mo-untagged', type: 'congress_trade', "
+        "transaction_date: date('2026-09-01'), transaction_type: 'buy'})"
+    )
+    try:
+        rows = _engine(neo4j_store, postgres_store).momentum("2026-01-01")
+        assert all(r["ticker"] for r in rows)
+    finally:
+        _cleanup(neo4j_store, "sig-mo-untagged")
+
+
 def test_flow_returns_prints_ranked_by_volume_ratio(neo4j_store, postgres_store):
     # Defensive pre-cleanup: an earlier aborted run may have left stale
     # twins behind (cleanup below only runs on success).
