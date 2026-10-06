@@ -15,7 +15,7 @@ export default function PoliticianDetail({ node, person, personError, alerts, on
   return (
     <div className="node-detail">
       <div className="node-title">
-        <h3>{person?.name ?? node.title}</h3>
+        <h3>{person?.name ?? node.title ?? node.id}</h3>
         <div className="label">
           Politician · {[person?.chamber, person?.party].filter(Boolean).join(' · ') || node.id}
         </div>
