@@ -49,7 +49,7 @@ export default function AnswerPanel({ result, error, history, onClose, onExample
       {result && (
         <div className="query-result">
           <div className="answer">
-            {result.has_data ? result.answer : 'No matching data in the graph yet.'}
+            {result.has_data ? (result.answer ?? '—') : 'No matching data in the graph yet.'}
           </div>
           {result.has_data && result.columns.length > 0 && (
             <>
