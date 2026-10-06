@@ -62,19 +62,19 @@ function TipCard({ dot, x, y, plotW }: { dot: TimelineDot; x: number; y: number;
   const p = dot.node.props;
   const rows: Array<[string, string]> = [];
   if (dot.kind === 'insider') {
-    rows.push(['Insider', String(p.insider_name ?? dot.node.title)]);
+    rows.push(['Insider', String(p.insider_name ?? dot.node.title ?? dot.node.id)]);
     rows.push(['Action', typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : '—']);
     if (typeof p.ticker === 'string' && p.ticker !== '') rows.push(['Ticker', p.ticker.toUpperCase()]);
     if (p.shares !== undefined && p.shares !== null && p.shares !== '') {
       rows.push(['Shares', Number(p.shares).toLocaleString()]);
     }
   } else if (dot.kind === 'congress') {
-    rows.push(['Member', String(p.politician_name ?? dot.node.title)]);
+    rows.push(['Member', String(p.politician_name ?? dot.node.title ?? dot.node.id)]);
     rows.push(['Action', typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : '—']);
     if (typeof p.ticker === 'string' && p.ticker !== '') rows.push(['Ticker', p.ticker.toUpperCase()]);
     if (typeof p.amount_range === 'string' && p.amount_range !== '') rows.push(['Amount', p.amount_range]);
   } else {
-    rows.push(['Ticker', String(p.ticker ?? dot.node.title)]);
+    rows.push(['Ticker', String(p.ticker ?? dot.node.title ?? dot.node.id)]);
     rows.push(['Side', dot.side === 'other' ? '—' : dot.side.toUpperCase()]);
     const strike = p.strike;
     if (strike !== undefined && strike !== null && strike !== '') {
@@ -217,10 +217,11 @@ export default function TimelineBoard({
 
   const dotTitle = (d: TimelineDot): string => {
     const p = d.node.props;
+    const name = d.node.title ?? d.node.id;
     if (d.kind === 'insider' || d.kind === 'congress') {
       const who = d.kind === 'insider' ? p.insider_name : p.politician_name;
       const parts = [
-        String(who ?? d.node.title),
+        String(who ?? name),
         typeof p.transaction_type === 'string' ? p.transaction_type.toUpperCase() : null,
         typeof p.ticker === 'string' && p.ticker !== '' ? String(p.ticker).toUpperCase() : null,
         new Date(d.time).toLocaleString(),
@@ -228,7 +229,7 @@ export default function TimelineBoard({
       return parts.join(' · ');
     }
     const parts = [
-      `${d.node.title}`,
+      `${name}`,
       d.side === 'other' ? null : d.side.toUpperCase(),
       typeof p.strike === 'number' || typeof p.strike === 'string' ? `$${p.strike}` : null,
       d.volume > 0 ? `vol ${d.volume.toLocaleString()}` : null,

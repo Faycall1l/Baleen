@@ -54,8 +54,19 @@ describe('toLeads', () => {
     expect(leads).toEqual([]);
   });
 
-  it('caps the list', () => {
-    const momentum = Array.from({ length: 20 }, (_, i) => ({
+  it('falls back instead of printing null names', () => {
+    const leads = toLeads(
+      bundle({
+        suspicious: [{ who: null as unknown as string, ticker: 'AAA', excess_pct: 9, source_url: '' }],
+        uncovered: [{ politician: null as unknown as string, sector: null as unknown as string, symbols: [] }],
+      }),
+    );
+    expect(leads[1].headline).toContain('A trader');
+    expect(leads[0].headline).toContain('A member');
+    expect(leads.every((l) => !l.headline.includes('null'))).toBe(true);
+  });
+
+  it('caps the list', () => {    const momentum = Array.from({ length: 20 }, (_, i) => ({
       ticker: `T${i}`,
       buys: 1,
       sells: 0,

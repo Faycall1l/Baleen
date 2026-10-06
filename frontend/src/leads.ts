@@ -41,7 +41,7 @@ export function toLeads(bundle: SignalsBundle | null, limit = 12): Lead[] {
       lead: {
         key: `oversight:${u.politician}:${u.sector}`,
         kind: 'oversight',
-        headline: `${u.politician} traded ${u.sector} with no committee watching`,
+        headline: `${u.politician ?? 'A member'} traded ${u.sector ?? 'an undisclosed sector'} with no committee watching`,
         dek:
           symbols.length > 0
             ? `Symbols: ${symbols.slice(0, 4).join(', ')}${symbols.length > 4 ? ` +${symbols.length - 4} more` : ''}`
@@ -62,7 +62,7 @@ export function toLeads(bundle: SignalsBundle | null, limit = 12): Lead[] {
       lead: {
         key: `beater:${s.who}:${s.ticker}`,
         kind: 'beater',
-        headline: `${s.who} beat the market by ${excess.toFixed(1)}% on ${ticker}`,
+        headline: `${s.who ?? 'A trader'} beat the market by ${excess.toFixed(1)}% on ${ticker}`,
         dek: 'A trade outperforming the market badly enough to ask questions about.',
         ticker,
         person: s.who || null,
