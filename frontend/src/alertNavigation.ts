@@ -14,7 +14,9 @@ export function resolveAlertNode(alert: Alert, graph: GraphData | null): GraphNo
       ((n.props.id as string) === alert.event_id || n.id === `Event:${alert.event_id}`),
   );
   if (event) return event;
-  for (const ref of alert.graph_refs) {
+  const refs = Array.isArray(alert.graph_refs) ? alert.graph_refs : [];
+  for (const ref of refs) {
+    if (typeof ref !== 'string' || ref === '') continue;
     const t = ref.toUpperCase();
     const ticker = graph.nodes.find(
       (n) => n.label === 'Ticker' && (n.key === t || n.title === t),

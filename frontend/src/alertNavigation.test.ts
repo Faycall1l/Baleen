@@ -47,4 +47,15 @@ describe('resolveAlertNode', () => {
     const unknown = { ...alert(), event_id: 'evt_nope', graph_refs: ['ZZZ'] };
     expect(resolveAlertNode(unknown, GRAPH)).toBeUndefined();
   });
+
+  it('skips nullish graph refs instead of crashing', () => {
+    const dirty = {
+      ...alert(),
+      event_id: 'evt_nope',
+      graph_refs: [null, '', 42, 'AMD'] as unknown as string[],
+    };
+    expect(resolveAlertNode(dirty, GRAPH)?.id).toBe('Ticker:AMD');
+    const allDirty = { ...dirty, graph_refs: [null] as unknown as string[] };
+    expect(resolveAlertNode(allDirty, GRAPH)).toBeUndefined();
+  });
 });
