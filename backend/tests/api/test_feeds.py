@@ -198,12 +198,12 @@ def test_signals_flow_success_path(monkeypatch):
 
 
 def test_heavy_endpoints_shed_load_with_503_when_gate_saturated(monkeypatch):
-    """With all four Neo4j read slots held, graph/signals/flow must fail
+    """With every Neo4j read slot held, graph/signals/flow must fail
     fast with 503 — never queue behind a dying database."""
     import app.api.routes as routes
 
     _quiet_settings(monkeypatch)
-    slots = [routes._neo4j_read_gate.acquire() for _ in range(4)]
+    slots = [routes._neo4j_read_gate.acquire() for _ in range(routes._NEO4J_READ_GATE_SLOTS)]
     try:
         with _client() as c:
             for path in (

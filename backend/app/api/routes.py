@@ -66,7 +66,11 @@ _graph_cache_lock = threading.Lock()
 # pile queries faster than they drain, which OOMs the 2GB Neo4j container and
 # restarts it mid-recovery. Fail fast with 503 instead of queueing behind a
 # dying backend — the UI already treats 503 as degraded, not offline.
-_neo4j_read_gate = threading.BoundedSemaphore(4)
+# Six slots absorb one tab's fan-out plus headroom on a healthy database
+# (~1s reads); stampedes still shed fast, and the UI quietly retries busy
+# responses instead of parking an error for a full poll cycle.
+_NEO4J_READ_GATE_SLOTS = 6
+_neo4j_read_gate = threading.BoundedSemaphore(_NEO4J_READ_GATE_SLOTS)
 
 
 # ---------------------------------------------------------------------------
