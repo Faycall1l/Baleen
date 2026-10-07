@@ -454,6 +454,9 @@ export default function App() {
                 alerts={alerts}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
+                onTickerClick={(t) => {
+                  if (!openTickerNode(t)) viewTickerInTape(t);
+                }}
               />
             ) : tickerSymbol ? (
               <TickerDetail

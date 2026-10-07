@@ -8,9 +8,10 @@ interface Props {
   alerts: Alert[];
   onClose: () => void;
   onAlertClick?: (alert: Alert) => void;
+  onTickerClick?: (ticker: string) => void;
 }
 
-export default function PoliticianDetail({ node, person, personError, alerts, onClose, onAlertClick }: Props) {
+export default function PoliticianDetail({ node, person, personError, alerts, onClose, onAlertClick, onTickerClick }: Props) {
   const joined = person ? matchAlerts(person.trades, alerts) : [];
   return (
     <div className="node-detail">
@@ -44,9 +45,40 @@ export default function PoliticianDetail({ node, person, personError, alerts, on
                 ))}
             </div>
           )}
+          {(person.oversight ?? []).length > 0 && (
+            <div className="node-links">
+              <div className="node-links-title">Oversight vs trading</div>
+              {(person.oversight ?? []).map((o) => (
+                <div key={o.sector} className="alert-item">
+                  <div className="alert-title">
+                    {o.sector} · {o.trades > 0 ? `${o.trades} trade${o.trades === 1 ? '' : 's'}` : 'no trades'}
+                  </div>
+                  <div className="alert-summary">
+                    via {o.committees.length > 0 ? o.committees.join(', ') : '—'}
+                    {o.tickers.length > 0 && (
+                      <>
+                        {' · traded '}
+                        {o.tickers.map((t, i) => (
+                          <span key={t}>
+                            {i > 0 && ', '}
+                            {onTickerClick ? (
+                              <button type="button" className="node-link" onClick={() => onTickerClick(t)}>
+                                {t}
+                              </button>
+                            ) : (
+                              t
+                            )}
+                          </span>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="node-links">
-            <div className="node-links-title">Trades · {joined.length}</div>
-            {joined.length === 0 && <div className="empty-hint">No disclosed trades in the graph.</div>}
+            <div className="node-links-title">Trades · {joined.length}</div>            {joined.length === 0 && <div className="empty-hint">No disclosed trades in the graph.</div>}
             {joined.map(({ row: trade, alerts: tradeAlerts }, ji) => (
               <div className="alert-item" key={trade.event_id ?? `trade-${ji}`}>
                 <div className="alert-title">

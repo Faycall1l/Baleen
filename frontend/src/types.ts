@@ -160,6 +160,14 @@ export interface PersonCard {
   party: string | null;
   committees: PersonCommittee[];
   trades: PersonTrade[];
+  oversight: OversightRow[];
+}
+
+export interface OversightRow {
+  sector: string;
+  committees: string[];
+  tickers: string[];
+  trades: number;
 }
 
 export interface TickerFlowPrint {
