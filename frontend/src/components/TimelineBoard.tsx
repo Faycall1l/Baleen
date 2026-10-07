@@ -17,7 +17,6 @@ interface Props {
   error: string | null;
   selectedId: string | null;
   onSelect: (node: GraphNode | null) => void;
-  onHoverEdgeChange?: (rel: string | null) => void;
   onRetry?: () => void;
   hiddenTypes: Set<string>;
   onToggleType: (label: string) => void;
