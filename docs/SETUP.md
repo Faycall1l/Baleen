@@ -24,11 +24,14 @@ Fill in real values (see [`.env.example`](../.env.example) for inline docs):
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `X_API_BEARER_TOKEN` | for live ingestion | X API v2 bearer token. Development/testing can use placeholders — the pipeline just logs fetch errors. |
+| `X_API_BEARER_TOKEN` | for live ingestion | X API v2 bearer token. Development/testing can use placeholders — the pipeline just logs fetch errors. With placeholder X creds, leave `SCHEDULER_ENABLED=false` or every failing tick burns LLM quota. |
+| `SCHEDULER_ENABLED` | no | `true` runs the ingest→process loop. Keep `false` until real X creds exist. |
 | `LLM_BASE_URL` | dev/test only | vLLM's OpenAI-compatible endpoint, e.g. `http://host.docker.internal:8001/v1`. Placeholders are fine for tests (they use a stub). |
 | `LLM_API_KEY` | dev/test only | vLLM is usually unauthenticated on localhost; any value works. |
 | `LLM_MODEL_NAME` | dev/test only | model served by vLLM. |
 | `LLM_TOOL_MODE` | no | `auto` (default) \| `tools` \| `json`. See §LLM below. |
+| `GROQ_API_KEY` | no | Backup provider: used only when the primary LLM raises. Empty disables the backup. Free-tier friendly. |
+| `GROQ_MODEL_NAME` | no | Defaults to `openai/gpt-oss-20b`. Must be a model your key can access (`GET /v1/models`). |
 | `POSTGRES_*` / `DATABASE_URL` | no | defaults match `docker-compose.yml`. |
 | `NEO4J_*` | no | defaults match `docker-compose.yml`. |
 
