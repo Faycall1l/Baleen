@@ -1,4 +1,4 @@
-// D3: Playwright smoke pass — load / search-select / stage-clear / schema.
+// Board smoke pass — load / search-select / esc-clear / filters / zoom.
 // Usage: node smoke.mjs [outdir]
 // Green = each step's DOM assertion holds and no page errors occur.
 import { chromium } from 'playwright';
@@ -36,15 +36,15 @@ await step('tour: dismiss onboarding overlay', async () => {
   await page.waitForTimeout(500);
 });
 
-await step('load: canvas + first layout', async () => {
+await step('load: board lanes paint', async () => {
   // First paint is DOM-observable: the footer stats line renders node counts
-  // once the snapshot lands (no telemetry hooks since P4).
+  // once the snapshot lands, then the board renders one row per lane.
   await page.waitForFunction(
     () => /[0-9]+ nodes/.test(document.querySelector('.graph-status')?.textContent ?? ''),
     null,
     { timeout: 180000 },
   );
-  await page.locator('.graph-canvas canvas').first().waitFor({ timeout: 15000 });
+  await page.locator('.tl-body').first().waitFor({ timeout: 60000 });
   await page.waitForTimeout(2000);
   await page.screenshot({ path: path.join(outdir, '01-load.png') });
 });
@@ -67,20 +67,9 @@ await step('search-select opens inspector', async () => {
   await page.screenshot({ path: path.join(outdir, '02-selected.png') });
 });
 
-await step('stage-click clears inspector', async () => {
-  // Click empty canvas: resolve the canvas box at runtime so the tape dock
-  // (R10) can't shift fixed coordinates onto the wrong element. Bottom-left
-  // is safe — legend and status pills are pointer-events: none there.
-  const canvas = page.locator('.graph-canvas');
-  const box = await canvas.boundingBox({ timeout: 15000 });
-  if (!box) throw new Error('no canvas box');
-  await page.mouse.click(box.x + 40, box.y + box.height - 120);
+await step('esc clears inspector', async () => {
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(1200);
-  // Fallback: Esc clears selection too (R15/R16).
-  if (await page.locator('.node-detail').count()) {
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(1200);
-  }
   if (await page.locator('.node-detail').count()) throw new Error('inspector still open');
 });
 
@@ -96,15 +85,12 @@ await step('type filter pills hide and restore', async () => {
   if (await pill.count()) throw new Error('pill still present after Show all');
 });
 
-await step('zoom out/in keeps canvas error-free', async () => {
+await step('zoom presets refocus error-free', async () => {
+  await page.getByRole('button', { name: '7d', exact: true }).click({ timeout: 10000 });
+  await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: 'All', exact: true }).click({ timeout: 10000 });
   await page.waitForTimeout(1500);
-  await page.mouse.move(720, 450);
-  for (let i = 0; i < 5; i++) {
-    await page.mouse.wheel(0, 400);
-    await page.waitForTimeout(200);
-  }
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: path.join(outdir, '04-zoomed-out.png') });
+  await page.screenshot({ path: path.join(outdir, '04-zoomed.png') });
 });
 
 console.log(errors.length ? `PAGE ERRORS:\n${errors.join('\n')}` : 'no page errors');
