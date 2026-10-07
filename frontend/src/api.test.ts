@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCommittee, fetchPerson, fetchTicker, askQuestion } from './api';
+import {
+  fetchAlerts,
+  fetchFlow,
+  fetchLeaderboard,
+  fetchReports,
+  fetchRules,
+  fetchSignals,
+} from './api';
+import { DEFAULT_FLOW } from './uiPrefs';
 
 function mockJson(body: unknown) {
   vi.stubGlobal(
@@ -48,5 +57,22 @@ describe('card fetches', () => {
     expect(res.rows).toEqual([]);
     expect(res.followups).toEqual([]);
     expect(res.sources).toEqual([]);
+  });
+
+  it('normalizes null lists on every feed payload', async () => {
+    mockJson({ alerts: null, count: 0 });
+    expect((await fetchAlerts()).alerts).toEqual([]);
+    mockJson({ reports: null, count: 0 });
+    expect((await fetchReports()).reports).toEqual([]);
+    mockJson({ leaders: null, count: 0 });
+    expect((await fetchLeaderboard()).leaders).toEqual([]);
+    mockJson({ rules: null, count: 0 });
+    expect((await fetchRules()).rules).toEqual([]);
+    mockJson({ momentum: null, clusters: null, options_meter: null, uncovered: null, suspicious: null });
+    const signals = await fetchSignals();
+    expect(signals.momentum).toEqual([]);
+    expect(signals.suspicious).toEqual([]);
+    mockJson({ flow: null, count: 0, filters: DEFAULT_FLOW });
+    expect((await fetchFlow(DEFAULT_FLOW)).flow).toEqual([]);
   });
 });
