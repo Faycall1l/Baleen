@@ -13,8 +13,8 @@ import type { Alert } from '../types';
 // Alerts inbox state: rule/text filtering plus an unread watermark.
 //
 // Unread means "arrived since the inbox was last open", tracked as the max
-// alert id seen with the drawer open and persisted across reloads. Opening
-// the drawer marks everything current as seen — you are looking at the list.
+// alert id seen with the inbox open and persisted across reloads. Opening
+// the inbox marks everything current as seen — you are looking at the list.
 export function useAlertsInbox(alerts: Alert[], active: boolean) {
   const [rule, setRule] = useState('all');
   const [query, setQuery] = useState('');

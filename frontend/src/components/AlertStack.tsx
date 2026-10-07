@@ -66,7 +66,7 @@ export default function AlertStack({ alerts, onAlertClick }: Props) {
 
   // Clicking navigates first: the toast dismisses only when the click
   // landed somewhere (node revealed). A missed navigation keeps the toast
-  // (it still auto-dismisses) and opens the alerts drawer for context.
+  // (a missed navigation keeps the toast until it auto-dismisses).
   const activate = (a: Alert) => {
     if (onAlertClick(a)) dismiss(a.id);
   };
