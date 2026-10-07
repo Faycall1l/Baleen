@@ -428,7 +428,7 @@ export default function App() {
         <main className="graph-area">
           <TileDock
             tiles={tiles}
-            enlarged={enlarged}
+            enlarged={enlarged && tiles.includes(enlarged) ? enlarged : null}
             onClose={(id) => setTiles((prev) => closeTile(prev, id))}
             onMove={(id, dir) => setTiles((prev) => moveTile(prev, id, dir))}
             onEnlarge={setEnlarged}
