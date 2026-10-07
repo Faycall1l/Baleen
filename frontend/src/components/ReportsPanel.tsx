@@ -16,16 +16,19 @@ function fmtDate(iso: string | null | undefined): string {
 }
 
 function BriefRow({ report, onReportClick }: { report: Report; onReportClick?: (report: Report) => void }) {
+  const refs = (report.graph_refs ?? []).filter(
+    (ref): ref is string => typeof ref === 'string' && ref !== '',
+  );
   return (
     <div
       className={`alert-item${onReportClick ? ' clickable' : ''}`}
       onClick={onReportClick ? () => onReportClick(report) : undefined}
     >
-      <div className="alert-title">{report.title}</div>
-      <div className="alert-summary">{report.body}</div>
+      <div className="alert-title">{report.title ?? 'Untitled brief'}</div>
+      <div className="alert-summary">{report.body ?? '—'}</div>
       <div className="alert-meta">
         <span>{report.created_at ? fmtDate(report.created_at) : ''}</span>
-        {(report.graph_refs ?? []).map((ref) => (
+        {refs.map((ref) => (
           <span key={ref} className="ref-chip">
             {ref}
           </span>
@@ -59,8 +62,8 @@ export default function ReportsPanel({ digest, reports, error, onReportClick }: 
       {!error && digest && (
         <div className="digest-card" key={`digest-${digest.id}`}>
           <div className="digest-kicker">DAILY DIGEST · {digest.period ?? ''}</div>
-          <div className="digest-title">{digest.title}</div>
-          <div className="alert-summary">{digest.body}</div>
+          <div className="digest-title">{digest.title ?? 'Untitled digest'}</div>
+          <div className="alert-summary">{digest.body ?? '—'}</div>
           <div className="alert-meta">
             <button
               type="button"
