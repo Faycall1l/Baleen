@@ -180,6 +180,19 @@ ORDER BY p.name
 LIMIT 30
 """
 
+OVERLAP_QUERY = """
+MATCH (p:Politician {id: $pid})-[:MEMBER_OF]->(c:Committee)-[:OVERSEES]->(s:Sector)
+OPTIONAL MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p),
+      (e)-[:INVOLVES_TICKER]->(t:Ticker)-[:IN_SECTOR]->(s)
+WHERE e IS NULL OR e.type = 'congress_trade'
+RETURN s.name AS sector,
+       collect(DISTINCT c.name) AS committees,
+       collect(DISTINCT t.ticker) AS tickers,
+       count(DISTINCT e) AS trades
+ORDER BY trades DESC
+LIMIT 20
+"""
+
 COMMITTEE_TRADES_QUERY = """
 MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician)-[:MEMBER_OF]->(c:Committee {id: $cid})
 WHERE e.type = 'congress_trade'
@@ -295,6 +308,7 @@ class SignalsEngine:
         try:
             rows = self.neo4j.run_read(PERSON_QUERY, pid=politician_id)
             trades = self.neo4j.run_read(PERSON_TRADES_QUERY, pid=politician_id)
+            overlap = self.neo4j.run_read(OVERLAP_QUERY, pid=politician_id)
         except Exception:
             logger.exception("person query failed")
             return None
@@ -303,6 +317,16 @@ class SignalsEngine:
         person = dict(rows[0])
         person["committees"] = [c for c in person.get("committees", []) if c.get("id")]
         person["trades"] = [t for t in trades if t.get("event_id")]
+        person["oversight"] = [
+            {
+                "sector": o.get("sector"),
+                "committees": [c for c in o.get("committees", []) if c],
+                "tickers": [t for t in o.get("tickers", []) if t],
+                "trades": o.get("trades", 0),
+            }
+            for o in overlap
+            if o.get("sector")
+        ]
         return person
 
     def ticker(self, symbol: str) -> dict | None:

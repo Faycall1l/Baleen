@@ -317,6 +317,45 @@ def test_person_merges_identity_committees_and_trades():
     assert [t["ticker"] for t in person["trades"]] == ["NVDA"]
 
 
+def test_person_merges_oversight_overlap():
+    """Oversight sections join overseen sectors with the member's trades in
+    them; sector-less rows never ship."""
+
+    class _OverlapNeo4j:
+        def run_read(self, query, **params):
+            if "OVERSEES" in query and "NOT EXISTS" not in query:
+                return [
+                    {
+                        "sector": "Technology",
+                        "committees": ["Finance", None],
+                        "tickers": ["NVDA", None],
+                        "trades": 3,
+                    },
+                    {"sector": None, "committees": [], "tickers": [], "trades": 0},
+                ]
+            if "MEMBER_OF" in query:
+                return [
+                    {
+                        "id": "W000817",
+                        "name": "Elizabeth Warren",
+                        "chamber": "senate",
+                        "party": "D",
+                        "committees": [],
+                    }
+                ]
+            return []
+
+    person = SignalsEngine(_OverlapNeo4j(), None).person("W000817")
+    assert person["oversight"] == [
+        {
+            "sector": "Technology",
+            "committees": ["Finance"],
+            "tickers": ["NVDA"],
+            "trades": 3,
+        }
+    ]
+
+
 def test_person_returns_none_when_unknown_or_down():
     class _EmptyNeo4j:
         def run_read(self, query, **params):
