@@ -78,14 +78,17 @@ export function toLeads(bundle: SignalsBundle | null, limit = 12): Lead[] {
     const buys = Number(m.buys) || 0;
     const sells = Number(m.sells) || 0;
     const actors = Number(m.actors) || 0;
+    const names = Array.isArray(m.names)
+      ? m.names.filter((w): w is string => typeof w === 'string' && w !== '')
+      : [];
     scored.push({
       lead: {
         key: `congress-flow:${m.ticker}`,
         kind: 'congress-flow',
         headline: `${ticker}: ${buys} buys / ${sells} sells across ${actors} members`,
         dek:
-          m.names?.length
-            ? `Names: ${m.names.slice(0, 3).join(', ')}${m.names.length > 3 ? ` +${m.names.length - 3} more` : ''}`
+          names.length > 0
+            ? `Names: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` +${names.length - 3} more` : ''}`
             : 'Unusual congressional volume in one ticker.',
         ticker,
         person: null,

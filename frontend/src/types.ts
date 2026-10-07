@@ -80,31 +80,31 @@ export interface LeaderboardEntry {
 }
 
 export interface MomentumRow {
-  ticker: string;
+  ticker: string | null;
   buys: number;
   sells: number;
   actors: number;
-  names?: string[] | null;
+  names?: Array<string | null> | null;
 }
 
 export interface ClusterRow {
-  ticker: string;
-  insiders: string[];
+  ticker: string | null;
+  insiders: Array<string | null>;
   buys: number;
 }
 
 export interface OptionsMeterRow {
-  ticker: string;
+  ticker: string | null;
   call_vol?: number | null;
   put_vol?: number | null;
   prints: number;
 }
 
 export interface SuspiciousRow {
-  who: string;
-  ticker: string;
+  who: string | null;
+  ticker: string | null;
   excess_pct: number;
-  source_url: string;
+  source_url: string | null;
 }
 
 export type FlowSide = 'all' | 'call' | 'put';
@@ -217,9 +217,9 @@ export interface CommitteeCard {
 }
 
 export interface UncoveredRow {
-  politician: string;
-  sector: string;
-  symbols?: string[] | null;
+  politician: string | null;
+  sector: string | null;
+  symbols?: Array<string | null> | null;
 }
 
 export interface SignalsBundle {
