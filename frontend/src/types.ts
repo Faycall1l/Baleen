@@ -140,7 +140,7 @@ export interface FlowResponse {
 }
 
 export interface PersonCommittee {
-  id: string;
+  id: string | null;
   name: string | null;
 }
 

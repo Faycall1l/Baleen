@@ -35,11 +35,13 @@ export default function PoliticianDetail({ node, person, personError, alerts, on
           {person.committees.length > 0 && (
             <div className="node-links">
               <div className="node-links-title">Committees</div>
-              {person.committees.map((c) => (
-                <span key={c.id} className="ref-chip">
-                  {c.name ?? c.id}
-                </span>
-              ))}
+              {person.committees
+                .filter((c) => c.id != null || c.name != null)
+                .map((c, i) => (
+                  <span key={c.id ?? `committee-${i}`} className="ref-chip">
+                    {c.name ?? c.id}
+                  </span>
+                ))}
             </div>
           )}
           <div className="node-links">
