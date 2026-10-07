@@ -36,4 +36,17 @@ describe('reportFilename null titles', () => {
       'baleen-brief-9-report.md',
     );
   });
+
+  it('renders fallbacks for null title, body, and refs', () => {
+    const md = reportToMarkdown({
+      id: 10,
+      kind: 'brief',
+      title: null as unknown as string,
+      body: null as unknown as string,
+      graph_refs: [null, '', 'NVDA'] as unknown as string[],
+    });
+    expect(md).toContain('# Untitled report');
+    expect(md).not.toContain('null');
+    expect(md).toContain('- NVDA');
+  });
 });

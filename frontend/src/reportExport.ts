@@ -5,10 +5,11 @@ import type { Report } from './types';
 // Pure string building so the formatting unit-tests without a browser.
 
 export function reportToMarkdown(report: Report): string {
-  const lines = [`# ${report.title}`, ''];
+  const title = typeof report.title === 'string' && report.title !== '' ? report.title : 'Untitled report';
+  const lines = [`# ${title}`, ''];
   if (report.period) lines.push(`Period: ${report.period}`, '');
-  lines.push(report.body);
-  const refs = (report.graph_refs ?? []).filter((r) => r.length > 0);
+  lines.push(typeof report.body === 'string' ? report.body : '—');
+  const refs = (report.graph_refs ?? []).filter((r) => typeof r === 'string' && r.length > 0);
   if (refs.length > 0) {
     lines.push('', '## Entities', '');
     for (const ref of refs) lines.push(`- ${ref}`);
