@@ -41,7 +41,13 @@ export function askQuestion(question: string): Promise<QueryResponse> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question }),
-  });
+  }).then((res) => ({
+    ...res,
+    columns: asArray(res.columns),
+    rows: asArray(res.rows),
+    followups: asArray(res.followups),
+    sources: asArray(res.sources),
+  }));
 }
 
 export function fetchAlerts(limit = 20): Promise<{ alerts: Alert[]; count: number }> {
