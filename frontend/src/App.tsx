@@ -436,7 +436,7 @@ export default function App() {
             renderBody={renderTileBody}
           />
           <div className="graph-status">
-            {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : ''}
+            {graph ? `${graph.node_count} nodes · ${graph.link_count} links` : graphError ? '' : 'Connecting…'}
             {graph?.truncated && graph.event_count
               ? ` · recent ${graph.node_count} of ${graph.event_count} events`
               : ''}
