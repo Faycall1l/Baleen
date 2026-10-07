@@ -9,8 +9,7 @@ export interface Shortcut {
 export const SHORTCUTS: Shortcut[] = [
   { keys: 'Ctrl/⌘ K or /', action: 'Focus the ask box' },
   { keys: '↑ ↓ + Enter', action: 'Move through search results and pick one' },
-  { keys: '← → ↑ ↓', action: 'Move canvas selection node to node (canvas focused)' },
-  { keys: '+ / -', action: 'Zoom the canvas in and out' },
-  { keys: 'Esc', action: 'Close panel, drawer, or selection' },
+  { keys: 'Enter or Space', action: 'Open the focused timeline dot' },
+  { keys: 'Esc', action: 'Restore tile, disarm path mode, or clear selection' },
   { keys: '?', action: 'Open this help' },
 ];
