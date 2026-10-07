@@ -110,15 +110,18 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
               </tr>
             </thead>
             <tbody>
-              {flow.map((print) => (
-                <tr
-                  key={print.event_id}
-                  className={`${sentimentClass(print.sentiment)}${onSelectTicker ? ' clickable' : ''}`}
-                  onClick={onSelectTicker ? () => onSelectTicker(print.ticker) : undefined}
-                  title={onSelectTicker ? `Show ${print.ticker} on the canvas` : undefined}
-                >
-                  <td className="ticker">{print.ticker}</td>
-                  <td>{print.side === 'call' ? 'CALL' : 'PUT'}</td>
+              {flow.map((print) => {
+                const ticker = print.ticker;
+                const clickable = onSelectTicker && ticker ? () => onSelectTicker(ticker) : undefined;
+                return (
+                  <tr
+                    key={print.event_id}
+                    className={`${sentimentClass(print.sentiment)}${clickable ? ' clickable' : ''}`}
+                    onClick={clickable}
+                    title={ticker && onSelectTicker ? `Show ${ticker} on the canvas` : undefined}
+                  >
+                    <td className="ticker">{ticker ?? '—'}</td>
+                    <td>{print.side === 'call' ? 'CALL' : print.side === 'put' ? 'PUT' : '—'}</td>
                   <td className="num">{formatStrike(print.strike)}</td>
                   <td>{formatExpiry(print.expiration)}</td>
                   <td className="num">{formatContracts(print.volume)}</td>
@@ -135,8 +138,9 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
                       '—'
                     )}
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </>

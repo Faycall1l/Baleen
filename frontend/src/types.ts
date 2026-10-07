@@ -111,14 +111,14 @@ export type FlowSide = 'all' | 'call' | 'put';
 
 export interface FlowPrint {
   event_id: string;
-  ticker: string;
-  side: 'call' | 'put';
+  ticker: string | null;
+  side: 'call' | 'put' | null;
   strike: number | null;
   expiration: string | null;
   premium: number | null;
   volume: number | null;
   open_interest: number | null;
-  ratio: number;
+  ratio: number | null;
   sentiment: 'bullish' | 'bearish' | 'neutral';
   event_time: string | null;
   first_seen_at: string | null;
