@@ -18,7 +18,8 @@ export function reportToMarkdown(report: Report): string {
 }
 
 export function reportFilename(report: Report): string {
-  const slug = report.title
+  const title = typeof report.title === 'string' ? report.title : '';
+  const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

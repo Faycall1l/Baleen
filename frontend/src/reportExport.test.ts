@@ -28,3 +28,12 @@ describe('reportExport', () => {
     expect(reportFilename(REPORT)).toBe('baleen-brief-8-nvda-unusual-calls-oct-1.md');
   });
 });
+
+describe('reportFilename null titles', () => {
+  it('falls back to a bare slug instead of crashing', async () => {
+    const { reportFilename: fn } = await import('./reportExport');
+    expect(fn({ id: 9, kind: 'brief', title: null as unknown as string, body: 'x' })).toBe(
+      'baleen-brief-9-report.md',
+    );
+  });
+});
