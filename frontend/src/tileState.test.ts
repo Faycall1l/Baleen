@@ -50,3 +50,100 @@ describe('moveTile', () => {
     expect(moveTile(tiles, 'path', 1)).toEqual(tiles);
   });
 });
+
+describe('layout tree', () => {
+  const row = (...ids: TileId[]): Layout => ({
+    type: 'split',
+    dir: 'row',
+    children: ids.map((id) => ({ type: 'tile', id })),
+  });
+
+  it('flattens leaves in visual order', async () => {
+    const { flattenLayout } = await import('./tileState');
+    expect(flattenLayout(null)).toEqual([]);
+    expect(flattenLayout({ type: 'tile', id: 'board' })).toEqual(['board']);
+    expect(
+      flattenLayout({
+        type: 'split',
+        dir: 'col',
+        children: [row('board', 'flow'), { type: 'tile', id: 'alerts' }],
+      }),
+    ).toEqual(['board', 'flow', 'alerts']);
+  });
+
+  it('opens into the root and refuses duplicates', async () => {
+    const { openInLayout } = await import('./tileState');
+    expect(openInLayout(null, 'flow')).toEqual({ type: 'tile', id: 'flow' });
+    expect(openInLayout({ type: 'tile', id: 'board' }, 'flow')).toEqual(
+      row('board', 'flow'),
+    );
+    const full = row('board', 'flow');
+    expect(openInLayout(full, 'flow')).toBe(full);
+  });
+
+  it('splits tiles right and below', async () => {
+    const { splitTile } = await import('./tileState');
+    expect(splitTile(row('board', 'flow'), 'flow', 'col', 'alerts')).toEqual({
+      type: 'split',
+      dir: 'row',
+      children: [
+        { type: 'tile', id: 'board' },
+        {
+          type: 'split',
+          dir: 'col',
+          children: [{ type: 'tile', id: 'flow' }, { type: 'tile', id: 'alerts' }],
+        },
+      ],
+    });
+    // Unknown target or duplicate id: unchanged.
+    expect(splitTile(row('board'), 'nope', 'row', 'flow')).toEqual(row('board'));
+    expect(splitTile(row('board'), 'board', 'row', 'board')).toEqual(row('board'));
+  });
+
+  it('closes tiles and collapses degenerate splits', async () => {
+    const { closeInLayout } = await import('./tileState');
+    expect(closeInLayout(row('board', 'flow'), 'flow')).toEqual({ type: 'tile', id: 'board' });
+    expect(closeInLayout({ type: 'tile', id: 'board' }, 'board')).toBeNull();
+    expect(closeInLayout(null, 'board')).toBeNull();
+    const nested = {
+      type: 'split',
+      dir: 'row',
+      children: [row('board', 'flow'), { type: 'tile', id: 'alerts' }],
+    } as Layout;
+    expect(closeInLayout(nested, 'alerts')).toEqual(row('board', 'flow'));
+    expect(closeInLayout(nested, 'flow')).toEqual({
+      type: 'split',
+      dir: 'row',
+      children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'alerts' }],
+    });
+  });
+
+  it('toggles and moves within siblings', async () => {
+    const { toggleInLayout, moveSibling } = await import('./tileState');
+    expect(toggleInLayout(row('board', 'flow'), 'flow')).toEqual({ type: 'tile', id: 'board' });
+    expect(toggleInLayout({ type: 'tile', id: 'board' }, 'flow')).toEqual(row('board', 'flow'));
+    expect(moveSibling(row('board', 'flow', 'alerts'), 'flow', 1)).toEqual(
+      row('board', 'alerts', 'flow'),
+    );
+    expect(moveSibling(row('board', 'flow'), 'board', -1)).toEqual(row('board', 'flow'));
+    expect(moveSibling({ type: 'tile', id: 'board' }, 'board', 1)).toEqual({
+      type: 'tile',
+      id: 'board',
+    });
+  });
+
+  it('sanitizes garbage, migrates flat lists, and dedupes', async () => {
+    const { sanitizeLayout, DEFAULT_LAYOUT } = await import('./tileState');
+    expect(sanitizeLayout(null)).toEqual(DEFAULT_LAYOUT);
+    expect(sanitizeLayout(['flow', 'nope', 'flow'])).toEqual({ type: 'tile', id: 'flow' });
+    expect(sanitizeLayout(['board', 'flow'])).toEqual(row('board', 'flow'));
+    expect(sanitizeLayout([])).toBeNull();
+    expect(
+      sanitizeLayout({
+        type: 'split',
+        dir: 'row',
+        children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'board' }, { type: 'nope' }],
+      }),
+    ).toEqual({ type: 'tile', id: 'board' });
+  });
+});
