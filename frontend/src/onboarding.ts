@@ -16,14 +16,14 @@ export interface OnboardingStep {
 
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
-    id: 'flow',
-    title: '1 · Read the tape',
-    body: 'The left column is the unusual-options tape: every print ranked by volume over open interest. Filter by ticker, calls or puts, and minimum ratio. Green ratios are bullish flow, red are bearish.',
+    id: 'leads',
+    title: '1 · Start with story leads',
+    body: 'The first tile ranks today’s congressional-trading leads: unsupervised sector trades, market-beating filings, congress flow. Click any ticker to open its evidence.',
   },
   {
     id: 'ask',
-    title: '2 · Ask the graph',
-    body: 'The top bar takes plain English. The agent writes validated read-only Cypher, runs it, and answers with a grounded table — every cell traceable to the graph, never invented.',
+    title: '2 · Ask in plain English',
+    body: 'The top bar takes questions like “which sectors has Cassidy traded?” The agent writes validated read-only queries and answers with a grounded table — every cell traceable, never invented.',
   },
   {
     id: 'alerts',
@@ -31,9 +31,9 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     body: 'Oversight-sector trades, $1M+ insider buys, and options sweeps land here with rule chips and text search. The rail badge counts unread; opening the inbox marks them seen.',
   },
   {
-    id: 'graph',
-    title: '4 · Explore the graph',
-    body: 'The canvas shows recent events and their tickers, politicians, committees, and sectors. Click a node to focus its neighborhood and open the inspector; switch to Schema for the type overview.',
+    id: 'tiles',
+    title: '4 · Arrange your desk',
+    body: 'Every rail tab docks a tile beside the others. Reorder with ← →, enlarge to focus, close what you don’t need — the layout persists, and any view copies as a share link.',
   },
 ];
 
