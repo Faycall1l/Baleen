@@ -373,6 +373,8 @@ class SignalsEngine:
                         WHERE (tweet_id LIKE 'ptr-%%' OR tweet_id LIKE 'edgar-%%')
                           AND jsonb_typeof(raw_json->'excess_since') = 'number'
                           AND (raw_json->>'excess_since')::float >= :min_excess
+                          AND raw_json->>'ticker' IS NOT NULL
+                          AND raw_json->>'filer_name' IS NOT NULL
                         ORDER BY (raw_json->>'excess_since')::float DESC
                         LIMIT 10
                         """

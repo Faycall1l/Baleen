@@ -196,6 +196,37 @@ def test_suspicious_timing_survives_junk_excess_values_issues_10(postgres_store)
     assert all(r["who"] != "Junk Gal" for r in ranked)
 
 
+def test_suspicious_timing_skips_null_ticker_or_filer(postgres_store):
+    """Rows missing ticker/filer must not leave the backend (the UI used to
+    filter them; now they never ship)."""
+    base: dict = {
+        "source_kind": "congress_disclosure",
+        "transaction_type": "Purchase",
+        "transaction_date": "2026-08-01",
+        "amount_range_label": "$1 - $2",
+        "excess_since": 99.0,
+    }
+    postgres_store.insert_raw_tweets(
+        [
+            RawTweet(
+                tweet_id="ptr-sig-noticker", author_handle="h", author_id="h",
+                text="x", created_at=datetime.now(timezone.utc),
+                url="https://x.com/y", raw_json={**base, "filer_name": "No Ticker"},
+            ),
+            RawTweet(
+                tweet_id="ptr-sig-nofiler", author_handle="h", author_id="h",
+                text="x", created_at=datetime.now(timezone.utc),
+                url="https://x.com/y", raw_json={**base, "ticker": "NVDA"},
+            ),
+        ]
+    )
+
+    ranked = SignalsEngine(None, postgres_store).suspicious_timing(min_excess_pct=1.0)
+
+    assert all(r["ticker"] for r in ranked)
+    assert all(r["who"] for r in ranked)
+
+
 # ---------------------------------------------------------------------------
 # Degradation: every signal degrades to [] when its store is down, and the
 # bundle shape stays intact so the UI never gets a 500 from a query hiccup.
