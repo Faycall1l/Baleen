@@ -134,14 +134,16 @@ export default function AlertsPanel({
               >
                 {badge ? badge.label : a.rule_name}
               </span>{' '}
-              {a.title}
+              {a.title ?? 'Untitled alert'}
             </div>
-            <div className="alert-summary">{a.summary}</div>
+            <div className="alert-summary">{a.summary ?? '—'}</div>
             <div className="alert-meta">
               <span>{fmtDate(a.created_at)}</span>
-              <a href={a.tweet_url} target="_blank" rel="noreferrer">
-                source ↗
-              </a>
+              {typeof a.tweet_url === 'string' && a.tweet_url !== '' ? (
+                <a href={a.tweet_url} target="_blank" rel="noreferrer">
+                  source ↗
+                </a>
+              ) : null}
             </div>
           </div>
         );
