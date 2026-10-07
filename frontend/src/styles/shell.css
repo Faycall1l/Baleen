@@ -101,6 +101,21 @@
   box-shadow: 0 0 6px rgba(255, 123, 114, 0.7);
 }
 
+.health-dot.checking {
+  background: var(--text-dim);
+  animation: health-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes health-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Health pill (R14): dot plus text — hue alone fails color-blind users. */
 .health-pill {
   display: inline-flex;
@@ -123,6 +138,10 @@
 
 .health-pill.offline {
   color: #ff7b72;
+}
+
+.health-pill.checking {
+  color: var(--text-dim);
 }
 
 /* First-run tour (R11): a centered card over a dimmed terminal. */

@@ -2,13 +2,18 @@ import type { Health } from '../types';
 
 export interface HealthSummary {
   label: string;
-  cls: 'ok' | 'degraded' | 'offline';
+  cls: 'ok' | 'degraded' | 'offline' | 'checking';
   detail: string;
 }
 
 // A 10px dot alone fails color-blind users and says nothing actionable, so
-// the pill carries text plus a tooltip naming the failing check.
-export function describeHealth(health: Health | null): HealthSummary {
+// the pill carries text plus a tooltip naming the failing check. Before the
+// first poll completes the pill reads as checking — never OFFLINE, since
+// nothing has been measured yet.
+export function describeHealth(health: Health | null, checked = true): HealthSummary {
+  if (!health && !checked) {
+    return { label: '···', cls: 'checking', detail: 'Checking backend…' };
+  }
   if (!health) {
     return { label: 'OFFLINE', cls: 'offline', detail: 'Backend unreachable' };
   }
@@ -21,8 +26,8 @@ export function describeHealth(health: Health | null): HealthSummary {
   return { label: 'LIVE', cls: 'ok', detail: 'all systems ok' };
 }
 
-export default function HealthDot({ health }: { health: Health | null }) {
-  const summary = describeHealth(health);
+export default function HealthDot({ health, checked = true }: { health: Health | null; checked?: boolean }) {
+  const summary = describeHealth(health, checked);
   return (
     <span className={`health-pill ${summary.cls}`} title={summary.detail}>
       <span className={`health-dot ${summary.cls}`} aria-hidden="true" />

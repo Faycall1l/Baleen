@@ -9,7 +9,7 @@ import type { Health, QueryResponse } from '../types';
 // Top command bar: brand, ask box + answer panel, health dot (extracted from
 // App, H13). Owns the ask/query result state so App only holds the graph and
 // feeds.
-export default function CommandBar({ health }: { health: Health | null }) {
+export default function CommandBar({ health, healthChecked = true }: { health: Health | null; healthChecked?: boolean }) {
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -66,7 +66,7 @@ export default function CommandBar({ health }: { health: Health | null }) {
           />
         )}
       </div>
-      <HealthDot health={health} />
+      <HealthDot health={health} checked={healthChecked} />
     </header>
   );
 }
