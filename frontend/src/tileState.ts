@@ -54,6 +54,17 @@ const ALL_TILES: ReadonlySet<string> = new Set([
   'path',
 ]);
 
+export const ALL_TILE_IDS: TileId[] = [
+  'board',
+  'leads',
+  'flow',
+  'alerts',
+  'reports',
+  'leaders',
+  'signals',
+  'path',
+];
+
 export const DEFAULT_TILES: TileId[] = ['leads', 'board'];
 
 export const TILE_TITLES: Record<TileId, string> = {

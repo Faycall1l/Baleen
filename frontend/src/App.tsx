@@ -36,15 +36,16 @@ import { personIdForNode } from './personView';
 import { buildGraphUrl, parseGraphUrl } from './graphUrl';
 import { loadHiddenTypes, loadLayout, saveHiddenTypes, saveLayout } from './uiPrefs';
 import {
-    closeInLayout,
-    flattenLayout,
-    moveSibling,
-    openInLayout,
-    sanitizeLayout,
-    toggleInLayout,
-    type Layout,
-    type TileId,
-  } from './tileState';
+  closeInLayout,
+  flattenLayout,
+  moveSibling,
+  openInLayout,
+  sanitizeLayout,
+  splitTile,
+  toggleInLayout,
+  type Layout,
+  type TileId,
+} from './tileState';
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
 import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
@@ -489,10 +490,11 @@ export default function App() {
         />
         <main className="graph-area">
           <TileDock
-            tiles={openTiles}
+            layout={layout}
             enlarged={enlarged && openTiles.includes(enlarged) ? enlarged : null}
             onClose={(id) => setLayout((prev) => closeInLayout(prev, id))}
             onMove={(id, dir) => setLayout((prev) => moveSibling(prev, id, dir))}
+            onSplit={(id, dir, panel) => setLayout((prev) => splitTile(prev, id, dir, panel))}
             onEnlarge={setEnlarged}
             onOpen={(id) => setLayout((prev) => openInLayout(prev, id))}
             renderBody={renderTileBody}

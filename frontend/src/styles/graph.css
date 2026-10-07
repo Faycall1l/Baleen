@@ -54,11 +54,10 @@ button.graph-error-action:hover {
   flex-direction: column;
 }
 
-/* Tile dock (P1): rail-opened panels share the main area side-by-side.
+/* Tile dock (P1, split tree in L4): rail-opened panels share the main area.
  * The board tile takes the wide share; content tiles take the narrow one.
- * Enlarging hides siblings (they stay open underneath). Below 1280px only
- * the board tile shows — everything else stays available as the overlay
- * drawer, so narrow screens keep working.
+ * Enlarging hides siblings (they stay open underneath). Below 1280px every
+ * split stacks vertically so narrow screens keep working.
  */
 .tile-dock {
   display: flex;
@@ -162,6 +161,60 @@ button.graph-error-action:hover {
   justify-content: center;
 }
 
+/* Split tree (L4): rows tile side by side, columns stack. Every level
+ * shares space evenly; tiles keep a usable minimum. Narrow screens force
+ * a single column whatever the split directions.
+ */
+.split-row,
+.split-col {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 8px;
+}
+
+.split-row {
+  flex-direction: row;
+}
+
+.split-col {
+  flex-direction: column;
+}
+
+.split-row > .tile,
+.split-col > .tile,
+.split-row > .split-col,
+.split-row > .split-row,
+.split-col > .split-col,
+.split-col > .split-row {
+  flex: 1 1 0;
+}
+
+.tile-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, #1c1e24);
+}
+
+.tile-pick {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tile-pick:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .tile-empty {
   text-align: center;
   color: var(--text-muted);
@@ -237,6 +290,10 @@ button.graph-error-action:hover {
   .tile-dock {
     flex-direction: column;
     overflow-y: auto;
+  }
+
+  .split-row {
+    flex-direction: column;
   }
 
   .tile-board {
