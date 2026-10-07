@@ -18,7 +18,7 @@ export default function TickerDetail({ node, card, cardError, alerts, onClose, o
   return (
     <div className="node-detail">
       <div className="node-title">
-        <h3>{card?.ticker ?? node.title}</h3>
+        <h3>{card?.ticker ?? node.title ?? node.id}</h3>
         <div className="label">
           Ticker{card?.sector ? ` · ${card.sector}` : ` · ${node.id}`}
         </div>

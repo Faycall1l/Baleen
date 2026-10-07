@@ -16,7 +16,7 @@ export default function CommitteeDetail({ node, card, cardError, alerts, onClose
   return (
     <div className="node-detail">
       <div className="node-title">
-        <h3>{card?.name ?? node.title}</h3>
+        <h3>{card?.name ?? node.title ?? node.id}</h3>
         <div className="label">Committee · {card?.id ?? node.id}</div>
         <div style={{ marginTop: 6 }}>
           <button onClick={onClose}>Close</button>

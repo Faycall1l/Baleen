@@ -22,7 +22,7 @@ export default function NodeDetail({ node, onClose, links = [] }: Props) {
   return (
     <div className="node-detail">
       <div className="node-title">
-        <h3>{node.title}</h3>
+        <h3>{node.title ?? node.id}</h3>
         <div className="label">
           {node.label} · {node.id}
         </div>
