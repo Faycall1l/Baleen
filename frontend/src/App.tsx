@@ -331,10 +331,29 @@ export default function App() {
   };
   const railOpen: RailKey[] = [...tiles];
 
+  // Ticker clicks from any surface: the graph node when loaded, else the
+  // ticker card as a synthetic node (same J3 mechanism as deep links), else
+  // the filtered tape. Never opens an empty tape blind.
+  const openSignalTicker = (t: string) => {
+    if (openTickerNode(t)) return;
+    fetchTicker(t)
+      .then((res) => {
+        if (res.ticker) {
+          handleSelect({
+            id: `Ticker:${t}`,
+            label: 'Ticker',
+            key: t,
+            title: res.ticker.ticker ?? t,
+            props: {},
+          });
+        } else {
+          viewTickerInTape(t);
+        }
+      })
+      .catch(() => viewTickerInTape(t));
+  };
+
   const renderTileBody = (id: TileId) => {
-    const openSignalTicker = (t: string) => {
-      if (!openTickerNode(t)) viewTickerInTape(t);
-    };
     if (id === 'leads') {
       return (
         <div className="flow-tile-scroll">
@@ -485,9 +504,7 @@ export default function App() {
                 alerts={alerts}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
-                onTickerClick={(t) => {
-                  if (!openTickerNode(t)) viewTickerInTape(t);
-                }}
+                onTickerClick={openSignalTicker}
               />
             ) : tickerSymbol ? (
               <TickerDetail
