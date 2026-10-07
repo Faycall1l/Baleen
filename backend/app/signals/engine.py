@@ -21,11 +21,10 @@ CLUSTER_MIN_INSIDERS = 2
 SUSPICIOUS_EXCESS_PCT = 15.0
 
 MOMENTUM_QUERY = """
-MATCH (e:Event)
+MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker)
 WHERE e.type IN ['congress_trade', 'insider_trade']
   AND e.transaction_date IS NOT NULL
   AND e.transaction_date >= date($since)
-OPTIONAL MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)
 OPTIONAL MATCH (e)-[:INVOLVES_POLITICIAN]->(p:Politician)
 OPTIONAL MATCH (e)-[:INVOLVES_INSIDER]->(i:Insider)
 RETURN t.ticker AS ticker,
