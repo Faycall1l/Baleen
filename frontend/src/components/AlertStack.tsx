@@ -102,8 +102,8 @@ export default function AlertStack({ alerts, onAlertClick }: Props) {
               ×
             </button>
           </div>
-          <div className="alert-toast-title">{a.title}</div>
-          <div className="alert-toast-summary">{a.summary}</div>
+          <div className="alert-toast-title">{a.title ?? 'Untitled alert'}</div>
+          <div className="alert-toast-summary">{a.summary ?? '—'}</div>
         </div>
       ))}
     </div>
