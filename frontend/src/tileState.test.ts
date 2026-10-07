@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  closeInLayout,
   closeTile,
   DEFAULT_TILES,
   ensureTile,
+  flattenLayout,
+  moveSibling,
   moveTile,
+  openInLayout,
+  sanitizeLayout,
+  DEFAULT_LAYOUT,
   sanitizeTiles,
+  splitTile,
+  toggleInLayout,
   toggleTile,
+  type Layout,
   type TileId,
+  type TileLeaf,
 } from './tileState';
 
 describe('sanitizeTiles', () => {
@@ -52,14 +62,13 @@ describe('moveTile', () => {
 });
 
 describe('layout tree', () => {
-  const row = (...ids: TileId[]): Layout => ({
+  const row = (...ids: TileId[]): Exclude<Layout, null> => ({
     type: 'split',
     dir: 'row',
-    children: ids.map((id) => ({ type: 'tile', id })),
+    children: ids.map((id): TileLeaf => ({ type: 'tile', id })),
   });
 
-  it('flattens leaves in visual order', async () => {
-    const { flattenLayout } = await import('./tileState');
+  it('flattens leaves in visual order', () => {
     expect(flattenLayout(null)).toEqual([]);
     expect(flattenLayout({ type: 'tile', id: 'board' })).toEqual(['board']);
     expect(
@@ -71,8 +80,7 @@ describe('layout tree', () => {
     ).toEqual(['board', 'flow', 'alerts']);
   });
 
-  it('opens into the root and refuses duplicates', async () => {
-    const { openInLayout } = await import('./tileState');
+  it('opens into the root and refuses duplicates', () => {
     expect(openInLayout(null, 'flow')).toEqual({ type: 'tile', id: 'flow' });
     expect(openInLayout({ type: 'tile', id: 'board' }, 'flow')).toEqual(
       row('board', 'flow'),
@@ -81,8 +89,7 @@ describe('layout tree', () => {
     expect(openInLayout(full, 'flow')).toBe(full);
   });
 
-  it('splits tiles right and below', async () => {
-    const { splitTile } = await import('./tileState');
+  it('splits tiles right and below', () => {
     expect(splitTile(row('board', 'flow'), 'flow', 'col', 'alerts')).toEqual({
       type: 'split',
       dir: 'row',
@@ -96,20 +103,19 @@ describe('layout tree', () => {
       ],
     });
     // Unknown target or duplicate id: unchanged.
-    expect(splitTile(row('board'), 'nope', 'row', 'flow')).toEqual(row('board'));
+    expect(splitTile(row('board'), 'nope' as TileId, 'row', 'flow')).toEqual(row('board'));
     expect(splitTile(row('board'), 'board', 'row', 'board')).toEqual(row('board'));
   });
 
-  it('closes tiles and collapses degenerate splits', async () => {
-    const { closeInLayout } = await import('./tileState');
+  it('closes tiles and collapses degenerate splits', () => {
     expect(closeInLayout(row('board', 'flow'), 'flow')).toEqual({ type: 'tile', id: 'board' });
     expect(closeInLayout({ type: 'tile', id: 'board' }, 'board')).toBeNull();
     expect(closeInLayout(null, 'board')).toBeNull();
-    const nested = {
+    const nested: Layout = {
       type: 'split',
       dir: 'row',
       children: [row('board', 'flow'), { type: 'tile', id: 'alerts' }],
-    } as Layout;
+    };
     expect(closeInLayout(nested, 'alerts')).toEqual(row('board', 'flow'));
     expect(closeInLayout(nested, 'flow')).toEqual({
       type: 'split',
@@ -118,8 +124,7 @@ describe('layout tree', () => {
     });
   });
 
-  it('toggles and moves within siblings', async () => {
-    const { toggleInLayout, moveSibling } = await import('./tileState');
+  it('toggles and moves within siblings', () => {
     expect(toggleInLayout(row('board', 'flow'), 'flow')).toEqual({ type: 'tile', id: 'board' });
     expect(toggleInLayout({ type: 'tile', id: 'board' }, 'flow')).toEqual(row('board', 'flow'));
     expect(moveSibling(row('board', 'flow', 'alerts'), 'flow', 1)).toEqual(
@@ -132,8 +137,7 @@ describe('layout tree', () => {
     });
   });
 
-  it('sanitizes garbage, migrates flat lists, and dedupes', async () => {
-    const { sanitizeLayout, DEFAULT_LAYOUT } = await import('./tileState');
+  it('sanitizes garbage, migrates flat lists, and dedupes', () => {
     expect(sanitizeLayout(null)).toEqual(DEFAULT_LAYOUT);
     expect(sanitizeLayout(['flow', 'nope', 'flow'])).toEqual({ type: 'tile', id: 'flow' });
     expect(sanitizeLayout(['board', 'flow'])).toEqual(row('board', 'flow'));
@@ -142,7 +146,7 @@ describe('layout tree', () => {
       sanitizeLayout({
         type: 'split',
         dir: 'row',
-        children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'board' }, { type: 'nope' }],
+        children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'board' }, { type: 'tile', id: 'nope' }],
       }),
     ).toEqual({ type: 'tile', id: 'board' });
   });
