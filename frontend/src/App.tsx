@@ -39,7 +39,7 @@ import { closeTile, ensureTile, moveTile, toggleTile, type TileId } from './tile
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
 import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
-import { fetchGraph, fetchPath, type PathResponse } from './api';
+import { fetchGraph, fetchPath, fetchPerson, fetchTicker, fetchCommittee, type PathResponse } from './api';
 import type { GraphData, GraphNode } from './types';
 
 export default function App() {
@@ -153,6 +153,9 @@ export default function App() {
 
   // Select the deep-linked node once it loads (R46). Consumed on first
   // success — or on any manual selection — so clearing it stays cleared.
+  // J3: when the node never loads (outside the window), resolve entity cards
+  // directly — Politician/Ticker/Committee links open anywhere, so member
+  // profiles are shareable even with no graph context loaded.
   const urlNodeConsumed = useRef(false);
   useEffect(() => {
     if (urlNodeConsumed.current || !graph || !initialUrl.node) return;
@@ -164,7 +167,35 @@ export default function App() {
     if (node) {
       urlNodeConsumed.current = true;
       handleSelect(node);
+      return;
     }
+    // Not in the loaded window: resolve the card directly for entity links.
+    urlNodeConsumed.current = true;
+    const target = initialUrl.node;
+    const sep = target.indexOf(':');
+    const label = sep < 0 ? '' : target.slice(0, sep);
+    const key = sep < 0 ? '' : target.slice(sep + 1);
+    if (!key) return;
+    let cancelled = false;
+    const openCard = (title: string, props: Record<string, unknown>) => {
+      if (!cancelled) handleSelect({ id: target, label, key, title, props });
+    };
+    if (label === 'Politician') {
+      fetchPerson(key)
+        .then((res) => openCard(res.person?.name ?? key, { id: key }))
+        .catch(() => {});
+    } else if (label === 'Ticker') {
+      fetchTicker(key)
+        .then((res) => openCard(res.ticker?.ticker ?? key, {}))
+        .catch(() => {});
+    } else if (label === 'Committee') {
+      fetchCommittee(key)
+        .then((res) => openCard(res.committee?.name ?? key, { id: key }))
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [graph, selected, initialUrl.node, handleSelect]);
 
   // Write the view state back to the URL on every change (R46, tiles P5).
