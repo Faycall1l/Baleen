@@ -55,7 +55,7 @@ export default function TickerDetail({ node, card, cardError, alerts, onClose, o
                 <tbody>
                   {prints.map(({ row: f, alerts: printAlerts }) => (
                     <tr key={f.event_id} className={sentimentClass(f.sentiment ?? 'neutral')}>
-                      <td>{f.side === 'call' ? 'CALL' : 'PUT'}</td>
+                      <td>{f.side === 'call' ? 'CALL' : f.side === 'put' ? 'PUT' : '—'}</td>
                       <td className="num">{formatStrike(f.strike)}</td>
                       <td>{formatExpiry(f.expiration)}</td>
                       <td className="num ratio">

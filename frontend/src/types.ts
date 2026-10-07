@@ -119,7 +119,7 @@ export interface FlowPrint {
   volume: number | null;
   open_interest: number | null;
   ratio: number | null;
-  sentiment: 'bullish' | 'bearish' | 'neutral';
+  sentiment: 'bullish' | 'bearish' | 'neutral' | null;
   event_time: string | null;
   first_seen_at: string | null;
   source_url: string | null;
@@ -169,7 +169,7 @@ export interface TickerFlowPrint {
   expiration: string | null;
   volume: number | null;
   open_interest: number | null;
-  ratio: number;
+  ratio: number | null;
   sentiment: string | null;
 }
 
