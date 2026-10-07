@@ -5,6 +5,21 @@ import type { GraphData } from '../types';
 
 export type GraphStage = 'first' | 'partial' | 'full';
 
+/** Busy-gate responses (HTTP 503 from the Neo4j read gate) are transient
+ * shed-load, not failures: the poll loop retries them quietly instead of
+ * parking a scary error for a full cycle. Pure so it unit-tests. */
+export function isBusyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /graph busy|503/.test(msg);
+}
+
+export const BUSY_MAX_RETRIES = 3;
+
+/** Linear backoff per busy retry (1-based attempt): 4s, 8s, 12s. */
+export function busyRetryDelay(attempt: number): number {
+  return Math.min(Math.max(1, attempt), BUSY_MAX_RETRIES) * 4000;
+}
+
 // Newest event_time across the loaded snapshot: the delta cursor for the
 // next poll. Events carry ISO strings; unparseable values are ignored.
 function graphCursor(g: GraphData | null): string | null {
@@ -48,6 +63,8 @@ export function useGraphFeed(): {
   const graphAbortRef = useRef<AbortController | null>(null);
   const pollCountRef = useRef(0);
   const graphSigRef = useRef<string | null>(null);
+  const busyRetriesRef = useRef(0);
+  const busyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyGraphPayload = useCallback((payload: GraphData, isDelta: boolean) => {
     if (isDelta) {
@@ -105,7 +122,12 @@ export function useGraphFeed(): {
 
   const loadGraph = useCallback(() => {
     // Slow renders must never pile up: a new poll cancels the previous
-    // in-flight fetch (aborts are swallowed, not surfaced as errors).
+    // in-flight fetch (aborts are swallowed, not surfaced as errors), and
+    // supersedes any pending busy retry.
+    if (busyTimerRef.current !== null) {
+      clearTimeout(busyTimerRef.current);
+      busyTimerRef.current = null;
+    }
     graphAbortRef.current?.abort();
     const ctrl = new AbortController();
     graphAbortRef.current = ctrl;
@@ -116,15 +138,33 @@ export function useGraphFeed(): {
     const full = pollCountRef.current % 10 === 1 || cursor === null;
     fetchGraph(150, ctrl.signal, full ? undefined : cursor ?? undefined, undefined, !showEvents)
       .then((data) => {
+        busyRetriesRef.current = 0;
         setUpdatedAt(Date.now());
         applyGraphPayload(data, !full);
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setGraphError(err.message);
+        if (isBusyError(err) && busyRetriesRef.current < BUSY_MAX_RETRIES) {
+          busyRetriesRef.current += 1;
+          busyTimerRef.current = setTimeout(
+            () => loadGraph(),
+            busyRetryDelay(busyRetriesRef.current),
+          );
+          return;
+        }
+        busyRetriesRef.current = 0;
+        setGraphError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => clearTimeout(timer));
   }, [applyGraphPayload, showEvents]);
+
+  useEffect(
+    () => () => {
+      if (busyTimerRef.current !== null) clearTimeout(busyTimerRef.current);
+      graphAbortRef.current?.abort();
+    },
+    [],
+  );
 
   useEffect(() => {
     // Staged boot: paint a quick small window first (seconds even on a slow
