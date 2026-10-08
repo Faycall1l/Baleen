@@ -82,7 +82,7 @@ function isTileId(v: unknown): v is TileId {
   return typeof v === 'string' && ALL_TILES.has(v);
 }
 
-/** Validate persisted tiles: drop garbage, dedupe, always keep the board.
+/** Validate persisted tiles: drop garbage, dedupe. Empty stays empty.
  * Non-array input (no prefs yet) yields the default workspace. */
 export function sanitizeTiles(raw: unknown): TileId[] {
   if (!Array.isArray(raw)) return [...DEFAULT_TILES];

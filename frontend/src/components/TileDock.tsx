@@ -185,7 +185,7 @@ function SplitView({
 /** Bloomberg-style tile dock (P1, unified in P5, freed in P6, splittable
  * in L4): rail-opened panels share the main area in a split tree. Tiles
  * split vertically (side by side) or horizontally (stacked) with a panel
- * picker; an empty dock offers quick-open so no one gets stranded.
+ * picker; the rail is the single opener, so an empty dock only hints at it.
  */
 export default function TileDock({ layout, enlarged, onClose, onMove, onSplit, onEnlarge, renderBody }: Props) {
   const open = flattenLayout(layout);
