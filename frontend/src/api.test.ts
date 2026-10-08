@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchCommittee, fetchPerson, fetchTicker, askQuestion } from './api';
 import {
+  fetchActivity,
   fetchAlerts,
+  fetchCommittee,
   fetchFlow,
   fetchGraph,
   fetchLeaderboard,
   fetchPath,
+  fetchPerson,
   fetchReports,
   fetchRules,
   fetchSignals,
+  fetchSimilar,
+  fetchTicker,
+  askQuestion,
 } from './api';
 import { DEFAULT_FLOW } from './uiPrefs';
 
@@ -87,5 +92,10 @@ describe('card fetches', () => {
     const path = await fetchPath('a', 'b');
     expect(path.nodes).toEqual([]);
     expect(path.rels).toEqual([]);
+  });
+
+  it('normalizes a null similar-traders list', async () => {
+    mockJson({ similar: null });
+    expect((await fetchSimilar('W000817')).similar).toEqual([]);
   });
 });

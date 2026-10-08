@@ -288,6 +288,27 @@ export default function App() {
     handleSelect(node);
   };
 
+  // Member clicks from any surface: the graph node when loaded, else the
+  // person card as a synthetic node (J3 mechanism). Never a dead click.
+  // Member clicks from any surface: the graph node when loaded, else the
+  // person card as a synthetic node (J3 mechanism). Never a dead click.
+  const openMemberAnywhere = (pid: string) => {
+    if (openPoliticianNode(pid)) return;
+    fetchPerson(pid)
+      .then((res) => {
+        if (res.person) {
+          handleSelect({
+            id: `Politician:${pid}`,
+            label: 'Politician',
+            key: pid,
+            title: res.person.name ?? pid,
+            props: { id: pid },
+          });
+        }
+      })
+      .catch(() => {});
+  };
+  // enlarged dock so the revealed node is visible; an id opens its tile.
   // Cross-surface panel opener for the inspector links: null restores an
   // enlarged dock so the revealed node is visible; an id opens its tile.
   const openTile = useCallback((id: TileId | null) => {
@@ -313,7 +334,7 @@ export default function App() {
   const politicianId = selected
     ? personIdForNode(selected.label, selected.id, selected.props)
     : null;
-  const { person, error: personError } = usePerson(politicianId);
+  const { person, error: personError, similar } = usePerson(politicianId);
 
   // Ticker view (R24b): same card pattern as politicians.
   const tickerSymbol =
@@ -526,9 +547,11 @@ export default function App() {
                 person={person}
                 personError={personError}
                 alerts={alerts}
+                similar={similar}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
                 onTickerClick={openSignalTicker}
+                onMemberClick={openMemberAnywhere}
               />
             ) : tickerSymbol ? (
               <TickerDetail
@@ -548,7 +571,7 @@ export default function App() {
                 alerts={alerts}
                 onClose={() => setSelected(null)}
                 onAlertClick={openAlertNode}
-                onMemberClick={openPoliticianNode}
+                onMemberClick={openMemberAnywhere}
               />
             ) : (
               <NodeDetail node={selected} onClose={() => setSelected(null)} links={inspectorLinks} />
