@@ -194,6 +194,25 @@ def test_enrichment_unknown_filer_gets_slug_and_no_committees():
     assert enriched.party == "I"
 
 
+def test_enrichment_resolves_new_roster_traders():
+    """High-activity filers added to the roster must resolve to BioGuide ids
+    with committees — previously they fell through to slugs (live split-brain:
+    roster 'Ro Khanna' vs filing 'Rohit Khanna')."""
+    cases = [
+        ("Michael Rulli", "R000619", ["HSIF"]),
+        ("Cleo Fields", "F000110", ["HSBA"]),
+        ("Gilbert Cisneros", "C001123", ["HSAS"]),
+        ("Josh Gottheimer", "G000583", ["HSBA"]),
+        ("April McClain Delaney", "M001232", ["HSAG"]),
+        ("Cory A Booker", "B001288", ["SSAF"]),
+        ("Rohit Khanna", "K000375", ["HSAS"]),
+    ]
+    for name, pid, committees in cases:
+        enriched = enrich_congress_trade(_tweet(filer=name), _event())
+        assert enriched.politician_id == pid, name
+        assert enriched.committee_ids == committees, name
+
+
 def test_maybe_enrich_is_noop_without_marker():
     tweet = _tweet()
     tweet.raw_json = {}
