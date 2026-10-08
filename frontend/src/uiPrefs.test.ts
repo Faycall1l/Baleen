@@ -4,9 +4,12 @@ import {
   DEFAULT_FLOW,
   loadFlowFilters,
   loadHiddenTypes,
+  loadLayout,
   saveFlowFilters,
   saveHiddenTypes,
+  saveLayout,
 } from './uiPrefs';
+import { DEFAULT_LAYOUT } from './tileState';
 
 function installMemoryStorage(): void {
   const store = new Map<string, string>();
@@ -46,5 +49,33 @@ describe('ui prefs', () => {
       JSON.stringify({ tickers: 'NVDA', side: 'merge', min_ratio: 'high' }),
     );
     expect(loadFlowFilters()).toEqual(DEFAULT_FLOW);
+  });
+});
+
+describe('layout prefs', () => {
+  beforeEach(() => {
+    installMemoryStorage();
+  });
+
+  it('defaults fresh workspaces and round-trips trees', () => {
+    expect(loadLayout()).toEqual(DEFAULT_LAYOUT);
+    const tree = {
+      type: 'split',
+      dir: 'col',
+      children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'flow' }],
+    } as const;
+    saveLayout(tree as never);
+    expect(loadLayout()).toEqual(tree);
+    saveLayout(null);
+    expect(loadLayout()).toBeNull();
+  });
+
+  it('migrates the legacy flat tile list once', () => {
+    localStorage.setItem('baleen.ui.tiles', JSON.stringify(['board', 'flow', 'bogus']));
+    expect(loadLayout()).toEqual({
+      type: 'split',
+      dir: 'row',
+      children: [{ type: 'tile', id: 'board' }, { type: 'tile', id: 'flow' }],
+    });
   });
 });

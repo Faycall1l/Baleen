@@ -33,7 +33,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'tiles',
     title: '4 · Arrange your desk',
-    body: 'Every rail tab docks a tile beside the others. Reorder with ← →, enlarge to focus, close what you don’t need — the layout persists, and any view copies as a share link.',
+    body: 'Every rail tab docks a tile beside the others. Split any tile vertically or horizontally for side-by-side views, reorder with ← →, enlarge to focus, close what you don’t need — the layout persists, and any view copies as a share link.',
   },
 ];
 

@@ -1,5 +1,5 @@
 import { FLOW_DEFAULTS } from './flow';
-import { sanitizeTiles, type TileId } from './tileState';
+import { DEFAULT_LAYOUT, sanitizeLayout, type Layout } from './tileState';
 import type { FlowFilters } from './types';
 
 // Workspace persistence (R40): the terminal greets return visits with
@@ -9,6 +9,7 @@ import type { FlowFilters } from './types';
 const HIDDEN_KEY = 'baleen.ui.hiddenTypes';
 const FLOW_KEY = 'baleen.ui.flowFilters';
 const TILES_KEY = 'baleen.ui.tiles';
+const LAYOUT_KEY = 'baleen.ui.layout';
 
 export const DEFAULT_FLOW: FlowFilters = { ...FLOW_DEFAULTS };
 
@@ -62,10 +63,16 @@ export function saveFlowFilters(filters: FlowFilters): void {
   write(FLOW_KEY, filters);
 }
 
-export function loadTiles(): TileId[] {
-  return sanitizeTiles(read<unknown>(TILES_KEY, null));
+export function loadLayout(): Layout {
+  const raw = read<unknown>(LAYOUT_KEY, null);
+  if (raw !== null) return sanitizeLayout(raw);
+  // One-time migration from the flat tile list, then the tree owns it.
+  const legacy = read<unknown>(TILES_KEY, null);
+  if (Array.isArray(legacy)) return sanitizeLayout(legacy);
+  return structuredClone(DEFAULT_LAYOUT) as Layout;
 }
 
-export function saveTiles(tiles: TileId[]): void {
-  write(TILES_KEY, tiles);
+export function saveLayout(layout: Layout): void {
+  // Empty docks persist as [] so they round-trip instead of resetting.
+  write(LAYOUT_KEY, layout ?? []);
 }

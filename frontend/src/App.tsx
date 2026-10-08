@@ -34,8 +34,18 @@ import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
 import { personIdForNode } from './personView';
 import { buildGraphUrl, parseGraphUrl } from './graphUrl';
-import { loadHiddenTypes, loadTiles, saveHiddenTypes, saveTiles } from './uiPrefs';
-import { closeTile, ensureTile, moveTile, toggleTile, type TileId } from './tileState';
+import { loadHiddenTypes, loadLayout, saveHiddenTypes, saveLayout } from './uiPrefs';
+import {
+  closeInLayout,
+  flattenLayout,
+  moveSibling,
+  openInLayout,
+  sanitizeLayout,
+  splitTile,
+  toggleInLayout,
+  type Layout,
+  type TileId,
+} from './tileState';
 import { soloHidden } from './typeFilters';
 import { SCHEMA_LABELS } from './graph/schema';
 import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
@@ -54,11 +64,13 @@ export default function App() {
   const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
   // Tile dock (P1): rail-opened panels share the main area. Persisted like
   // other workspace prefs; the board is permanent (see tileState).
-  const [tiles, setTiles] = useState<TileId[]>(() => initialUrl.tiles ?? loadTiles());
+  const [layout, setLayout] = useState<Layout>(() =>
+    initialUrl.tiles ? sanitizeLayout(initialUrl.tiles) : loadLayout(),
+  );
   const [enlarged, setEnlarged] = useState<TileId | null>(null);
   useEffect(() => {
-    saveTiles(tiles);
-  }, [tiles]);
+    saveLayout(layout);
+  }, [layout]);
   // Type filters live here (not in TimelineBoard) so the URL writer below sees
   // the whole view state in one place.
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
@@ -203,10 +215,10 @@ export default function App() {
     const url = buildGraphUrl({
       node: selected?.id ?? null,
       hidden: [...hiddenTypes],
-      tiles,
+      tiles: flattenLayout(layout),
     });
     window.history.replaceState(null, '', url);
-  }, [selected?.id, hiddenTypes, tiles]);
+  }, [selected?.id, hiddenTypes, layout]);
 
   // Path mode (R53b): armed from any inspector via PathFromButton; the next
   // selected node completes the pair and opens the path tile. Declared
@@ -239,7 +251,8 @@ export default function App() {
 
   // Alerts inbox (R8): unread watermark + rule/text filtering live here so
   // the rail badge and the tile share one source of truth.
-  const inbox = useAlertsInbox(alerts, tiles.includes('alerts'));
+  const openTiles = useMemo(() => flattenLayout(layout), [layout]);
+  const inbox = useAlertsInbox(alerts, openTiles.includes('alerts'));
   const { rules: alertRules, toggleRule: toggleAlertRule } = useAlertRules();
 
   const loadedIds = useMemo(
@@ -260,12 +273,12 @@ export default function App() {
       fetchPath(from.id, node.id)
         .then((res) => {
           setPathResult(res);
-          setTiles((prev) => ensureTile(prev, 'path'));
+          setLayout((prev) => openInLayout(prev, 'path'));
         })
         .catch((err: unknown) => {
           setPathResult(null);
           setPathError(err instanceof Error ? err.message : 'Path fetch failed');
-          setTiles((prev) => ensureTile(prev, 'path'));
+          setLayout((prev) => openInLayout(prev, 'path'));
         });
     } else if (node && pathFrom && node.id === pathFrom.id) {
       setPathFrom(null);
@@ -280,7 +293,7 @@ export default function App() {
       setEnlarged(null);
       return;
     }
-    setTiles((prev) => ensureTile(prev, id));
+    setLayout((prev) => openInLayout(prev, id));
   }, []);
 
   const { openAlertNode, openReportNode, openLeaderNode, openTickerNode, openPoliticianNode, inspectorLinks } = useInspectorLinks(
@@ -322,14 +335,14 @@ export default function App() {
   // sure its tile is open.
   const viewTickerInTape = (ticker: string) => {
     setFlowFilters((f) => ({ ...f, tickers: [ticker] }));
-    setTiles((prev) => ensureTile(prev, 'flow'));
+    setLayout((prev) => openInLayout(prev, 'flow'));
   };
 
   // Rail toggle (P5): every tab docks its tile, board included.
   const handleRailToggle = (key: RailKey) => {
-    setTiles((prev) => toggleTile(prev, key));
+    setLayout((prev) => toggleInLayout(prev, key));
   };
-  const railOpen: RailKey[] = [...tiles];
+  const railOpen: RailKey[] = [...openTiles];
 
   // Ticker clicks from any surface: the graph node when loaded, else the
   // ticker card as a synthetic node (same J3 mechanism as deep links), else
@@ -477,12 +490,12 @@ export default function App() {
         />
         <main className="graph-area">
           <TileDock
-            tiles={tiles}
-            enlarged={enlarged && tiles.includes(enlarged) ? enlarged : null}
-            onClose={(id) => setTiles((prev) => closeTile(prev, id))}
-            onMove={(id, dir) => setTiles((prev) => moveTile(prev, id, dir))}
+            layout={layout}
+            enlarged={enlarged && openTiles.includes(enlarged) ? enlarged : null}
+            onClose={(id) => setLayout((prev) => closeInLayout(prev, id))}
+            onMove={(id, dir) => setLayout((prev) => moveSibling(prev, id, dir))}
+            onSplit={(id, dir, panel) => setLayout((prev) => splitTile(prev, id, dir, panel))}
             onEnlarge={setEnlarged}
-            onOpen={(id) => setTiles((prev) => ensureTile(prev, id))}
             renderBody={renderTileBody}
           />
           <div className="graph-status">
