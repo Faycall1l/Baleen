@@ -139,10 +139,10 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
 
 
 if __name__ == "__main__":
-    store = Neo4jStore(get_settings())
-    entity_db = PostgresStore(get_settings())
+    settings = get_settings()
+    store = Neo4jStore(settings)
+    entity_db = PostgresStore(settings.postgres_dsn)
     try:
         seed(store, entity_db)
     finally:
         store.close()
-        entity_db.close()
