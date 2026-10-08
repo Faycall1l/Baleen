@@ -1,5 +1,5 @@
 import { FLOW_DEFAULTS } from './flow';
-import { DEFAULT_LAYOUT, sanitizeLayout, sanitizeTiles, type Layout, type TileId } from './tileState';
+import { DEFAULT_LAYOUT, sanitizeLayout, type Layout } from './tileState';
 import type { FlowFilters } from './types';
 
 // Workspace persistence (R40): the terminal greets return visits with
@@ -61,14 +61,6 @@ export function loadFlowFilters(): FlowFilters {
 
 export function saveFlowFilters(filters: FlowFilters): void {
   write(FLOW_KEY, filters);
-}
-
-export function loadTiles(): TileId[] {
-  return sanitizeTiles(read<unknown>(TILES_KEY, null));
-}
-
-export function saveTiles(tiles: TileId[]): void {
-  write(TILES_KEY, tiles);
 }
 
 export function loadLayout(): Layout {

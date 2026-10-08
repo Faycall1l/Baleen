@@ -89,32 +89,6 @@ export function sanitizeTiles(raw: unknown): TileId[] {
   return [...new Set(raw.filter(isTileId))];
 }
 
-/** Rail toggle: add at the end, or remove. */
-export function toggleTile(tiles: TileId[], id: TileId): TileId[] {
-  return tiles.includes(id) ? tiles.filter((t) => t !== id) : [...tiles, id];
-}
-
-/** Ensure a tile is open (deep links, tape jumps); no-op when present. */
-export function ensureTile(tiles: TileId[], id: TileId): TileId[] {
-  return tiles.includes(id) ? tiles : [...tiles, id];
-}
-
-/** Close button: any tile can go; the dock shows quick-open when empty. */
-export function closeTile(tiles: TileId[], id: TileId): TileId[] {
-  return tiles.filter((t) => t !== id);
-}
-
-/** Reorder: swap one step left (-1) or right (+1); edges are no-ops. */
-export function moveTile(tiles: TileId[], id: TileId, dir: -1 | 1): TileId[] {
-  const i = tiles.indexOf(id);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= tiles.length) return tiles;
-  const next = [...tiles];
-  next[i] = tiles[j];
-  next[j] = tiles[i];
-  return next;
-}
-
 /** Leaf ids in visual order. */
 export function flattenLayout(layout: Layout): TileId[] {
   if (!layout) return [];
