@@ -74,7 +74,7 @@ export const TILE_TITLES: Record<TileId, string> = {
   alerts: 'Alerts',
   reports: 'Reports',
   leaders: 'Leaderboard',
-  signals: 'Signals',
+  signals: 'Activity',
   path: 'Path',
 };
 

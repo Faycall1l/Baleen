@@ -9,7 +9,7 @@ const ITEMS: { key: RailKey; label: string }[] = [
   { key: 'alerts', label: 'Alerts' },
   { key: 'reports', label: 'Reports' },
   { key: 'leaders', label: 'Leaders' },
-  { key: 'signals', label: 'Signals' },
+  { key: 'signals', label: 'Activity' },
 ];
 
 // Left rail of panel toggles (extracted from App, H12). Counts come from the

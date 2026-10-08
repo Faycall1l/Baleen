@@ -239,6 +239,33 @@ export interface SignalsBundle {
   suspicious: SuspiciousRow[];
 }
 
+export interface ActivityMover {
+  ticker: string | null;
+  recent: number;
+  prior: number;
+  delta: number;
+}
+
+export interface ActivityNewcomer {
+  ticker: string | null;
+  events: number;
+}
+
+export interface ActivityFresh {
+  event_id: string | null;
+  kind: string | null;
+  ticker: string | null;
+  who: string | null;
+  seen_at: string | null;
+}
+
+export interface ActivityBundle {
+  window_days: number;
+  movers: ActivityMover[];
+  newcomers: ActivityNewcomer[];
+  fresh: ActivityFresh[];
+}
+
 export interface HealthCheck {
   status: string;
   detail?: string;

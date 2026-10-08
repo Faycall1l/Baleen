@@ -261,6 +261,18 @@ button.graph-error-action:hover {
   text-align: left;
 }
 
+.signal-up {
+  color: #6fbf73;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.signal-down {
+  color: #e06666;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
 .lead-rank {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
