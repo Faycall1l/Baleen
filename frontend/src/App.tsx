@@ -496,7 +496,6 @@ export default function App() {
             onMove={(id, dir) => setLayout((prev) => moveSibling(prev, id, dir))}
             onSplit={(id, dir, panel) => setLayout((prev) => splitTile(prev, id, dir, panel))}
             onEnlarge={setEnlarged}
-            onOpen={(id) => setLayout((prev) => openInLayout(prev, id))}
             renderBody={renderTileBody}
           />
           <div className="graph-status">

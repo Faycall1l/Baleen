@@ -225,14 +225,6 @@ button.graph-error-action:hover {
   padding: 26px 30px;
 }
 
-.tile-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 14px;
-}
-
 /* Ranked signal list (S1): kind tag plus a strength bar, one line per
  * signal, everything tappable. Reuses the alert item frame. */
 .signal-list {

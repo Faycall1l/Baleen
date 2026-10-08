@@ -18,7 +18,6 @@ interface Props {
   onMove: (id: TileId, dir: -1 | 1) => void;
   onSplit: (id: TileId, dir: SplitDir, panel: TileId) => void;
   onEnlarge: (id: TileId | null) => void;
-  onOpen: (id: TileId) => void;
   renderBody: (id: TileId) => ReactNode;
 }
 
@@ -188,20 +187,13 @@ function SplitView({
  * split vertically (side by side) or horizontally (stacked) with a panel
  * picker; an empty dock offers quick-open so no one gets stranded.
  */
-export default function TileDock({ layout, enlarged, onClose, onMove, onSplit, onEnlarge, onOpen, renderBody }: Props) {
+export default function TileDock({ layout, enlarged, onClose, onMove, onSplit, onEnlarge, renderBody }: Props) {
   const open = flattenLayout(layout);
   if (!layout) {
     return (
       <div className="tile-dock tile-dock-empty">
         <div className="tile-empty" role="status">
-          <div>All panels closed.</div>
-          <div className="tile-empty-actions">
-            {ALL_TILE_IDS.map((id) => (
-              <button key={id} type="button" className="graph-fit-btn" onClick={() => onOpen(id)}>
-                {TILE_TITLES[id]}
-              </button>
-            ))}
-          </div>
+          <div>All panels closed — open one from the rail on the left.</div>
         </div>
       </div>
     );
