@@ -5,7 +5,7 @@ import AlertsPanel from './components/AlertsPanel';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import LeadsPanel from './components/LeadsPanel';
 import ReportsPanel from './components/ReportsPanel';
-import SignalsPanel from './components/SignalsPanel';
+import ActivityPanel from './components/ActivityPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
@@ -147,11 +147,13 @@ export default function App() {
     leadersError,
     signals,
     signalsError,
+    activity,
+    activityError,
     health,
     healthChecked,
     briefs,
     reportCount,
-    signalsCount,
+    activityCount,
     loadAll,
   } = useFeeds();
 
@@ -457,7 +459,7 @@ export default function App() {
     if (id === 'signals') {
       return (
         <div className="flow-tile-scroll">
-          <SignalsPanel signals={signals} error={signalsError} onTickerClick={openSignalTicker} />
+          <ActivityPanel activity={activity} error={activityError} onTickerClick={openSignalTicker} />
         </div>
       );
     }
@@ -486,7 +488,7 @@ export default function App() {
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
-          counts={{ board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: signalsCount, path: pathResult ? pathResult.nodes.length : 0 }}
+          counts={{ board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: activityCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <main className="graph-area">
           <TileDock

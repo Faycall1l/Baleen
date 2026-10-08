@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  fetchActivity,
   fetchAlerts,
   fetchDigest,
   fetchHealth,
@@ -8,7 +9,7 @@ import {
   fetchReports,
   fetchSignals,
 } from '../api';
-import type { Alert, Health, LeaderboardEntry, Report, SignalsBundle } from '../types';
+import type { ActivityBundle, Alert, Health, LeaderboardEntry, Report, SignalsBundle } from '../types';
 
 // Side-panel feeds: alerts, reports + digest, leaderboard, signals, plus the
 // health dot (extracted from App, H10). The graph is polled separately by
@@ -23,6 +24,8 @@ export function useFeeds() {
   const [leadersError, setLeadersError] = useState<string | null>(null);
   const [signals, setSignals] = useState<SignalsBundle | null>(null);
   const [signalsError, setSignalsError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityBundle | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   // First check completed (success or failure): before this the pill must
   // not claim OFFLINE — nothing has been measured yet.
@@ -58,6 +61,10 @@ export function useFeeds() {
     fetchSignals()
       .then(setSignals)
       .catch((err) => setSignalsError(err.message));
+    setActivityError(null);
+    fetchActivity()
+      .then(setActivity)
+      .catch((err) => setActivityError(err.message));
   }, []);
 
   // Refs mirror state so the stream can send fresh cursors on reconnect.
@@ -150,6 +157,9 @@ export function useFeeds() {
       signals.suspicious.length +
       signals.uncovered.length
     : 0;
+  const activityCount = activity
+    ? activity.movers.length + activity.newcomers.length + activity.fresh.length
+    : 0;
 
   return {
     alerts,
@@ -161,11 +171,14 @@ export function useFeeds() {
     leadersError,
     signals,
     signalsError,
+    activity,
+    activityError,
     health,
     healthChecked,
     briefs,
     reportCount,
     signalsCount,
+    activityCount,
     loadAll,
   };
 }
