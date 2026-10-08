@@ -61,6 +61,22 @@ def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
     return payload
 
 
+@router.get("/signals/activity")
+def signals_activity(window_days: int = Query(default=7, ge=1, le=30)) -> dict:
+    """What is moving right now: accelerating tickers, first-seen tickers,
+    and the freshest events. Uncached — three cheap indexed queries."""
+    from app.api import routes
+
+    # Gate outside the try (see /signals): saturation stays a 503.
+    with routes.neo4j_read_slot():
+        try:
+            payload = _engine().activity(recent_days=window_days)
+        except Exception as exc:
+            logger.exception("signals activity failed")
+            raise HTTPException(status_code=500, detail=f"signals activity failed: {exc}")
+    return json_safe(payload)
+
+
 @router.get("/signals/flow")
 def signals_flow(
     tickers: str | None = Query(default=None),

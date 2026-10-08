@@ -62,6 +62,43 @@ ORDER BY call_vol + put_vol DESC
 LIMIT 15
 """
 
+ACTIVITY_MOVERS_QUERY = """
+MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker)
+WHERE e.first_seen_at IS NOT NULL
+  AND e.first_seen_at >= datetime($prior_since)
+WITH t.ticker AS ticker,
+     sum(CASE WHEN e.first_seen_at >= datetime($recent_since) THEN 1 ELSE 0 END) AS recent,
+     count(*) AS total
+WITH ticker, recent, (total - recent) AS prior, (2 * recent - total) AS delta
+WHERE recent > 0
+RETURN ticker, recent, prior, delta
+ORDER BY delta DESC, recent DESC
+LIMIT 10
+"""
+
+ACTIVITY_NEWCOMERS_QUERY = """
+MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker)
+WHERE e.first_seen_at IS NOT NULL
+WITH t.ticker AS ticker, min(e.first_seen_at) AS first_seen, count(*) AS events
+WHERE first_seen >= datetime($recent_since)
+RETURN ticker, events
+ORDER BY events DESC
+LIMIT 8
+"""
+
+ACTIVITY_FRESH_QUERY = """
+MATCH (e:Event)
+WHERE e.first_seen_at IS NOT NULL
+  AND e.first_seen_at >= datetime($recent_since)
+OPTIONAL MATCH (e)-[:INVOLVES_TICKER]->(t:Ticker)
+OPTIONAL MATCH (e)-[:INVOLVES_POLITICIAN]->(p:Politician)
+OPTIONAL MATCH (e)-[:INVOLVES_INSIDER]->(i:Insider)
+RETURN e.id AS event_id, e.type AS kind, t.ticker AS ticker,
+       coalesce(p.name, i.name) AS who, e.first_seen_at AS seen_at
+ORDER BY seen_at DESC
+LIMIT 8
+"""
+
 FLOW_QUERY = """
 MATCH (e:Event {type: 'options_flow'})-[:INVOLVES_TICKER]->(t:Ticker)
 WHERE e.first_seen_at IS NOT NULL
@@ -252,6 +289,26 @@ class SignalsEngine:
         except Exception:
             logger.exception("options meter query failed")
             return []
+
+    def activity(self, recent_days: int = 7) -> dict:
+        """What is moving right now: tickers accelerating vs the prior
+        window, first-seen tickers, and the freshest events. Recency uses
+        ``first_seen_at`` (set on every node at write time) so options flow
+        and dated filings share one clock. Degrades to empty sections."""
+        now = datetime.now(timezone.utc)
+        recent_since = (now - timedelta(days=recent_days)).isoformat()
+        prior_since = (now - timedelta(days=2 * recent_days)).isoformat()
+        empty = {"window_days": recent_days, "movers": [], "newcomers": [], "fresh": []}
+        try:
+            movers = self.neo4j.run_read(
+                ACTIVITY_MOVERS_QUERY, recent_since=recent_since, prior_since=prior_since
+            )
+            newcomers = self.neo4j.run_read(ACTIVITY_NEWCOMERS_QUERY, recent_since=recent_since)
+            fresh = self.neo4j.run_read(ACTIVITY_FRESH_QUERY, recent_since=recent_since)
+        except Exception:
+            logger.exception("activity query failed")
+            return empty
+        return {"window_days": recent_days, "movers": movers, "newcomers": newcomers, "fresh": fresh}
 
     def flow(
         self,
