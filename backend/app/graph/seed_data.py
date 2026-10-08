@@ -87,7 +87,14 @@ POLITICIANS: list[dict] = [
     {"id": "M001183", "name": "Joe Manchin", "party": "D", "chamber": "senate", "committees": ["SSEG"]},
     {"id": "C000127", "name": "Maria Cantwell", "party": "D", "chamber": "senate", "committees": ["SSEG"]},
     {"id": "C001090", "name": "Dan Crenshaw", "party": "R", "chamber": "house", "committees": ["HSAS"]},
-    {"id": "K000375", "name": "Ro Khanna", "party": "D", "chamber": "house", "committees": ["HSAS"]},
+    {"id": "K000375", "name": "Rohit Khanna", "party": "D", "chamber": "house", "committees": ["HSAS"]},
+    {"id": "G000583", "name": "Josh Gottheimer", "party": "D", "chamber": "house", "committees": ["HSBA"]},
+    {"id": "M001232", "name": "April McClain Delaney", "party": "D", "chamber": "house", "committees": ["HSAG"]},
+    {"id": "R000619", "name": "Michael Rulli", "party": "R", "chamber": "house", "committees": ["HSIF"]},
+    {"id": "F000110", "name": "Cleo Fields", "party": "D", "chamber": "house", "committees": ["HSBA"]},
+    {"id": "C001123", "name": "Gilbert Cisneros", "party": "D", "chamber": "house", "committees": ["HSAS"]},
+    {"id": "B001288", "name": "Cory A Booker", "party": "D", "chamber": "senate", "committees": ["SSAF"]},
+    {"id": "M001239", "name": "John J McGuire III", "party": "R", "chamber": "house", "committees": ["HSAS"]},
 ]
 
 # ---------------------------------------------------------------------------
