@@ -1,4 +1,4 @@
-import type { FlowFilters } from './types';
+import type { FlowFilters, FlowPrint } from './types';
 
 export const FLOW_DEFAULTS: FlowFilters = {
   tickers: [],
@@ -45,4 +45,52 @@ export function sentimentClass(sentiment: string | null | undefined): 'up' | 'do
   if (sentiment === 'bullish') return 'up';
   if (sentiment === 'bearish') return 'down';
   return 'flat';
+}
+
+const CSV_COLUMNS: Array<{ key: keyof FlowPrint; label: string }> = [
+  { key: 'event_id', label: 'event_id' },
+  { key: 'ticker', label: 'ticker' },
+  { key: 'side', label: 'side' },
+  { key: 'strike', label: 'strike' },
+  { key: 'expiration', label: 'expiration' },
+  { key: 'premium', label: 'premium' },
+  { key: 'volume', label: 'volume' },
+  { key: 'open_interest', label: 'open_interest' },
+  { key: 'ratio', label: 'ratio' },
+  { key: 'sentiment', label: 'sentiment' },
+  { key: 'event_time', label: 'event_time' },
+  { key: 'first_seen_at', label: 'first_seen_at' },
+  { key: 'source_url', label: 'source_url' },
+];
+
+function csvCell(value: unknown): string {
+  if (value == null) return '';
+  const s = String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Tape rows as CSV for data desks: exactly what the filters show, raw
+ * values (no display formatting) so spreadsheets stay computable. */
+export function printsToCSV(flow: FlowPrint[]): string {
+  const head = CSV_COLUMNS.map((c) => c.label).join(',');
+  const rows = flow.map((print) =>
+    CSV_COLUMNS.map((c) => csvCell(print[c.key])).join(','),
+  );
+  return [head, ...rows].join('\n');
+}
+
+export function flowFilename(when: Date = new Date()): string {
+  return `baleen-flow-${when.toISOString().slice(0, 10)}.csv`;
+}
+
+export function downloadCSV(filename: string, text: string): void {
+  const blob = new Blob([text], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
