@@ -266,6 +266,31 @@ def test_signal_queries_degrade_to_empty_list_when_neo4j_down():
     assert engine.uncovered() == []
     assert engine.similar("W000187") == []
     assert engine.flow() == []
+    assert engine.activity() == {"window_days": 7, "movers": [], "newcomers": [], "fresh": []}
+
+
+def test_activity_shapes_movers_newcomers_and_fresh():
+    class _FakeNeo4j:
+        def run_read(self, query, **params):
+            if "AS delta" in query:
+                return [{"ticker": "NVDA", "recent": 9, "prior": 2, "delta": 7}]
+            if "min(e.first_seen_at)" in query:
+                return [{"ticker": "NEWT", "events": 3}]
+            return [
+                {
+                    "event_id": "evt_1",
+                    "kind": "options_flow",
+                    "ticker": "NVDA",
+                    "who": None,
+                    "seen_at": "2026-10-01T00:00:00Z",
+                }
+            ]
+
+    activity = SignalsEngine(_FakeNeo4j(), None).activity()
+    assert activity["window_days"] == 7
+    assert activity["movers"] == [{"ticker": "NVDA", "recent": 9, "prior": 2, "delta": 7}]
+    assert activity["newcomers"] == [{"ticker": "NEWT", "events": 3}]
+    assert activity["fresh"][0]["event_id"] == "evt_1"
 
 
 def test_suspicious_timing_degrades_to_empty_list_when_postgres_down():
