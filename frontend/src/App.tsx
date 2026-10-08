@@ -480,11 +480,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <CommandBar health={health} healthChecked={healthChecked} />
-      {showTour && <OnboardingTour onDone={dismissTour} />}
-      {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
+      {initialUrl.embed ? (
+        <div className="embed">
+          <div className="embed-body">{renderTileBody(initialUrl.embed)}</div>
+          <a className="embed-attr" href={window.location.pathname} target="_blank" rel="noreferrer">
+            Baleen — watch Congress trade
+          </a>
+        </div>
+      ) : (
+        <>
+          <CommandBar health={health} healthChecked={healthChecked} />
+          {showTour && <OnboardingTour onDone={dismissTour} />}
+          {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
 
-      <div className="app-body">
+          <div className="app-body">
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
@@ -556,7 +565,9 @@ export default function App() {
           </aside>
         )}
         <AlertStack alerts={alerts} onAlertClick={openAlertNode} />
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

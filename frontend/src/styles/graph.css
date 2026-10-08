@@ -225,6 +225,39 @@ button.graph-error-action:hover {
   padding: 26px 30px;
 }
 
+/* Embed mode (E1): one panel chromeless for publishers. The tile body
+ * fills the viewport with a slim attribution bar; no rail, no chrome. */
+.embed {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.embed-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.embed-attr {
+  flex: 0 0 auto;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.embed-attr:hover {
+  color: var(--accent);
+}
+
 /* Ranked signal list (S1): kind tag plus a strength bar, one line per
  * signal, everything tappable. Reuses the alert item frame. */
 .signal-list {
