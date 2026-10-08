@@ -1,10 +1,13 @@
 import {
   FLOW_DEFAULTS,
+  downloadCSV,
+  flowFilename,
   formatContracts,
   formatExpiry,
   formatRatio,
   formatStrike,
   formatTapeTime,
+  printsToCSV,
   sentimentClass,
 } from '../flow';
 import type { FlowFilters, FlowPrint } from '../types';
@@ -89,7 +92,14 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
       {flow.length > 0 && (
         <>
           <div className="flow-status">
-            {count} prints · min {filters.min_ratio.toFixed(1)}x · {filters.window_days}d
+            {count} prints · min {filters.min_ratio.toFixed(1)}x · {filters.window_days}d{' '}
+            <button
+              type="button"
+              className="node-link"
+              onClick={() => downloadCSV(flowFilename(), printsToCSV(flow))}
+            >
+              Export CSV
+            </button>
           </div>
           <table className="flow-tape">
             <caption className="visually-hidden">
