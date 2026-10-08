@@ -146,4 +146,3 @@ if __name__ == "__main__":
         seed(store, entity_db)
     finally:
         store.close()
-        entity_db.close()
