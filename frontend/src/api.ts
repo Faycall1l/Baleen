@@ -1,7 +1,7 @@
 // Thin client for the Baleen API surfaces.
 
 import { buildFlowQuery } from './flow';
-import type { ActivityBundle, Alert, CommitteeCard, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, PersonCard, QueryResponse, Report, SignalsBundle, TickerCard } from './types';
+import type { ActivityBundle, Alert, CommitteeCard, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, PersonCard, QueryResponse, Report, SignalsBundle, SimilarTrader, TickerCard } from './types';
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -158,6 +158,12 @@ export function fetchPerson(politicianId: string): Promise<{ person: PersonCard 
       },
     }),
   );
+}
+
+export function fetchSimilar(politicianId: string): Promise<{ similar: SimilarTrader[] }> {
+  return json<{ similar: SimilarTrader[] }>(
+    `/api/signals/similar?politician_id=${encodeURIComponent(politicianId)}`,
+  ).then((res) => ({ similar: asArray(res.similar) }));
 }
 
 export function fetchTicker(symbol: string): Promise<{ ticker: TickerCard }> {

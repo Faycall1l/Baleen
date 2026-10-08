@@ -170,6 +170,13 @@ export interface OversightRow {
   trades: number;
 }
 
+export interface SimilarTrader {
+  id: string | null;
+  name: string | null;
+  shared: number;
+  tickers: string[];
+}
+
 export interface TickerFlowPrint {
   event_id: string;
   side: string | null;

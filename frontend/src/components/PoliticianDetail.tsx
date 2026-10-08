@@ -1,17 +1,19 @@
 import { matchAlerts } from '../personView';
-import type { Alert, GraphNode, PersonCard } from '../types';
+import type { Alert, GraphNode, PersonCard, SimilarTrader } from '../types';
 
 interface Props {
   node: GraphNode;
   person: PersonCard | null;
   personError: string | null;
   alerts: Alert[];
+  similar: SimilarTrader[];
   onClose: () => void;
   onAlertClick?: (alert: Alert) => void;
   onTickerClick?: (ticker: string) => void;
+  onMemberClick?: (politicianId: string) => void;
 }
 
-export default function PoliticianDetail({ node, person, personError, alerts, onClose, onAlertClick, onTickerClick }: Props) {
+export default function PoliticianDetail({ node, person, personError, alerts, similar, onClose, onAlertClick, onTickerClick, onMemberClick }: Props) {
   const joined = person ? matchAlerts(person.trades, alerts) : [];
   return (
     <div className="node-detail">
@@ -75,6 +77,30 @@ export default function PoliticianDetail({ node, person, personError, alerts, on
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {(similar ?? []).length > 0 && (
+            <div className="node-links">
+              <div className="node-links-title">Traders like {person?.name ?? node.title ?? 'this member'}</div>
+              {(similar ?? [])
+                .filter((s): s is SimilarTrader & { id: string } => typeof s.id === 'string' && s.id !== '')
+                .slice(0, 5)
+                .map((s) => (
+                  <div key={s.id} className="alert-item">
+                    <div className="alert-title">
+                      {onMemberClick ? (
+                        <button type="button" className="node-link" onClick={() => onMemberClick(s.id)}>
+                          {s.name ?? s.id}
+                        </button>
+                      ) : (
+                        <span>{s.name ?? s.id}</span>
+                      )}
+                      {' · '}
+                      {s.shared} shared ticker{s.shared === 1 ? '' : 's'}
+                    </div>
+                    <div className="alert-summary">{(s.tickers ?? []).filter((t) => typeof t === 'string' && t !== '').join(', ')}</div>
+                  </div>
+                ))}
             </div>
           )}
           <div className="node-links">
