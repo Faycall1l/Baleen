@@ -19,6 +19,7 @@ from app.alerts.engine import AlertEngine
 from app.db.postgres import PostgresStore
 from app.extraction.client import LLMTransportError
 from app.extraction.extractor import EventExtractor
+from app.extraction.filing import event_from_filing_row
 from app.graph.writer import GraphWriter
 from app.ingestion.disclosures import maybe_enrich_event
 from app.ingestion.edgar import maybe_enrich_insider
@@ -70,7 +71,12 @@ class ProcessingPipeline:
 
         for tweet in tweets:
             try:
-                event = self.extractor.extract(tweet)
+                # Structured filing rows skip the LLM entirely: the facts are
+                # already parsed, and a model call per tweet is what exhausts
+                # free-tier backups (Groq 429s). Falls back to extraction.
+                event = event_from_filing_row(tweet)
+                if event is None:
+                    event = self.extractor.extract(tweet)
                 # Records from the filing feeds carry authoritative facts;
                 # ground the model output in them before writing.
                 event = maybe_enrich_event(tweet, event)
