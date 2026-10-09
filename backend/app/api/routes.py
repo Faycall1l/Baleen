@@ -182,7 +182,12 @@ def get_alert_engine() -> AlertEngine:
 def get_report_engine() -> "ReportEngine":
     from app.reports.engine import ReportEngine
 
-    return ReportEngine(store=_get_store(), neo4j=_get_neo4j(), llm=_get_llm())
+    return ReportEngine(
+        store=_get_store(),
+        neo4j=_get_neo4j(),
+        llm=_get_llm(),
+        llm_briefs=_get_settings().reports_llm_briefs,
+    )
 
 
 def _get_processing() -> "ProcessingPipeline":
@@ -200,7 +205,12 @@ def _get_processing() -> "ProcessingPipeline":
         writer=GraphWriter(store=_get_neo4j(), entity_resolver=EntityResolver(_get_store())),
         alert_engine=get_alert_engine(),
         store=_get_store(),
-        report_engine=ReportEngine(store=_get_store(), neo4j=_get_neo4j(), llm=_get_llm()),
+        report_engine=ReportEngine(
+            store=_get_store(),
+            neo4j=_get_neo4j(),
+            llm=_get_llm(),
+            llm_briefs=s.reports_llm_briefs,
+        ),
     )
 
 

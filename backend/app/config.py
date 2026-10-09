@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model_name: str = "openai/gpt-oss-20b"
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    # False drafts briefs from the deterministic template (same facts, no
+    # prose polish) instead of calling the model per event — the switch for
+    # free-tier schedulers. Digests always use the model (one call a day).
+    reports_llm_briefs: bool = True
 
     # --- PostgreSQL ---
     postgres_host: str = "localhost"

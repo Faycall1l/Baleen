@@ -34,10 +34,14 @@ logger = logging.getLogger(__name__)
 
 
 class ReportEngine:
-    def __init__(self, store: PostgresStore, neo4j: Neo4jStore, llm: LLMClient) -> None:
+    def __init__(self, store: PostgresStore, neo4j: Neo4jStore, llm: LLMClient, llm_briefs: bool = True) -> None:
         self.store = store
         self.neo4j = neo4j
         self.llm = llm
+        # False skips the model call and uses the deterministic template
+        # directly — same facts, no prose polish, zero quota. The switch for
+        # free-tier schedulers (REPORTS_LLM_BRIEFS).
+        self.llm_briefs = llm_briefs
 
     # ------------------------------------------------------------------
     # Briefs (one per typed event)
@@ -78,6 +82,8 @@ class ReportEngine:
     def _draft_brief(self, event: Event, facts: dict) -> str:
         from app.extraction.client import draft_text
 
+        if not self.llm_briefs:
+            return template_brief(event, facts)
         prompt = (
             "You are Baleen's markets reporter. Write a 2-4 sentence factual "
             "brief strictly from the facts provided. Name the key figures "
