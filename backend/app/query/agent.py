@@ -227,7 +227,10 @@ class QueryAgent:
             "$parameters — the executor does not bind them. Never use CREATE, "
             "MERGE, SET, DELETE, or CALL. If the question cannot be answered "
             "from this schema, call `generate_cypher` with a query that returns "
-            "nothing."
+            "nothing. Match people by surname with "
+            "`toLower(n.name) CONTAINS toLower(\"...\")` — never exact `=` on "
+            "names, since stored names carry first names, initials, and "
+            "suffixes the question omits."
         )
 
     def _generate_cypher(self, messages: list[dict]) -> str:
