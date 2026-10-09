@@ -66,10 +66,12 @@ Options-flow events have extra properties: ticker, contract_type (call|put),
 strike, expiration, premium, volume, open_interest, sentiment, event_time.
 Congress-trade events have extra properties: politician_name, chamber, party,
 committee_ids, ticker, transaction_type (buy|sell), amount_range,
-transaction_date, event_time.
+amount_low, amount_high (numeric bounds parsed from the label; absent on
+older nodes — treat missing as unknown, never zero), transaction_date,
+event_time.
 Insider-trade events have extra properties: insider_name, insider_cik, role,
 ticker, transaction_type (buy|sell), shares, price, amount_range,
-transaction_date, event_time.
+amount_low, amount_high (same semantics), transaction_date, event_time.
 
 Relationship types:
 - (Ticker)-[:IN_SECTOR]->(Sector)
