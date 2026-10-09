@@ -234,6 +234,14 @@ def test_agent_prompt_instructs_inlining_literals():
     assert "Do NOT use $parameters" in tool_text()
 
 
+def test_agent_prompt_instructs_surname_matching():
+    agent = QueryAgent(llm=stub_llm(), store=EmptyStore())
+    system = agent._system_prompt()
+    # Stored names carry first names/initials the question omits; exact
+    # matches silently return empty.
+    assert "CONTAINS" in system
+
+
 def test_columns_describe_ragged_rows_with_types():
     from app.query.agent import columns_for_rows
 
