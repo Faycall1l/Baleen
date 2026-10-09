@@ -64,7 +64,7 @@ class ProcessingPipeline:
         failures never raise.
         """
         tweets = self.store.claim_new_tweets(limit=limit)
-        summary = {"processed": 0, "unparsed": 0, "alerts": 0, "reports": 0, "failed": 0}
+        summary = {"processed": 0, "unparsed": 0, "alerts": 0, "reports": 0, "failed": 0, "deterministic": 0}
         done_ids: list[str] = []
         failed_ids: list[str] = []
         transport_failures = 0
@@ -77,6 +77,8 @@ class ProcessingPipeline:
                 event = event_from_filing_row(tweet)
                 if event is None:
                     event = self.extractor.extract(tweet)
+                else:
+                    summary["deterministic"] += 1
                 # Records from the filing feeds carry authoritative facts;
                 # ground the model output in them before writing.
                 event = maybe_enrich_event(tweet, event)
