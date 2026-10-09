@@ -41,6 +41,32 @@ LABEL_RE = re.compile(r"\([^()]*?:([A-Za-z_][\w:]*)")
 #: ``[:TYPE]``.
 REL_RE = re.compile(r"\[[^[\]]*?:([A-Za-z_][\w:]*)")
 
+#: Canonical directed edges (from_label, rel_type, to_label). Every schema
+#: relationship flows one way; a labeled edge pointing anywhere else joins
+#: nonsense and silently returns empty — the live failure that motivated
+#: this check (``(p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event)``).
+DIRECTED_EDGES: frozenset[tuple[str, str, str]] = frozenset(
+    {
+        ("Ticker", "IN_SECTOR", "Sector"),
+        ("Politician", "MEMBER_OF", "Committee"),
+        ("Committee", "OVERSEES", "Sector"),
+        ("Event", "INVOLVES_TICKER", "Ticker"),
+        ("Event", "INVOLVES_POLITICIAN", "Politician"),
+        ("Event", "INVOLVES_INSIDER", "Insider"),
+        ("Event", "IN_COMMITTEE", "Committee"),
+    }
+)
+
+#: Labeled node with optional variable and optional inline properties:
+#: ``(t:Ticker)``, ``(t:Ticker {ticker: 'NVDA'})``. Captures the label.
+_LABELED_NODE = r"\(\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\b[^()]*\)"
+#: ``-[r:TYPE]->`` with optional variable and the mandatory colon.
+_REL_RIGHT = r"-\[\s*:?\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\s*\]->"
+_EDGE_RIGHT_RE = re.compile(_LABELED_NODE + _REL_RIGHT + _LABELED_NODE)
+_EDGE_LEFT_RE = re.compile(
+    _LABELED_NODE + r"<-\[\s*:?\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\s*\]-" + _LABELED_NODE
+)
+
 
 def validate_cypher(query: str) -> list[str]:
     """Return a list of allowlist violations, or ``[]`` if the query is safe.
@@ -63,8 +89,36 @@ def validate_cypher(query: str) -> list[str]:
     for rel in _extract(REL_RE, query):
         if rel not in ALLOWED_RELATIONSHIPS:
             violations.append(f"relationship `{rel}` is not in the allowlist")
+    violations.extend(_directed_edge_violations(query))
 
     return violations
+
+
+def _directed_edge_violations(query: str) -> list[str]:
+    """Flag labeled edges running against the schema direction.
+
+    Only judges edges where both endpoint labels are present and the
+    relationship type is known — unlabeled or undirected patterns stay
+    permissive so working queries never break on this check.
+    """
+    violations: list[str] = []
+    for from_label, rel, to_label in _EDGE_RIGHT_RE.findall(query):
+        violations.extend(_check_edge(from_label, rel, to_label, "->"))
+    for to_label, rel, from_label in _EDGE_LEFT_RE.findall(query):
+        violations.extend(_check_edge(from_label, rel, to_label, "->"))
+    return violations
+
+
+def _check_edge(from_label: str, rel: str, to_label: str, arrow: str) -> list[str]:
+    if rel not in ALLOWED_RELATIONSHIPS:
+        return []
+    if from_label not in ALLOWED_LABELS or to_label not in ALLOWED_LABELS:
+        return []
+    if (from_label, rel, to_label) in DIRECTED_EDGES:
+        return []
+    return [
+        f"edge `({from_label})-[:{rel}]{arrow}({to_label})` runs against the schema direction"
+    ]
 
 
 def _has_embedded_statement_separator(query: str) -> bool:

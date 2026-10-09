@@ -82,3 +82,33 @@ def test_allowlist_rejects_index_constraint_statements():
     ):
         violations = validate_cypher(query)
         assert any("index/constraint" in v for v in violations)
+
+
+def test_direction_check_rejects_reversed_labeled_edges():
+    """Live failure: (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event) runs
+    clean and returns empty. The gate must flag the direction."""
+    violations = validate_cypher(
+        "MATCH (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event) RETURN p"
+    )
+    assert any("direction" in v for v in violations)
+
+
+def test_direction_check_accepts_schema_edges_with_properties():
+    ok = validate_cypher(
+        "MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker {ticker: 'NVDA'}) "
+        "MATCH (t)-[:IN_SECTOR]->(s:Sector) RETURN s.name"
+    )
+    assert ok == []
+    leftward = validate_cypher(
+        "MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician {id: 'W000817'}) RETURN p"
+    )
+    assert leftward == []
+
+
+def test_direction_check_rejects_wrong_pairs_and_ignores_unlabeled():
+    violations = validate_cypher(
+        "MATCH (t:Ticker)-[:IN_SECTOR]->(p:Politician) RETURN t"
+    )
+    assert any("direction" in v for v in violations)
+    assert validate_cypher("MATCH (a)-[:IN_SECTOR]->(b) RETURN a") == []
+    assert validate_cypher("MATCH (a:Ticker)-[:IN_SECTOR]-(s:Sector) RETURN a") == []
