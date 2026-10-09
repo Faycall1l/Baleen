@@ -103,7 +103,13 @@ aborts the others and every fetch is logged with count, timestamp, and errors.
 `TweetSource` is the interface all sources (and test fakes) implement.
 
 ### 2. Extraction
-For each new `raw_tweet`, the extractor asks the configured OpenAI-compatible
+Structured filing rows skip the model entirely: `app/extraction/filing.py`
+builds trade events straight from `raw_json` (filer, ticker, side, shares,
+price, dates), because spending an LLM call per parsed filing is what
+exhausts free-tier backups. This is what makes the scheduler viable without
+a paid model endpoint. Anything else — and any filing row missing minimum
+facts — falls back to the LLM path below, which also covers freeform posts.
+For each remaining `raw_tweet`, the extractor asks the configured OpenAI-compatible
 LLM (remote vLLM, `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_NAME`) to
 classify the text into one of the supported event types **using tool/function
 calling** against Pydantic JSON schemas — never freeform JSON from prose. If
