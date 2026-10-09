@@ -294,3 +294,26 @@ def test_insider_write_applies_entity_resolver_canonical_identity(neo4j_store):
         assert [(r["id"], r["name"]) for r in rows] == [("CANON-1", "Canonical Person")]
     finally:
         _cleanup(neo4j_store, event.deterministic_id)
+
+
+def test_amount_bounds_parsed_from_range_labels():
+    from app.graph.writer import _parse_amount_bounds
+
+    assert _parse_amount_bounds("$1,001 - $15,000") == (1001.0, 15000.0)
+    assert _parse_amount_bounds("$52,120,753") == (52120753.0, 52120753.0)
+    assert _parse_amount_bounds("over $1,000,000") == (1000000.0, None)
+    assert _parse_amount_bounds("under $50,000") == (0.0, 50000.0)
+    assert _parse_amount_bounds("$1.5M") == (1500000.0, 1500000.0)
+    assert _parse_amount_bounds(None) == (None, None)
+    assert _parse_amount_bounds("nonsense") == (None, None)
+
+
+def test_trade_events_carry_amount_bounds():
+    store = _FakeTxStore()
+    writer = GraphWriter(store)
+    writer.write_event(_event("bounds-1"))
+
+    merges = [params for query, params in store.stmts if "MERGE (n:Event" in query]
+    assert merges, "expected an Event MERGE statement"
+    assert merges[0]["props"]["amount_low"] == 1001.0
+    assert merges[0]["props"]["amount_high"] == 15000.0

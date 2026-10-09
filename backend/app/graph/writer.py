@@ -8,6 +8,7 @@ is a no-op. All nodes are stamped with the source tweet id/url for traceability.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable
 
 from app.db.neo4j import Neo4jStore
@@ -27,6 +28,40 @@ logger = logging.getLogger(__name__)
 SectorResolver = Callable[[str], str | None]
 
 DEFAULT_RESOLVER: SectorResolver = lambda ticker: TICKER_SECTORS.get(ticker)
+
+_AMOUNT_NUMBER_RE = re.compile(r"([\d,]+(?:\.\d+)?)\s*([MmKk])?")
+_AMOUNT_MULTIPLIER = {"M": 1_000_000.0, "K": 1_000.0}
+
+
+def _parse_amount_bounds(label: str | None) -> tuple[float | None, float | None]:
+    """Split a filing amount label into comparable numeric bounds.
+
+    ``"$1,001 - $15,000"`` -> ``(1001.0, 15000.0)``; a single amount binds
+    both ends; ``over``/``under``-style open ends stay ``None`` on the open
+    side. Unparseable labels yield ``(None, None)`` so the node simply lacks
+    the props (as do all pre-change nodes) — the query agent treats absent
+    bounds as unknown, never zero.
+    """
+    if not isinstance(label, str) or not label.strip():
+        return (None, None)
+    lowered = label.lower()
+    try:
+        numbers = [
+            float(n.replace(",", "")) * _AMOUNT_MULTIPLIER.get(suffix.upper(), 1.0)
+            for n, suffix in _AMOUNT_NUMBER_RE.findall(label)
+        ]
+    except ValueError:
+        return (None, None)
+    if not numbers:
+        return (None, None)
+    if len(numbers) == 1:
+        value = numbers[0]
+        if re.search(r"\b(over|above|more than|exceeding|greater than)\b", lowered):
+            return (value, None)
+        if re.search(r"\b(under|below|up to|less than)\b", lowered):
+            return (0.0, value)
+        return (value, value)
+    return (numbers[0], numbers[-1])
 
 
 class GraphWriter:
@@ -133,6 +168,12 @@ class GraphWriter:
         # The schema exposes the event kind as `type` on the Event node.
         props["type"] = props.pop("event_type")
         props["id"] = event.deterministic_id
+        if isinstance(event, (CongressTradeEvent, InsiderTradeEvent)):
+            # Comparable amount bounds for "over $XM" questions. Absent on
+            # old nodes (and unparseable labels); Neo4j drops null props.
+            low, high = _parse_amount_bounds(props.get("amount_range"))
+            props["amount_low"] = low
+            props["amount_high"] = high
         self._merge_node("Event", props, self._provenance(event))
 
     def _merge_ticker(self, ticker: str, tweet_id: str, tweet_url: str) -> str | None:
