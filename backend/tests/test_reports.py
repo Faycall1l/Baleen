@@ -274,3 +274,23 @@ def test_digest_facts_survive_graph_and_alert_failures():
     engine.neo4j = BoomNeo4j([])
     facts = engine._digest_facts("2026-09-10")
     assert facts["events"] == 0 and facts["tickers"] == [] and facts["alerts"] == []
+
+
+def test_write_brief_without_llm_uses_template_and_never_calls_model():
+    """REPORTS_LLM_BRIEFS=false: same facts, zero quota. The stub raises on
+    any call so a model touch fails the test outright."""
+
+    class _BoomLLM:
+        def chat(self, *args, **kwargs):
+            raise AssertionError("model must not be called")
+
+    from app.reports.engine import ReportEngine
+
+    store = _FakeStore()
+    engine = ReportEngine(store=store, neo4j=_FakeNeo4j(None), llm=_BoomLLM(), llm_briefs=False)
+    report = engine.write_brief(_congress())
+
+    assert report is not None
+    assert "Maxine Waters" in store.reports[0]["body"]
+    assert "JPM" in store.reports[0]["body"]
+    assert "https://" in store.reports[0]["body"]
