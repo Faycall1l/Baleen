@@ -9,6 +9,7 @@ graph properties or filing metadata; no LLM, deterministic, recomputed live.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 from app.db.neo4j import Neo4jStore
@@ -255,16 +256,28 @@ class SignalsEngine:
     # ------------------------------------------------------------------
 
     def bundle(self, window_days: int = WINDOW_DAYS) -> dict:
-        """All signals in one payload for the UI panel."""
+        """All signals in one payload for the UI panel.
+
+        The five sections query independently, so they fan out across
+        threads instead of stacking five sequential round-trips into one
+        gate slot — sequential was ~8s wall time and piled polls into
+        nginx 504s under load. Each section already degrades to [].
+        """
         since = (date.today() - timedelta(days=window_days)).isoformat()
-        return {
-            "window_days": window_days,
-            "momentum": self.momentum(since),
-            "clusters": self.clusters(since),
-            "options_meter": self.options_meter(),
-            "uncovered": self.uncovered(),
-            "suspicious": self.suspicious_timing(),
-        }
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            momentum = pool.submit(self.momentum, since)
+            clusters = pool.submit(self.clusters, since)
+            meter = pool.submit(self.options_meter)
+            uncovered = pool.submit(self.uncovered)
+            suspicious = pool.submit(self.suspicious_timing)
+            return {
+                "window_days": window_days,
+                "momentum": momentum.result(),
+                "clusters": clusters.result(),
+                "options_meter": meter.result(),
+                "uncovered": uncovered.result(),
+                "suspicious": suspicious.result(),
+            }
 
     def momentum(self, since: str) -> list[dict]:
         try:
