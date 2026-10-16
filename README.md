@@ -9,13 +9,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Faycall1l/Baleen/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Faycall1l/Baleen/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green" /></a>
   <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" /></a>
   <a href="docker-compose.yml"><img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" /></a>
 </p>
 
-Baleen turns congressional trading disclosures, insider filings, and unusual
-options flow into a queryable **Neo4j knowledge graph** — then serves it as a
+Baleen turns congressional trading disclosures (House Clerk), SEC EDGAR Form 4
+insider filings, and unusual options flow (X API and options chains) into a queryable **Neo4j knowledge graph** — then serves it as a
 Bloomberg-style tile workspace for investigative journalists: ranked **story
 leads** first (unsupervised sector trades, market-beating filings, congress
 flow), a shared-evidence model where every number traces to a filing and every
@@ -185,5 +186,5 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-> Baleen is a demonstration project. It is not financial advice, and it is not
+> Baleen is a demonstration project. Data comes from public filings and APIs. It is not financial advice, and it is not
 > affiliated with X Corp. or @unusual_whales. Data shown is informational only.
