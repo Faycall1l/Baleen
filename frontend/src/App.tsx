@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AlertStack from './components/AlertStack';
 import AlertsPanel from './components/AlertsPanel';
@@ -25,7 +25,11 @@ import { useFeeds } from './hooks/useFeeds';
 import { useAlertsInbox } from './hooks/useAlertsInbox';
 import { useAlertRules } from './hooks/useAlertRules';
 import { useFlow } from './hooks/useFlow';
+import { useDeepLinkNode, useUrlWriteBack } from './hooks/useDeepLink';
 import { useGraphFeed } from './hooks/useGraphFeed';
+import { useHiddenTypes } from './hooks/useHiddenTypes';
+import { usePathMode } from './hooks/usePathMode';
+import { useScrubber } from './hooks/useScrubber';
 import { useInspectorLinks } from './hooks/useInspectorLinks';
 import { useCommittee } from './hooks/useCommittee';
 import { usePerson } from './hooks/usePerson';
@@ -33,9 +37,10 @@ import { useTicker } from './hooks/useTicker';
 import { usePollingTick } from './hooks/usePollingTick';
 import { useSelection } from './hooks/useSelection';
 import { loadOnboarded, saveOnboarded } from './onboarding';
+import { fetchPerson, fetchTicker } from './api';
 import { personIdForNode } from './personView';
-import { buildGraphUrl, parseGraphUrl } from './graphUrl';
-import { loadHiddenTypes, loadLayout, saveHiddenTypes, saveLayout } from './uiPrefs';
+import { parseGraphUrl } from './graphUrl';
+import { loadLayout, saveLayout } from './uiPrefs';
 import {
   closeInLayout,
   flattenLayout,
@@ -47,11 +52,7 @@ import {
   type Layout,
   type TileId,
 } from './tileState';
-import { soloHidden } from './typeFilters';
-import { SCHEMA_LABELS } from './graph/schema';
-import { daysAgoToISO, SCRUB_DAYS } from './timeScrub';
-import { fetchGraph, fetchPath, fetchPerson, fetchTicker, fetchCommittee, type PathResponse } from './api';
-import type { GraphData, GraphNode } from './types';
+import { SCRUB_DAYS } from './timeScrub';
 
 export default function App() {
   const { graph, graphError, graphStage, updatedAt, loadGraph, showEvents, setShowEvents } = useGraphFeed();
@@ -72,36 +73,7 @@ export default function App() {
   useEffect(() => {
     saveLayout(layout);
   }, [layout]);
-  // Type filters live here (not in TimelineBoard) so the URL writer below sees
-  // the whole view state in one place.
-  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(
-    () => new Set(initialUrl.hidden.length > 0 ? initialUrl.hidden : loadHiddenTypes()),
-  );
-
-  const toggleType = useCallback((label: string) => {
-    setHiddenTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      saveHiddenTypes(next);
-      return next;
-    });
-  }, []);
-
-  const clearTypes = useCallback(() => {
-    setHiddenTypes(() => {
-      saveHiddenTypes([]);
-      return new Set();
-    });
-  }, []);
-
-  const soloType = useCallback((label: string) => {
-    setHiddenTypes((prev) => {
-      const next = soloHidden(SCHEMA_LABELS, label, prev);
-      saveHiddenTypes(next);
-      return next;
-    });
-  }, []);
+  const { hiddenTypes, toggleType, clearTypes, soloType } = useHiddenTypes(initialUrl.hidden);
   // Shortcut help: `?` outside inputs toggles it.
   const [showHelp, setShowHelp] = useState(false);
   // First-run tour: shown until dismissed, persisted across visits.
@@ -117,26 +89,7 @@ export default function App() {
   const feedsTick = usePollingTick(30_000, 0);
   const graphTick = usePollingTick(30_000, 20_000);
 
-  // Time scrubber: days-ago offset, null for live. The frozen
-  // snapshot replaces the board data until cleared; live polls continue
-  // underneath so jumping back is instant.
-  const [scrubDaysAgo, setScrubDaysAgo] = useState<number | null>(null);
-  const [asOfData, setAsOfData] = useState<GraphData | null>(null);
-  useEffect(() => {
-    if (scrubDaysAgo === null) {
-      setAsOfData(null);
-      return;
-    }
-    let cancelled = false;
-    fetchGraph(500, undefined, undefined, daysAgoToISO(scrubDaysAgo, Date.now()))
-      .then((data) => {
-        if (!cancelled) setAsOfData(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [scrubDaysAgo]);
+  const { scrubDaysAgo, setScrubDaysAgo, asOfData } = useScrubber();
 
   const {
     alerts,
@@ -166,69 +119,11 @@ export default function App() {
     loadGraph();
   }, [graphTick, loadGraph]);
 
-  // Select the deep-linked node once it loads. Consumed on first
-  // success — or on any manual selection — so clearing it stays cleared.
-  // When the node never loads (outside the window), resolve entity cards
-  // directly — Politician/Ticker/Committee links open anywhere, so member
-  // profiles are shareable even with no graph context loaded.
-  const urlNodeConsumed = useRef(false);
-  useEffect(() => {
-    if (urlNodeConsumed.current || !graph || !initialUrl.node) return;
-    if (selected) {
-      urlNodeConsumed.current = true;
-      return;
-    }
-    const node = graph.nodes.find((n) => n.id === initialUrl.node);
-    if (node) {
-      urlNodeConsumed.current = true;
-      handleSelect(node);
-      return;
-    }
-    // Not in the loaded window: resolve the card directly for entity links.
-    urlNodeConsumed.current = true;
-    const target = initialUrl.node;
-    const sep = target.indexOf(':');
-    const label = sep < 0 ? '' : target.slice(0, sep);
-    const key = sep < 0 ? '' : target.slice(sep + 1);
-    if (!key) return;
-    let cancelled = false;
-    const openCard = (title: string, props: Record<string, unknown>) => {
-      if (!cancelled) handleSelect({ id: target, label, key, title, props });
-    };
-    if (label === 'Politician') {
-      fetchPerson(key)
-        .then((res) => openCard(res.person?.name ?? key, { id: key }))
-        .catch(() => {});
-    } else if (label === 'Ticker') {
-      fetchTicker(key)
-        .then((res) => openCard(res.ticker?.ticker ?? key, {}))
-        .catch(() => {});
-    } else if (label === 'Committee') {
-      fetchCommittee(key)
-        .then((res) => openCard(res.committee?.name ?? key, { id: key }))
-        .catch(() => {});
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [graph, selected, initialUrl.node, handleSelect]);
+  useDeepLinkNode(graph, selected, initialUrl.node, handleSelect);
+  useUrlWriteBack(selected?.id ?? null, hiddenTypes, layout);
 
-  // Write the view state back to the URL on every change.
-  useEffect(() => {
-    const url = buildGraphUrl({
-      node: selected?.id ?? null,
-      hidden: [...hiddenTypes],
-      tiles: flattenLayout(layout),
-    });
-    window.history.replaceState(null, '', url);
-  }, [selected?.id, hiddenTypes, layout]);
-
-  // Path mode: armed from any inspector via PathFromButton; the next
-  // selected node completes the pair and opens the path tile. Declared
-  // before the key handler below so Esc can disarm.
-  const [pathFrom, setPathFrom] = useState<GraphNode | null>(null);
-  const [pathResult, setPathResult] = useState<PathResponse | null>(null);
-  const [pathError, setPathError] = useState<string | null>(null);
+  const path = usePathMode(handleSelect, () => setLayout((prev) => openInLayout(prev, 'path')));
+  const { pathFrom, setPathFrom, pathResult, pathError } = path;
 
   // Esc restores an enlarged tile, disarms path mode, or clears the
   // inspector selection. `?` outside inputs opens help.
@@ -250,7 +145,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [enlarged, showHelp, pathFrom, setSelected]);
+  }, [enlarged, showHelp, pathFrom, setPathFrom, setSelected]);
 
   // Alerts inbox: unread watermark + rule/text filtering live here so
   // the rail badge and the tile share one source of truth.
@@ -268,29 +163,8 @@ export default function App() {
     if (full) handleSelect(full);
   };
 
-  const handleBoardSelect = (node: GraphNode | null) => {
-    if (node && pathFrom && node.id !== pathFrom.id) {
-      const from = pathFrom;
-      setPathFrom(null);
-      setPathError(null);
-      fetchPath(from.id, node.id)
-        .then((res) => {
-          setPathResult(res);
-          setLayout((prev) => openInLayout(prev, 'path'));
-        })
-        .catch((err: unknown) => {
-          setPathResult(null);
-          setPathError(err instanceof Error ? err.message : 'Path fetch failed');
-          setLayout((prev) => openInLayout(prev, 'path'));
-        });
-    } else if (node && pathFrom && node.id === pathFrom.id) {
-      setPathFrom(null);
-    }
-    handleSelect(node);
-  };
+  const handleBoardSelect = path.completeOrSelect;
 
-  // Member clicks from any surface: the graph node when loaded, else the
-  // person card as a synthetic node. Never a dead click.
   // Member clicks from any surface: the graph node when loaded, else the
   // person card as a synthetic node. Never a dead click.
   const openMemberAnywhere = (pid: string) => {
@@ -309,7 +183,6 @@ export default function App() {
       })
       .catch(() => {});
   };
-  // enlarged dock so the revealed node is visible; an id opens its tile.
   // Cross-surface panel opener for the inspector links: null restores an
   // enlarged dock so the revealed node is visible; an id opens its tile.
   const openTile = useCallback((id: TileId | null) => {
@@ -586,11 +459,7 @@ export default function App() {
             )}
             <PathFromButton
               armed={pathFrom !== null}
-              onArm={() => {
-                setPathResult(null);
-                setPathError(null);
-                setPathFrom(selected);
-              }}
+              onArm={() => path.arm(selected)}
               onCancel={() => setPathFrom(null)}
             />
           </aside>
