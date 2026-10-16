@@ -6,6 +6,23 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: backend}}
+    env:
+      DATABASE_URL: postgresql+psycopg://baleen:baleen@localhost:5432/baleen
+      TEST_DATABASE_URL: postgresql+psycopg://baleen:baleen@localhost:5432/baleen_test
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: baleen_dev_pass
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: baleen, POSTGRES_PASSWORD: baleen, POSTGRES_DB: baleen_test}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U baleen" --health-interval 5s --health-retries 10
+      neo4j:
+        image: neo4j:5
+        env: {NEO4J_AUTH: neo4j/baleen_dev_pass}
+        ports: ["7687:7687"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

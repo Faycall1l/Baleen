@@ -305,7 +305,7 @@ def test_malformed_row_is_skipped_not_crash(monkeypatch):
 
     # The source resolves `_record` in its own module (L5), so patch there.
     monkeypatch.setattr(disclosures, "_record", flaky)
-    src = _source([broken, good], lookback_days=30)
+    src = _source([broken, good], lookback_days=3650)
     result = src.fetch_recent([], 3600)
 
     assert len(result.tweets) == 1

@@ -104,7 +104,7 @@ def test_source_emits_traceable_records():
         fetch_index=lambda year: INDEX,
         fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
     )
-    result = src.fetch_recent([], 30 * 86400)
+    result = src.fetch_recent([], 3650 * 86400)
 
     assert result.errors == []
     assert len(result.tweets) == 4
@@ -122,8 +122,8 @@ def test_source_skips_seen_filings_on_repill():
         fetch_index=lambda year: INDEX,
         fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
     )
-    assert len(src.fetch_recent([], 30 * 86400).tweets) == 4
-    assert src.fetch_recent([], 30 * 86400).tweets == []  # same process: no re-download
+    assert len(src.fetch_recent([], 3650 * 86400).tweets) == 4
+    assert src.fetch_recent([], 3650 * 86400).tweets == []  # same process: no re-download
 
 
 def test_source_index_failure_returns_errors():
@@ -149,10 +149,10 @@ def test_transient_pdf_failure_retried_next_poll_issues_12():
         fetch_index=lambda year: INDEX,
         fetch_pdf=flaky,
     )
-    first = src.fetch_recent([], 30 * 86400)
+    first = src.fetch_recent([], 3650 * 86400)
     assert first.tweets == [] and len(first.errors) == 1
 
-    second = src.fetch_recent([], 30 * 86400)
+    second = src.fetch_recent([], 3650 * 86400)
     assert second.errors == []
     assert len(second.tweets) == 4
     assert calls["n"] == 2  # filing not skipped after the transient failure
@@ -288,7 +288,7 @@ def test_malformed_record_skipped_without_aborting_poll(monkeypatch):
         fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
     )
 
-    result = src.fetch_recent([], 30 * 86400)
+    result = src.fetch_recent([], 3650 * 86400)
 
     assert result.tweets == []
     assert result.errors == []  # a malformed row is not a source failure
@@ -304,7 +304,7 @@ def test_caps_pdfs_per_poll_then_breaks():
         fetch_index=lambda year: idx,
         fetch_pdf=lambda year, doc_id: _pdf_bytes(PTR_TEXT),
     )
-    result = src.fetch_recent([], 30 * 86400)
+    result = src.fetch_recent([], 3650 * 86400)
     assert len(result.tweets) == 4  # only the top (newest) filing's trades
 
 
