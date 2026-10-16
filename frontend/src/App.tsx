@@ -250,7 +250,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [enlarged, showHelp, pathFrom]);
+  }, [enlarged, showHelp, pathFrom, setSelected]);
 
   // Alerts inbox: unread watermark + rule/text filtering live here so
   // the rail badge and the tile share one source of truth.

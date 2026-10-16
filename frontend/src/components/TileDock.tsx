@@ -166,7 +166,6 @@ function SplitView({
     <div className={`split-${node.dir}`}>
       {node.children.map((child, i) => (
         <SplitView
-          // eslint-disable-next-line react/no-array-index-key
           key={`${child.type === 'tile' ? child.id : `split-${i}`}`}
           node={child}
           enlarged={enlarged}

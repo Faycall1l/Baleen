@@ -61,7 +61,7 @@ ruff check . && ruff format --check .
 
 # frontend
 cd frontend && npm ci && npm run dev    # API on :8000
-npm test && npm run build
+npm run lint && npm test && npm run build
 ```
 
 CI runs both suites against Postgres and Neo4j service containers.

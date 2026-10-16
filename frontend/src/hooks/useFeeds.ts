@@ -137,7 +137,6 @@ export function useFeeds() {
       es?.close();
       if (timer) clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // One stable callback for the 30s tick so App's effect deps stay flat.
