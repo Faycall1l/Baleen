@@ -1,7 +1,15 @@
 # Baleen — Alert Engine
 
-Lightweight rule evaluation over newly written graph events. In MVP scope there
-is exactly **one** rule; the design leaves room for more without shipping them.
+Rule evaluation over newly written graph events. Three rules ship, each a method
+registered with the `@rule` decorator in `app/alerts/rules.py`.
+
+| Rule | Fires when |
+| --- | --- |
+| `politician_trades_in_oversight_sector` | a member of Congress trades a ticker in a sector their committee oversees |
+| `insider_large_buy` | a corporate insider buys $1M+ of their own stock in one trade |
+| `unusual_options_sweep` | one contract's day volume is 5x+ its open interest |
+
+Rules can be switched on and off at runtime through `/api/rules`.
 
 ## Flow
 
@@ -28,7 +36,7 @@ evaluates each active row in alert_rules
 The engine reuses the same LLM client wrapper as extraction
 (`app/extraction/client.py`) — no separate provider wiring.
 
-## The one MVP rule: `politician_trades_in_oversight_sector`
+## `politician_trades_in_oversight_sector`
 
 **When it fires.** A `CongressTradeEvent` references a politician `P` who trades
 a ticker `T`, and `T`'s sector is overseen by at least one committee `P` is a
@@ -44,19 +52,14 @@ member of.
 **Alert output.** Title: `"<Politician> traded <TICKER> in <Sector>, a sector
 their committee oversees"`. Body: an LLM-drafted 2–3 sentence summary grounded
 in the graph facts (politician, ticker, transaction type, amount, sector,
-committee, date), always citing the source tweet URL.
+committee, date), always citing the source URL.
 
 ## Rule configuration
 
-Rules live in the `alert_rules` table. The MVP rule is seeded by
-`backend/scripts/seed_reference.py` (or `scripts/seed_alerts.py`):
-
-| name | description | config |
-| --- | --- | --- |
-| `politician_trades_in_oversight_sector` | Alerts when a politician trades a ticker whose sector is overseen by one of their committees | `{}` |
-
-Disable a rule with `UPDATE alert_rules SET active = false WHERE name = ...`.
-The engine logs every evaluation (rule, event, triggered yes/no).
+Rules live in the `alert_rules` table and are seeded from the `@rule` registry
+at startup. Disable one with `PUT /api/rules/{name}` or
+`UPDATE alert_rules SET active = false WHERE name = ...`. The engine logs every
+evaluation (rule, event, triggered yes/no).
 
 ## Why it's grounded
 

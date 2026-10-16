@@ -1,54 +1,31 @@
-# Baleen — Architecture
+# Architecture
 
-Baleen is an agentic **Graph-RAG** system that turns a live financial-Twitter/X
-stream (congressional trading disclosures + unusual options flow, in the style
-of [@unusual_whales](https://x.com/unusual_whales)) into a queryable Neo4j
-knowledge graph, exposed through an Obsidian-style graph UI, a natural-language
-query bar, and a lightweight alert engine.
-
-This document is the high-level architecture map. Start with the
-[README](../README.md) for quickstart, then read this for the data flow, then
-[SCHEMA.md](./SCHEMA.md) for the exact graph/table definitions.
-
----
+Baleen ingests public trading disclosures into a Neo4j knowledge graph and
+serves it through a tile workspace, a natural-language query bar, and alert and
+report engines. Read [SCHEMA.md](./SCHEMA.md) for the exact graph and table
+definitions and [SETUP.md](./SETUP.md) to run it.
 
 ## System overview
 
 ```
-                          ┌──────────────────────────────┐
-                          │        X (Twitter) API        │
-                          │        recent-search v2       │
-                          └──────────────┬───────────────┘
-                                         │ poll (APScheduler)
-                                         ▼
-        ┌─────────────────────────────────────────────────┐
-        │                   BACKEND (FastAPI)              │
-        │                                                 │
-        │  INGESTION         raw_tweets  ─────────────► PostgreSQL
-        │  (tweepy, dedup)      (tweet_id UNIQUE)          ▲
-        │                                                 │
-        │  EXTRACTION         vLLM / OpenAI-compat         │
-        │  (tool-calling or   /v1/chat/completions         │
-        │   constrained-JSON)  ────────────► Event         │
-        │                        (Pydantic validated)      │
-        │                                                 │
-        │  GRAPH WRITER       Cypher MERGE ─────────────► Neo4j
-        │  (idempotent)         nodes + edges + source     │
-        │                        tweet provenance          │
-        │                                                 │
-        │  QUERY AGENT         NL question ──► Cypher      │
-        │  (read-only role,     allowlist validate ──► run │
-        │   allowlist)          ──► grounded NL answer     │
-        │                                                 │
-        │  ALERT ENGINE        rules + LLM summary ──────► alerts (PG)
-        └─────────────────────────────────────────────────┘
-                          ▲                 │
-        ┌─────────────────┴─────┐   ┌───────▼───────────────┐
-        │  FRONTEND (React+Vite)│   │                       │
-        │  Graph View           │   │  /api/graph           │
-        │  Query Bar            │   │  /api/query           │
-        │  Alerts Panel         │   │  /api/alerts          │
-        └───────────────────────┘   └───────────────────────┘
+ House Clerk PTRs ─┐
+ Senate mirror ────┤
+ SEC EDGAR Form 4 ─┼─► MultiSource ─► Postgres raw_tweets (dedup on tweet_id)
+ CBOE option chains┤                          │
+ X API (optional) ─┘                          ▼
+                              extraction: filing rows → events directly,
+                              free text → LLM tool-calling (Pydantic schemas)
+                                              │
+                                              ▼
+                              Neo4j graph (idempotent MERGE, source URL on every node)
+                                              │
+              ┌──────────────┬────────────────┼───────────────┬───────────────┐
+              ▼              ▼                ▼               ▼               ▼
+          alerts         reports          signals       query agent      graph / flow
+        (3 rules)    (briefs + digest)  (no LLM)     (NL → Cypher)      REST + SSE
+                                              │
+                                              ▼
+                                   React tile workspace
 ```
 
 ## Repository layout
@@ -60,10 +37,9 @@ Baleen/
 ├── README.md
 ├── docs/
 │   ├── ARCHITECTURE.md       # this file
-│   ├── ASSUMPTIONS.md        # decisions made where the spec was missing
 │   ├── SCHEMA.md             # exact Neo4j schema + Postgres tables
 │   ├── SETUP.md              # env vars, vLLM wiring, seeding, tests
-│   └── ALERTS.md             # alert engine + the one MVP rule
+│   └── ALERTS.md             # alert engine and rules
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI app + scheduler startup
@@ -81,14 +57,19 @@ Baleen/
 │   │   ├── api/              # REST routes (/graph, /query, /alerts, /reports, /leaderboard, /signals, /stream)
 │   │   └── scheduler.py      # APScheduler wiring (polls all live sources)
 │   ├── scripts/              # seed_reference.py, ingest_once.py (--real), llm_mock.py
-│   └── tests/                # per-phase unit + integration tests
+│   └── tests/                # unit + integration tests (Postgres and Neo4j required for the latter)
 └── frontend/
     └── src/
-        ├── App.tsx           # six surfaces: Graph, Query, Alerts, Reports, Leaderboard, Signals
-        └── components/       # GraphView, QueryBar, AlertsPanel, ReportsPanel, LeaderboardPanel, SignalsPanel, NodeDetail
+        ├── App.tsx           # workspace shell, URL state, polling
+        ├── components/       # one component per tile plus detail cards
+        ├── hooks/            # feeds, graph polling, inspector links
+        └── tileState.ts      # split-tree layout model (pure functions)
 ```
 
-## Data flow phases
+## Data flow
+
+> Naming note: `raw_tweets`, `tweet_id` and `tweet_url` date from the X-only prototype. They now hold
+> a record of any source (filing PDF, Form 4, options print, post).
 
 ### 1. Ingestion
 `backend/app/ingestion/pipeline.py` runs on a timer (APScheduler). Each tick
@@ -147,10 +128,8 @@ rather than fabricating. If Cypher fails validation or the LLM is unsure, it
 says so.
 
 ### 5. Alerts
-`backend/app/alerts/engine.py` runs on every new `CongressTradeEvent`. It
-evaluates active rules from the `alert_rules` table. The single MVP rule —
-`politician_trades_in_oversight_sector` — fires when a politician trades a
-ticker whose sector is overseen by one of their committees. On trigger the LLM
+`backend/app/alerts/engine.py` runs on every new event. It
+evaluates active rules from the `alert_rules` table (see [ALERTS.md](./ALERTS.md)). On trigger the LLM
 drafts a short factual summary with source links, stored in the `alerts` table
 and served to the Alerts Panel.
 
@@ -172,26 +151,19 @@ Served live at `/api/signals` to the Signals panel.
 
 ## Frontend
 
-Six surfaces, no dashboards, no extra pages:
+A tile workspace: each panel docks beside the others, splits, enlarges, and
+persists in the URL so any view is a shareable link.
 
-- **Graph view** — force-directed rendering of the Neo4j graph fetched from
-  `/api/graph`, dark Obsidian theme, click-to-expand node detail panel showing
-  linked source tweets.
-- **Query bar** — always visible; calls `/api/query`; shows the generated
-  (allowlisted) Cypher and answers grounded in the result rows, citing source
-  tweets.
-- **Alerts panel** — collapsible; lists recent alerts with links to relevant
-  graph nodes.
-- **Reports panel** — auto-published event briefs (one per typed event) plus
-  the rolling daily digest, from `/api/reports`.
-- **Leaderboard panel** — best congressional trades by return since filing,
-  from `/api/leaderboard`.
-- **Signals panel** — computed pressure signals (momentum, clusters, options
-  meter, timing, uncovered bets), from `/api/signals`.
+- **Insights**: KPI strip and charts (congress buy/sell, options call/put, excess return, movers).
+- **Story leads**: ranked signals (off-committee trades, market-beating filings, congress flow).
+- **Signal board**: time-aligned event lanes with a time scrubber and type filters.
+- **Flow tape**: filterable options and insider prints.
+- **Query bar**: natural-language questions; shows the allowlisted Cypher and the source rows.
+- **Alerts, Reports, Leaderboard, Activity**: feeds from the matching REST routes.
+- **Path**: shortest connection between two entities in the graph.
+- **Detail cards** for politicians, tickers and committees, linked from every row.
 
 ## Deployment
 
-Docker Compose runs four services from `docker-compose.yml`: Postgres, Neo4j,
-the FastAPI backend, and the Vite frontend (served as a static build behind the
-backend, or as its own container). One `docker-compose up` from a clean checkout
-starts everything. See [SETUP.md](./SETUP.md).
+`docker compose up` starts Postgres, Neo4j, the FastAPI backend and the
+frontend. See [SETUP.md](./SETUP.md).

@@ -30,8 +30,7 @@ ingestion idempotent (re-polls skip rows that already exist).
 
 ### `alert_rules`
 
-Active rule definitions. Exactly one MVP rule ships seeded:
-`politician_trades_in_oversight_sector`.
+Active rule definitions, seeded from the registry in `app/alerts/rules.py`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -127,10 +126,9 @@ The query agent connects with a dedicated read-only Neo4j user. See
 
 ---
 
-## 3. Example Cypher the agent must be able to produce
+## 3. Example Cypher the agent produces
 
-These are the three MVP example questions (see
-[ASSUMPTIONS.md](./ASSUMPTIONS.md#%C2%A754--query-agent--example-questions)).
+Three example questions the agent is built to answer.
 
 **Q1 — committee → sectors → tickers**
 ```cypher
