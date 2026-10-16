@@ -18,6 +18,7 @@ import logging
 from neo4j import Driver, GraphDatabase, unit_of_work
 
 from app.config import Settings
+from app.graph.schema import LABEL_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +134,8 @@ class Neo4jStore:
         ``CREATE RANGE INDEX ... IF NOT EXISTS`` is safe to call repeatedly;
         the schema-change statements are committed in their own transaction.
 
-        Besides the two query-path indexes, every node key in ``LABEL_KEYS`` is
-        indexed so the writer's equality MERGEs resolve
-        the anchor node through an index instead of a full label scan.
+        Every node key in ``LABEL_KEYS`` also gets a uniqueness constraint so
+        the writer's equality MERGEs resolve through an index, not a label scan.
         """
         stmts = [
             # Enables index-backed ``ORDER BY e.event_time DESC`` in the
@@ -149,13 +149,13 @@ class Neo4jStore:
             "CREATE RANGE INDEX event_first_seen_at IF NOT EXISTS FOR (e:Event) ON (e.first_seen_at)",
             # Covers the ``WHERE e.tweet_id = ...`` dedup path in the writer.
             "CREATE RANGE INDEX event_tweet_id IF NOT EXISTS FOR (e:Event) ON (e.tweet_id)",
-            # Equality anchors for GraphWriter MERGEs (LABEL_KEYS in app/graph/schema.py).
-            "CREATE RANGE INDEX event_id IF NOT EXISTS FOR (e:Event) ON (e.id)",
-            "CREATE RANGE INDEX politician_id IF NOT EXISTS FOR (p:Politician) ON (p.id)",
-            "CREATE RANGE INDEX insider_id IF NOT EXISTS FOR (i:Insider) ON (i.id)",
-            "CREATE RANGE INDEX committee_id IF NOT EXISTS FOR (c:Committee) ON (c.id)",
-            "CREATE RANGE INDEX ticker_ticker IF NOT EXISTS FOR (t:Ticker) ON (t.ticker)",
-            "CREATE RANGE INDEX sector_name IF NOT EXISTS FOR (s:Sector) ON (s.name)",
+        ]
+        # Unique constraints double as the equality index the writer's MERGEs
+        # anchor on; a separate range index on the same property would block
+        # them. Names match scripts/seed_reference.py.
+        stmts += [
+            f"CREATE CONSTRAINT baleen_{label.lower()}_key IF NOT EXISTS FOR (n:{label}) REQUIRE n.{key} IS UNIQUE"
+            for label, key in LABEL_KEYS.items()
         ]
         with self._driver.session() as session:
             for stmt in stmts:
