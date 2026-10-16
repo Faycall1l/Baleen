@@ -3,6 +3,7 @@ import type { TileId } from '../tileState';
 export type RailKey = TileId;
 
 const ITEMS: { key: RailKey; label: string }[] = [
+  { key: 'insights', label: 'Insights' },
   { key: 'board', label: 'Board' },
   { key: 'leads', label: 'Leads' },
   { key: 'flow', label: 'Flow' },

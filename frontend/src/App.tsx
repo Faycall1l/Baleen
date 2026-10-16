@@ -5,6 +5,7 @@ import AlertsPanel from './components/AlertsPanel';
 import LeaderboardPanel from './components/LeaderboardPanel';
 import LeadsPanel from './components/LeadsPanel';
 import ReportsPanel from './components/ReportsPanel';
+import InsightsPanel from './components/InsightsPanel';
 import ActivityPanel from './components/ActivityPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
@@ -390,6 +391,13 @@ export default function App() {
   };
 
   const renderTileBody = (id: TileId) => {
+    if (id === 'insights') {
+      return (
+        <div className="flow-tile-scroll">
+          <InsightsPanel signals={signals} leaders={leaders} activity={activity} unreadAlerts={inbox.unread} onTickerClick={openSignalTicker} />
+        </div>
+      );
+    }
     if (id === 'leads') {
       return (
         <div className="flow-tile-scroll">
@@ -518,7 +526,7 @@ export default function App() {
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
-          counts={{ board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: activityCount, path: pathResult ? pathResult.nodes.length : 0 }}
+          counts={{ insights: 0, board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: activityCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <main className="graph-area">
           <TileDock

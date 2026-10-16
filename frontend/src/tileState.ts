@@ -30,7 +30,7 @@ export type Layout = LayoutNode | null;
 export const DEFAULT_LAYOUT: Layout = {
   type: 'split',
   dir: 'row',
-  children: [{ type: 'tile', id: 'leads' }, { type: 'tile', id: 'board' }],
+  children: [{ type: 'tile', id: 'insights' }, { type: 'tile', id: 'board' }],
 };
 
 export type TileId =
@@ -41,6 +41,7 @@ export type TileId =
   | 'reports'
   | 'leaders'
   | 'signals'
+  | 'insights'
   | 'path';
 
 const ALL_TILES: ReadonlySet<string> = new Set([
@@ -51,6 +52,7 @@ const ALL_TILES: ReadonlySet<string> = new Set([
   'reports',
   'leaders',
   'signals',
+  'insights',
   'path',
 ]);
 
@@ -62,10 +64,11 @@ export const ALL_TILE_IDS: TileId[] = [
   'reports',
   'leaders',
   'signals',
+  'insights',
   'path',
 ];
 
-export const DEFAULT_TILES: TileId[] = ['leads', 'board'];
+export const DEFAULT_TILES: TileId[] = ['insights', 'board'];
 
 export const TILE_TITLES: Record<TileId, string> = {
   board: 'Signal board',
@@ -75,6 +78,7 @@ export const TILE_TITLES: Record<TileId, string> = {
   reports: 'Reports',
   leaders: 'Leaderboard',
   signals: 'Activity',
+  insights: 'Insights',
   path: 'Path',
 };
 
