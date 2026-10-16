@@ -6,4 +6,3 @@ __pycache__/
 venv/
 .env
 tests/
-scripts/llm_mock.py

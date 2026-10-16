@@ -56,7 +56,7 @@ Baleen/
 │   │   ├── signals/          # computed pressure signals (no LLM)
 │   │   ├── api/              # REST routes (/graph, /query, /alerts, /reports, /leaderboard, /signals, /stream)
 │   │   └── scheduler.py      # APScheduler wiring (polls all live sources)
-│   ├── scripts/              # seed_reference.py, ingest_once.py (--real), llm_mock.py
+│   ├── scripts/              # seed_reference.py, ingest_once.py (--real)
 │   └── tests/                # unit + integration tests (Postgres and Neo4j required for the latter)
 └── frontend/
     └── src/

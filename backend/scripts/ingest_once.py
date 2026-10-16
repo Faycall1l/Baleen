@@ -10,7 +10,7 @@ tweets already stored.
 
 With ``--live`` it instead pulls from the real X API for the configured
 handles and the search window from env, using the configured LLM endpoint
-(vLLM or ``scripts/llm_mock.py``).
+(e.g. vLLM).
 
 Usage:
     python -m scripts.ingest_once                 # demo corpus

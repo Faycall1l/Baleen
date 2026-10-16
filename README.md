@@ -38,7 +38,7 @@ docker compose up --build
 docker compose exec backend python -m scripts.seed_reference
 ```
 
-UI at http://localhost:5173, API docs at http://localhost:8000/docs. The scheduler polls every five minutes. Free-text extraction and brief drafting need an OpenAI-compatible LLM (`LLM_BASE_URL`); structured filings skip the model, so the keyless feeds work without one. To run without any LLM or credentials, use the bundled mock and sample corpus described in [docs/SETUP.md](docs/SETUP.md).
+UI at http://localhost:5173, API docs at http://localhost:8000/docs. The scheduler polls every five minutes. Free-text extraction and brief drafting need an OpenAI-compatible LLM (`LLM_BASE_URL`); structured filings skip the model, so the keyless feeds work without one.
 
 ## How it works
 

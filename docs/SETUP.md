@@ -8,7 +8,7 @@ How to configure, run, seed, and test Baleen.
 - Python 3.11+ (only for running the backend/tests outside Docker)
 - Node.js 18+ (only for frontend dev outside Docker)
 - An X (Twitter) API v2 developer project — or placeholder creds, see below
-- A vLLM instance serving an open-weight model (or a local mock, see below)
+- A vLLM instance serving an open-weight model
 
 ## 1. Configure environment
 
@@ -66,20 +66,6 @@ Transport failures (network blips, a vLLM restart, HTTP error statuses) are
 retried with exponential backoff up to `LLM_MAX_RETRIES` (default 2), so a
 single hiccup never fails a whole run; `LLM_TIMEOUT_SECONDS` bounds each
 attempt.
-
-### Local mock server (no LLM needed)
-
-For development and tests without any model, run the bundled stub — it serves
-tool calls / JSON extraction and query-answering with deterministic canned
-output:
-
-```bash
-cd backend && python -m scripts.llm_mock   # listens on :8001 (set PORT=8002 to override)
-```
-
-Point Baleen at it with `LLM_BASE_URL=http://localhost:8001/v1` (or the port you
-chose). Tests use an in-process stub, so they don't require the mock to be
-running.
 
 ## 3. Run everything
 
@@ -266,9 +252,9 @@ app caps each Neo4j statement with `NEO4J_QUERY_TIMEOUT_SECONDS`.
   and the `.env` hostnames match the service names (`postgres`, `neo4j`).
 - **LLM extraction returns `UnparsedEvent` for everything** — the model may not
   be responding; check backend logs, try `LLM_TOOL_MODE=json`, and confirm the
-  mock/model is actually listening on `LLM_BASE_URL`.
+  model is actually listening on `LLM_BASE_URL`.
 - **Ports in use** — Baleen uses 5432, 7474, 7687, 7690 (test Neo4j), 8000,
-  8001 (mock LLM), 5173. Stop other projects on these ports before
+  5173. Stop other projects on these ports before
   `docker-compose up`; 7688 is deliberately avoided because the co-located
   gmem project binds it.
 

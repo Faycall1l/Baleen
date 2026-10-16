@@ -89,7 +89,6 @@ services:
       # the backend itself; override it so the DSN targets the postgres service.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-baleen}:${POSTGRES_PASSWORD:-baleen}@postgres:5432/${POSTGRES_DB:-baleen}
       NEO4J_URI: bolt://neo4j:7687
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://llm-mock:8001/v1}
     ports:
       - "8000:8000"
     depends_on:
@@ -97,29 +96,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-      llm-mock:
-        condition: service_healthy
     volumes:
       - ./backend:/app
-
-  # Deterministic stand-in LLM so a plain `docker compose up` extracts,
-  # alerts, and answers out of the box. Point LLM_BASE_URL at a real vLLM
-  # and this container just idles.
-  llm-mock:
-    restart: unless-stopped
-    build: ./backend
-    container_name: baleen-llm-mock
-    command: ["python", "-m", "scripts.llm_mock"]
-    environment:
-      PORT: "8001"
-    volumes:
-      - ./backend:/app
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/v1/models')\""]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
 
   frontend:
     restart: unless-stopped
