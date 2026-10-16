@@ -13,6 +13,10 @@
 
 ![Baleen workspace](docs/screenshot.png)
 
+![Story leads and flow tape](docs/screenshot-leads.png)
+
+<sub>Screenshots use synthetic demo data with fictional names.</sub>
+
 Baleen polls public disclosure feeds, extracts typed trade events, and writes them to a Neo4j graph where every node links back to its source filing. A React workspace on top surfaces ranked leads, KPIs and charts, and answers plain-English questions with the Cypher it ran.
 
 ## Features

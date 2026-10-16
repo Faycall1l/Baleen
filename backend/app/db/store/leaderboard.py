@@ -29,7 +29,7 @@ class LeaderboardStoreMixin:
                            (raw_json->>'ret_since')::float AS ret_pct,
                            (raw_json->>'excess_since')::float AS excess_pct,
                            url AS source_url
-    FROM raw_tweets
+                    FROM raw_tweets
                    WHERE tweet_id LIKE 'ptr-%'
                      AND jsonb_typeof(raw_json->'ret_since') = 'number'
                      AND jsonb_typeof(raw_json->'excess_since') = 'number'

@@ -59,7 +59,11 @@ export default function InsightsPanel({ signals, leaders, activity, unreadAlerts
     [signals],
   );
   const lead = useMemo(
-    () => leaders.filter((l) => l.excess_pct != null).slice(0, 8),
+    () =>
+      leaders
+        .filter((l) => l.excess_pct != null)
+        .sort((a, b) => (b.excess_pct as number) - (a.excess_pct as number))
+        .slice(0, 8),
     [leaders],
   );
   const movers = useMemo(() => (activity?.movers ?? []).filter((m) => m.ticker).slice(0, 8), [activity]);

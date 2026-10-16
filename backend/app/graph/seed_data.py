@@ -1,4 +1,4 @@
-"""Hand-curated reference dataset for the Baleen demo (see docs/ASSUMPTIONS.md).
+"""Hand-curated reference dataset for the Baleen demo.
 
 Contains US congressional committees, politician memberships, committee→sector
 oversight mappings, and a ticker→sector map. Conceptually sourced from public
