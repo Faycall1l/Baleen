@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 // The old design fired every feed at the same instant: graph + alerts +
 // reports + leaders + signals + flow + health all hit the backend in one
 // burst, and overlapping bursts piled Neo4j queries faster than they
-// drained (see backend R6). Each caller takes its own phase offset so the
+// drained. Each caller takes its own phase offset so the
 // bursts spread across the period, and ticks pause while the tab is hidden
 // — a background tab has no business polling a loaded database.
 //

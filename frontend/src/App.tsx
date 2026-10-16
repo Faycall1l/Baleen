@@ -168,7 +168,7 @@ export default function App() {
 
   // Select the deep-linked node once it loads. Consumed on first
   // success — or on any manual selection — so clearing it stays cleared.
-  // when the node never loads (outside the window), resolve entity cards
+  // When the node never loads (outside the window), resolve entity cards
   // directly — Politician/Ticker/Committee links open anywhere, so member
   // profiles are shareable even with no graph context loaded.
   const urlNodeConsumed = useRef(false);
