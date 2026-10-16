@@ -14,7 +14,7 @@ Pipeline for one question:
 
 If generation/validation fails repeatedly, or the query returns zero rows, the
 agent says so — it never fabricates an answer that isn't grounded in graph
-results. Tool schemas and limits live in :mod:`app.query.tools` (L6).
+results. Tool schemas and limits live in :mod:`app.query.tools`.
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ class QueryAgent:
         messages = [{"role": "system", "content": self._system_prompt()}]
         messages.append({"role": "user", "content": f"Question: {question}"})
 
-        for attempt in range(self.max_attempts):
+        for _ in range(self.max_attempts):
             # Each attempt stands on its own: a rejection in an earlier attempt
             # must not poison a later, valid one.
             result.allowed = True
@@ -192,9 +192,7 @@ class QueryAgent:
             break
 
         if not result.allowed:
-            result.answer = self._failure(
-                "The generated query used disallowed labels or clauses, so it was not run."
-            )
+            result.answer = self._failure("The generated query used disallowed labels or clauses, so it was not run.")
             return result
 
         if exec_error:
@@ -228,7 +226,7 @@ class QueryAgent:
             "MERGE, SET, DELETE, or CALL. If the question cannot be answered "
             "from this schema, call `generate_cypher` with a query that returns "
             "nothing. Match people by surname with "
-            "`toLower(n.name) CONTAINS toLower(\"...\")` — never exact `=` on "
+            '`toLower(n.name) CONTAINS toLower("...")` — never exact `=` on '
             "names, since stored names carry first names, initials, and "
             "suffixes the question omits."
         )
@@ -242,9 +240,7 @@ class QueryAgent:
         for call in response.tool_calls:
             # Accept an explicit generate_cypher call, or a nameless reply
             # carrying the cypher field (some models emit bare arguments).
-            if call.name == "generate_cypher" or (
-                not call.name and "cypher" in call.arguments
-            ):
+            if call.name == "generate_cypher" or (not call.name and "cypher" in call.arguments):
                 return str(call.arguments.get("cypher", "")).strip()
         logger.warning("LLM returned no generate_cypher tool call")
         return ""
@@ -273,9 +269,7 @@ class QueryAgent:
         for call in response.tool_calls:
             # Explicit answer_question call, or a nameless reply carrying the
             # answer field (some models emit bare arguments).
-            if call.name == "answer_question" or (
-                not call.name and "answer" in call.arguments
-            ):
+            if call.name == "answer_question" or (not call.name and "answer" in call.arguments):
                 sources = call.arguments.get("sources") or []
                 return (
                     str(call.arguments.get("answer", "")).strip(),

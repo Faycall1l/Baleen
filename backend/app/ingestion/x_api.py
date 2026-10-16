@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 import tweepy
@@ -79,7 +79,7 @@ class XApiSource(TweetSource):
             return result
 
         query = " OR ".join(f"from:{h}" for h in handles)
-        start_time = datetime.now(timezone.utc) - timedelta(seconds=since_seconds)
+        start_time = datetime.now(UTC) - timedelta(seconds=since_seconds)
         seen_ids: set[str] = set()
         next_token: str | None = None
 
@@ -92,7 +92,7 @@ class XApiSource(TweetSource):
             )
             try:
                 response = self._with_retry(
-                    lambda: self._client.search_recent_tweets(
+                    lambda next_token=next_token: self._client.search_recent_tweets(
                         query=query,
                         start_time=start_time,
                         max_results=self._max_results,
@@ -130,7 +130,7 @@ class XApiSource(TweetSource):
                 if created_at.tzinfo is None:
                     # X API timestamps are UTC; normalize naive datetimes so
                     # Postgres TIMESTAMPTZ round-trips correctly.
-                    created_at = created_at.replace(tzinfo=timezone.utc)
+                    created_at = created_at.replace(tzinfo=UTC)
                 result.tweets.append(
                     RawTweet(
                         tweet_id=tweet_id,

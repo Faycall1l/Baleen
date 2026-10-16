@@ -5,7 +5,7 @@ appear within seconds), downloads each filing's ownership XML, and emits one
 record per insider transaction. No API key — the SEC only asks for an
 identifying User-Agent.
 
-The XML/Atom parsing itself lives in :mod:`app.ingestion.edgar_parse` (L2);
+The XML/Atom parsing itself lives in :mod:`app.ingestion.edgar_parse`;
 this module owns the network source and the deterministic enrichment that
 grounds extracted events in the filing they came from. Only open-market
 transactions (codes P/S) become records; grants, gifts, and exercises are
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -80,7 +80,7 @@ class EdgarForm4Source(TweetSource):
             entries = parse_atom(self._fetch_text(self.atom_url))
         except Exception as exc:
             return FetchResult(tweets=[], errors=[f"EDGAR Atom fetch failed: {exc}"])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window = max(since_seconds, LOOKBACK_SECONDS)
         cutoff = now.timestamp() - window
         fresh = [e for e in entries if _parse_ts(e.get("updated")) >= cutoff]
@@ -95,7 +95,7 @@ class EdgarForm4Source(TweetSource):
             except Exception as exc:
                 errors.append(f"Form 4 {entry['accession']} failed: {exc}")
                 continue
-            # issue #12: mark seen only on success, so a transient SEC failure
+            # mark seen only on success, so a transient SEC failure
             # is retried next tick instead of being skipped for this process.
             self._seen_accessions.remember(entry["accession"])
         logger.info("edgar source: %d trade(s) from filings", len(tweets))
@@ -112,7 +112,7 @@ class EdgarForm4Source(TweetSource):
             raise ValueError("no ownership XML link on filing index")
         filing = parse_ownership(self._fetch_text(xml_url))
         filed_at = _parse_ts(entry.get("updated")) or now.timestamp()
-        filed_dt = datetime.fromtimestamp(filed_at, tz=timezone.utc)
+        filed_dt = datetime.fromtimestamp(filed_at, tz=UTC)
         records = []
         for owner_idx, owner in enumerate(filing["owners"]):
             for txn_idx, txn in enumerate(filing["transactions"]):
@@ -120,17 +120,20 @@ class EdgarForm4Source(TweetSource):
                 # distinct trades never collide.
                 rec_id = f"{entry['accession']}-{owner_idx}-{txn_idx}"
                 record = _record(
-                    rec_id, entry["index_url"], filed_dt,
-                    owner, txn, filing["ticker"], now,
+                    rec_id,
+                    entry["index_url"],
+                    filed_dt,
+                    owner,
+                    txn,
+                    filing["ticker"],
+                    now,
                 )
                 if record is not None:
                     records.append(record)
         return records
 
     def _download(self, url: str) -> str:
-        response = httpx.get(
-            url, headers={"User-Agent": self.user_agent}, timeout=self.timeout_seconds
-        )
+        response = httpx.get(url, headers={"User-Agent": self.user_agent}, timeout=self.timeout_seconds)
         response.raise_for_status()
         return response.text
 
@@ -212,11 +215,7 @@ def maybe_enrich_insider(tweet: RawTweet, event: Event) -> Event:
     """
     try:
         meta = tweet.raw_json or {}
-        if (
-            isinstance(event, InsiderTradeEvent)
-            and isinstance(meta, dict)
-            and meta.get("source_kind") == SOURCE_KIND
-        ):
+        if isinstance(event, InsiderTradeEvent) and isinstance(meta, dict) and meta.get("source_kind") == SOURCE_KIND:
             return enrich_insider_trade(tweet, event)
     except Exception:
         logger.exception("insider enrichment failed for %s; keeping model output", tweet.tweet_id)

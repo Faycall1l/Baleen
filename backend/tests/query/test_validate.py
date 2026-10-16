@@ -1,6 +1,6 @@
 """Cypher allowlist: labels, relationships, write/admin clauses, procedures.
 
-Part of the query suite split out of the former ``tests/test_query_agent.py`` (M3).
+Part of the query suite split out of the former ``tests/test_query_agent.py``.
 """
 
 from __future__ import annotations
@@ -14,9 +14,7 @@ def test_allowlist_rejects_disallowed_label():
 
 
 def test_allowlist_rejects_disallowed_relationship():
-    violations = validate_cypher(
-        "MATCH (a:Ticker)-[:OWNED_BY]->(b:Politician) RETURN a"
-    )
+    violations = validate_cypher("MATCH (a:Ticker)-[:OWNED_BY]->(b:Politician) RETURN a")
     assert any("OWNED_BY" in v for v in violations)
 
 
@@ -58,9 +56,7 @@ def test_allowlist_rejects_procedure_calls():
 def test_allowlist_rejects_load_csv():
     """LOAD CSV reads the server's local filesystem; a crafted question could
     otherwise prompt the model to exfiltrate file contents."""
-    assert validate_cypher(
-        "LOAD CSV WITH HEADERS FROM 'file:///etc/passwd' AS row RETURN row"
-    )
+    assert validate_cypher("LOAD CSV WITH HEADERS FROM 'file:///etc/passwd' AS row RETURN row")
 
 
 def test_allowlist_rejects_multi_statement():
@@ -87,9 +83,7 @@ def test_allowlist_rejects_index_constraint_statements():
 def test_direction_check_rejects_reversed_labeled_edges():
     """Live failure: (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event) runs
     clean and returns empty. The gate must flag the direction."""
-    violations = validate_cypher(
-        "MATCH (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event) RETURN p"
-    )
+    violations = validate_cypher("MATCH (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event) RETURN p")
     assert any("direction" in v for v in violations)
 
 
@@ -99,16 +93,12 @@ def test_direction_check_accepts_schema_edges_with_properties():
         "MATCH (t)-[:IN_SECTOR]->(s:Sector) RETURN s.name"
     )
     assert ok == []
-    leftward = validate_cypher(
-        "MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician {id: 'W000817'}) RETURN p"
-    )
+    leftward = validate_cypher("MATCH (e:Event)-[:INVOLVES_POLITICIAN]->(p:Politician {id: 'W000817'}) RETURN p")
     assert leftward == []
 
 
 def test_direction_check_rejects_wrong_pairs_and_ignores_unlabeled():
-    violations = validate_cypher(
-        "MATCH (t:Ticker)-[:IN_SECTOR]->(p:Politician) RETURN t"
-    )
+    violations = validate_cypher("MATCH (t:Ticker)-[:IN_SECTOR]->(p:Politician) RETURN t")
     assert any("direction" in v for v in violations)
     assert validate_cypher("MATCH (a)-[:IN_SECTOR]->(b) RETURN a") == []
     assert validate_cypher("MATCH (a:Ticker)-[:IN_SECTOR]-(s:Sector) RETURN a") == []

@@ -5,7 +5,7 @@ Everything is driven by ``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL_NAME``
 Baleen talks to an LLM.
 
 The response/error contract lives in :mod:`app.extraction.protocol` and the
-constrained-JSON tool-call parsing in :mod:`app.extraction.tool_calls` (L3);
+constrained-JSON tool-call parsing in :mod:`app.extraction.tool_calls`;
 this module is the transport, retry, and tool-mode policy.
 
 Tool-calling modes (``LLM_TOOL_MODE``):
@@ -43,7 +43,8 @@ from app.extraction.tool_calls import parse_tool_calls_from_json
 
 logger = logging.getLogger(__name__)
 
-def draft_text(llm: "LLMClient", *, system: str, prompt: str, fallback: str) -> str:
+
+def draft_text(llm: LLMClient, *, system: str, prompt: str, fallback: str) -> str:
     """Draft short grounded copy, falling back to a template on LLM failure.
 
     Shared by alert summaries, report briefs, and digests: try the model
@@ -63,6 +64,7 @@ def draft_text(llm: "LLMClient", *, system: str, prompt: str, fallback: str) -> 
     except LLMError as exc:
         logger.warning("LLM draft failed: %s", exc)
     return fallback
+
 
 class LLMClient:
     def __init__(
@@ -151,7 +153,7 @@ class LLMClient:
                 try:
                     return self._chat_tools(messages, tools, tool_choice)
                 except LLMTransportError:
-                    # issue #14: a dead endpoint already spent its backoff
+                    # a dead endpoint already spent its backoff
                     # budget in _post; the JSON fallback must not double-pay.
                     raise
                 except LLMError as exc:
@@ -187,9 +189,7 @@ class LLMClient:
         """
         try:
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-            response = self._http.get(
-                f"{self.base_url}/models", headers=headers, timeout=min(self.timeout, 10)
-            )
+            response = self._http.get(f"{self.base_url}/models", headers=headers, timeout=min(self.timeout, 10))
             return response.status_code < 400
         except httpx.HTTPError:
             return False
@@ -248,24 +248,18 @@ class LLMClient:
             raise LLMTransportError(f"LLM transport error: {exc}") from exc
 
         if response.status_code >= 400:
-            raise LLMTransportError(
-                f"LLM endpoint returned {response.status_code}: {response.text[:300]}"
-            )
+            raise LLMTransportError(f"LLM endpoint returned {response.status_code}: {response.text[:300]}")
         try:
             return response.json()
         except json.JSONDecodeError as exc:
-            raise LLMTransportError(
-                f"LLM returned non-JSON response: {response.text[:300]}"
-            ) from exc
+            raise LLMTransportError(f"LLM returned non-JSON response: {response.text[:300]}") from exc
 
     def _chat_plain(self, messages: list[dict]) -> LLMResponse:
         payload = self._payload(messages)
         data = self._post(payload)
         return self._parse(data, parse_tools=False)
 
-    def _chat_tools(
-        self, messages: list[dict], tools: list[dict], tool_choice: str | None
-    ) -> LLMResponse:
+    def _chat_tools(self, messages: list[dict], tools: list[dict], tool_choice: str | None) -> LLMResponse:
         payload = self._payload(messages, tools=tools, tool_choice=tool_choice)
         data = self._post(payload)
         response = self._parse(data, parse_tools=True)

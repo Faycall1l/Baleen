@@ -129,15 +129,8 @@ class ProcessingPipeline:
         if failed_ids:
             self.store.reset_status(failed_ids, "new")
 
-        if (
-            tweets
-            and summary["failed"] == transport_failures
-            and transport_failures > 0
-            and summary["processed"] == 0
-        ):
-            raise LLMTransportError(
-                f"LLM endpoint unreachable for all {transport_failures} tweet(s)"
-            )
+        if tweets and summary["failed"] == transport_failures and transport_failures > 0 and summary["processed"] == 0:
+            raise LLMTransportError(f"LLM endpoint unreachable for all {transport_failures} tweet(s)")
 
         logger.info("processing complete: %s", summary)
         return summary

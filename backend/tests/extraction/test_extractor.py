@@ -1,24 +1,18 @@
-"""EventExtractor: per-event tool output, validation, and routing to unparsed.
-
-Part of the extraction suite split out of the former ``tests/test_extraction.py``
-(M2), mirroring the ``app/extraction`` module split.
-"""
+"""EventExtractor: per-event tool output, validation, and routing to unparsed."""
 
 from __future__ import annotations
 
 import pytest
+from conftest import StubLLM, stub_tool_call
 
 from app.extraction.client import LLMClient
 from app.extraction.extractor import EventExtractor, build_tool_definitions
-
 from app.models.events import (
     CongressTradeEvent,
     OptionsFlowEvent,
     UnparsedEvent,
     as_json_schema,
 )
-
-from conftest import StubLLM, stub_tool_call
 from tests.extraction.conftest import _tweet
 
 EXTRACTOR = EventExtractor(client=LLMClient("http://x", "k", "m"), max_tries=2)
@@ -29,9 +23,7 @@ def test_tool_definitions_are_derived_from_schemas():
     names = {t["function"]["name"] for t in tools}
     assert names == {"extract_options_flow", "extract_congress_trade", "extract_insider_trade"}
 
-    options = next(
-        t for t in tools if t["function"]["name"] == "extract_options_flow"
-    )
+    options = next(t for t in tools if t["function"]["name"] == "extract_options_flow")
     params = options["function"]["parameters"]
     # Provenance fields are injected by Baleen, not asked of the LLM.
     assert "tweet_id" not in params["properties"]
@@ -73,9 +65,7 @@ def test_options_flow_tweet_extracts(settings):
     stub = StubLLM([("NVDA", stub_tool_call("extract_options_flow", options))])
     extractor = EventExtractor(client=stub)
 
-    event = extractor.extract(
-        _tweet(text="🚨 $NVDA 1,000 contracts of $190 calls 6/21 for $4.5M 🐂")
-    )
+    event = extractor.extract(_tweet(text="🚨 $NVDA 1,000 contracts of $190 calls 6/21 for $4.5M 🐂"))
 
     assert isinstance(event, OptionsFlowEvent)
     assert event.ticker == "NVDA"
@@ -99,9 +89,7 @@ def test_congress_trade_tweet_extracts(settings):
     stub = StubLLM([("Pelosi", stub_tool_call("extract_congress_trade", trade))])
     extractor = EventExtractor(client=stub)
 
-    event = extractor.extract(
-        _tweet(text="Rep. Nancy Pelosi (D-CA) disclosed a BUY of $NVDA $1,001-$15,000")
-    )
+    event = extractor.extract(_tweet(text="Rep. Nancy Pelosi (D-CA) disclosed a BUY of $NVDA $1,001-$15,000"))
 
     assert isinstance(event, CongressTradeEvent)
     assert event.ticker == "NVDA"

@@ -1,5 +1,5 @@
 """``raw_tweets`` table: idempotent ingest and the new/claimed/extracted
-status machine, split out of :mod:`app.db.postgres` (K2).
+status machine, split out of :mod:`app.db.postgres`.
 
 Mixed into ``PostgresStore``, which owns the shared SQLAlchemy engine, so every
 method here stays a thin, auditable ``text()`` call.
@@ -8,7 +8,9 @@ method here stays a thin, auditable ``text()`` call.
 from __future__ import annotations
 
 import json
+
 from sqlalchemy import text
+
 from app.db.store.support import _scrub_nulls, _strip_nulls
 from app.ingestion.source import RawTweet
 
@@ -61,9 +63,7 @@ class TweetStoreMixin:
             inserted = result.rowcount
         return inserted, len(tweets) - inserted
 
-    def claim_new_tweets(
-        self, limit: int = 100, lease_seconds: int = 600
-    ) -> list[RawTweet]:
+    def claim_new_tweets(self, limit: int = 100, lease_seconds: int = 600) -> list[RawTweet]:
         """Atomically claim a batch of tweets for processing.
 
         Unlike a plain read, this flips the claimed rows to

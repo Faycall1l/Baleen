@@ -34,9 +34,9 @@ def test_parse_occ_splits_symbol():
 def test_flags_unusual_volume_not_quiet_contracts():
     payload = _payload(
         [
-            _contract("NVDA260909C00110000", volume=7500, oi=1200),   # 6.2x -> flag
-            _contract("NVDA260909P00110000", volume=100, oi=50000),   # quiet
-            _contract("NVDA260909C00115000", volume=400, oi=10),      # below abs bar
+            _contract("NVDA260909C00110000", volume=7500, oi=1200),  # 6.2x -> flag
+            _contract("NVDA260909P00110000", volume=100, oi=50000),  # quiet
+            _contract("NVDA260909C00115000", volume=400, oi=10),  # below abs bar
         ]
     )
     src = OptionsChainSource(watchlist=["NVDA"], fetcher=lambda ticker: payload)
@@ -68,7 +68,7 @@ def test_chain_failure_records_errors_and_keeps_sweeping():
     result = src.fetch_recent([], 3600)
 
     assert result.tweets == []
-    assert len(result.errors) == 2  # issue #13: sweep continues, both tried
+    assert len(result.errors) == 2  # sweep continues, both tried
     assert "NVDA" in result.errors[0] and "AMD" in result.errors[1]
 
 
@@ -76,10 +76,19 @@ def test_dead_ticker_does_not_starve_following_tickers_issues_13():
     def fetch(ticker: str):
         if ticker == "ZZZZ":
             raise RuntimeError("delisted 404")
-        return {"data": {"options": [
-            {"option": "NVDA260909C00110000", "volume": 5000, "open_interest": 500,
-             "last_trade_price": 10.0, "last_trade_time": "2026-09-09T15:12:25"}
-        ]}}
+        return {
+            "data": {
+                "options": [
+                    {
+                        "option": "NVDA260909C00110000",
+                        "volume": 5000,
+                        "open_interest": 500,
+                        "last_trade_price": 10.0,
+                        "last_trade_time": "2026-09-09T15:12:25",
+                    }
+                ]
+            }
+        }
 
     src = OptionsChainSource(watchlist=["ZZZZ", "NVDA"], fetcher=fetch)
     result = src.fetch_recent([], 3600)
@@ -108,9 +117,7 @@ def test_sweep_across_watchlist_collects_each_ticker():
 
     def fetch(ticker: str):
         seen.append(ticker)
-        return {"data": {"options": [
-            dict(payload["data"]["options"][0], option=f"{ticker}260909C00110000")
-        ]}}
+        return {"data": {"options": [dict(payload["data"]["options"][0], option=f"{ticker}260909C00110000")]}}
 
     src = OptionsChainSource(watchlist=["NVDA", "AMD"], fetcher=fetch)
     result = src.fetch_recent([], 3600)
@@ -133,8 +140,8 @@ def test_anomaly_rule_skips_low_ratio_and_unparsable_contracts():
 
     day = "2026-09-09"
     contracts = [
-        _contract("BADSYM", volume=9000, oi=2_000_000),   # ratio 0.0045 < min
-        _contract("bogus", volume=9000, oi=100),          # unparsable symbol
+        _contract("BADSYM", volume=9000, oi=2_000_000),  # ratio 0.0045 < min
+        _contract("bogus", volume=9000, oi=100),  # unparsable symbol
     ]
     assert _anomalies(contracts, day) == []
 
@@ -182,5 +189,6 @@ def test_live_fetch_chain_uses_httpx(monkeypatch):
     src = OptionsChainSource(watchlist=["NVDA"], timeout_seconds=5)
 
     import httpx
+
     monkeypatch.setattr(httpx, "get", lambda url, **k: _Resp())
     assert src._fetch_chain("NVDA") == {"data": {"options": []}}

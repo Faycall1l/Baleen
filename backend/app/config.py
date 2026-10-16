@@ -37,9 +37,7 @@ class Settings(BaseSettings):
     poll_interval_seconds: int = Field(default=300, ge=5)
 
     # --- SEC EDGAR (Form 4 insider filings, keyless) ---
-    edgar_user_agent: str = (
-        "Baleen/1.0 (SEC EDGAR Form 4 research; contact: admin@example.com)"
-    )
+    edgar_user_agent: str = "Baleen/1.0 (SEC EDGAR Form 4 research; contact: admin@example.com)"
 
     # --- LLM (vLLM, OpenAI-compatible) ---
     llm_base_url: str = "http://localhost:8001/v1"
@@ -82,14 +80,14 @@ class Settings(BaseSettings):
     # The writer fans one event out into ~13 MERGEs inside a single transaction,
     # and even one index-backed lookup can take several seconds on a shared,
     # loaded Neo4j — so the cap needs headroom over 30s to avoid
-    # TransactionTimedOutClientConfiguration on legitimate work (see #21/#23).
+    # TransactionTimedOutClientConfiguration on legitimate work.
     neo4j_query_timeout_seconds: int = Field(default=120, ge=0, le=600)
 
     # Budget for the IdentityEngine merge transaction (a multi-statement graph
     # rewrite). Unlike statement caps, the merge needs one cumulative budget;
-    # it stays finite so a stalled Neo4j can't hold locks indefinitely (#23),
+    # it stays finite so a stalled Neo4j can't hold locks indefinitely,
     # and a mid-flight abort is safe: the whole merge is one transaction and
-    # re-apply resumes/heals an incomplete tombstone (#22).
+    # re-apply resumes/heals an incomplete tombstone.
     neo4j_merge_timeout_seconds: int = Field(default=300, ge=30, le=3600)
 
     # Cache TTL (seconds) for the read-heavy /api/graph force-directed payload.
@@ -112,7 +110,7 @@ class Settings(BaseSettings):
     # 3-page poll can return 300 tweets; batch them so one run drains the queue.
     process_batch_size: int = Field(default=100, ge=1, le=1000)
 
-    # --- API auth / rate-limiting (issue #18) ---
+    # --- API auth / rate-limiting ---
     # When non-empty, /api/query, /api/graph and /api/stream require
     # ``Authorization: Bearer <api_key>``. Empty = local dev (no guard).
     api_key: str = ""
@@ -129,10 +127,7 @@ class Settings(BaseSettings):
     @classmethod
     def _require_http_scheme(cls, value: str) -> str:
         if urlparse(value).scheme not in ("http", "https"):
-            raise ValueError(
-                f"llm_base_url must be an http(s) URL (got {value!r}; "
-                "e.g. http://localhost:8001/v1)"
-            )
+            raise ValueError(f"llm_base_url must be an http(s) URL (got {value!r}; e.g. http://localhost:8001/v1)")
         return value
 
     @field_validator("neo4j_uri", "neo4j_read_uri")
@@ -141,9 +136,7 @@ class Settings(BaseSettings):
         if not value:
             return value  # read URI is optional
         if urlparse(value).scheme not in ("bolt", "bolt+s", "neo4j", "neo4j+s"):
-            raise ValueError(
-                f"Neo4j URIs must be bolt(s):// or neo4j(s):// (got {value!r})"
-            )
+            raise ValueError(f"Neo4j URIs must be bolt(s):// or neo4j(s):// (got {value!r})")
         return value
 
     @field_validator("database_url")
@@ -152,9 +145,7 @@ class Settings(BaseSettings):
         if not value:
             return value  # optional; derived from *_host fields otherwise
         if not urlparse(value).scheme.startswith(("postgresql", "postgres")):
-            raise ValueError(
-                f"database_url must be postgresql:// (got {value!r})"
-            )
+            raise ValueError(f"database_url must be postgresql:// (got {value!r})")
         return value
 
     @property

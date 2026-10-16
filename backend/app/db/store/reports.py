@@ -1,5 +1,5 @@
 """Report rows (briefs, alert reports, digests) and the SSE cursor read,
-split out of :mod:`app.db.postgres` (K2).
+split out of :mod:`app.db.postgres`.
 
 Mixed into ``PostgresStore``, which owns the shared SQLAlchemy engine, so every
 method here stays a thin, auditable ``text()`` call.
@@ -8,6 +8,7 @@ method here stays a thin, auditable ``text()`` call.
 from __future__ import annotations
 
 import json
+
 from sqlalchemy import text
 
 
@@ -69,18 +70,22 @@ class ReportStoreMixin:
 
     def get_digest(self, period: str) -> dict | None:
         with self.engine.connect() as conn:
-            row = conn.execute(
-                text(
-                    """
+            row = (
+                conn.execute(
+                    text(
+                        """
                     SELECT id, kind, event_id, period, title, body, graph_refs, created_at
                     FROM reports
                     WHERE kind = 'digest' AND period = :period
                     ORDER BY created_at DESC
                     LIMIT 1
                     """
-                ),
-                {"period": period},
-            ).mappings().first()
+                    ),
+                    {"period": period},
+                )
+                .mappings()
+                .first()
+            )
             return dict(row) if row is not None else None
 
     def get_reports_since(self, last_id: int, limit: int = 50) -> list[dict]:

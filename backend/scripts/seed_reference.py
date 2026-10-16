@@ -23,8 +23,8 @@ from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
 from app.graph.schema import LABEL_KEYS
 from app.graph.seed_data import (
-    COMMITTEES,
     COMMITTEE_SECTORS,
+    COMMITTEES,
     POLITICIANS,
     SECTORS,
     TICKER_SECTORS,
@@ -36,8 +36,7 @@ logger = logging.getLogger(__name__)
 SYNTHETIC_SOURCE = {"tweet_id": "seed", "tweet_url": "https://x.com/seed"}
 
 CONSTRAINTS = [
-    f"CREATE CONSTRAINT baleen_{label.lower()}_key IF NOT EXISTS "
-    f"FOR (n:{label}) REQUIRE n.{key} IS UNIQUE"
+    f"CREATE CONSTRAINT baleen_{label.lower()}_key IF NOT EXISTS FOR (n:{label}) REQUIRE n.{key} IS UNIQUE"
     for label, key in LABEL_KEYS.items()
 ]
 
@@ -69,14 +68,17 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
             "MERGE (s:Sector {name: $name}) "
             "SET s.first_seen_at = COALESCE(s.first_seen_at, datetime()), "
             "s.tweet_id = $tweet_id, s.tweet_url = $tweet_url",
-            name=sector, **SYNTHETIC_SOURCE,
+            name=sector,
+            **SYNTHETIC_SOURCE,
         )
     for committee_id, name in COMMITTEES.items():
         store.run(
             "MERGE (c:Committee {id: $id}) "
             "SET c.first_seen_at = COALESCE(c.first_seen_at, datetime()), "
             "c.name = $name, c.tweet_id = $tweet_id, c.tweet_url = $tweet_url",
-            id=committee_id, name=name, **SYNTHETIC_SOURCE,
+            id=committee_id,
+            name=name,
+            **SYNTHETIC_SOURCE,
         )
     for politician in POLITICIANS:
         store.run(
@@ -86,7 +88,8 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
                 p.name = $name, p.party = $party, p.chamber = $chamber,
                 p.tweet_id = $tweet_id, p.tweet_url = $tweet_url
             """,
-            **politician, **SYNTHETIC_SOURCE,
+            **politician,
+            **SYNTHETIC_SOURCE,
         )
 
     for committee_id, sectors in COMMITTEE_SECTORS.items():
@@ -97,7 +100,9 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
                 MERGE (c)-[r:OVERSEES]->(s)
                 SET r.tweet_id = $tweet_id, r.tweet_url = $tweet_url
                 """,
-                cid=committee_id, sector=sector, **SYNTHETIC_SOURCE,
+                cid=committee_id,
+                sector=sector,
+                **SYNTHETIC_SOURCE,
             )
     for politician in POLITICIANS:
         for committee_id in politician["committees"]:
@@ -107,7 +112,9 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
                 MERGE (p)-[r:MEMBER_OF]->(c)
                 SET r.tweet_id = $tweet_id, r.tweet_url = $tweet_url
                 """,
-                pid=politician["id"], cid=committee_id, **SYNTHETIC_SOURCE,
+                pid=politician["id"],
+                cid=committee_id,
+                **SYNTHETIC_SOURCE,
             )
     for ticker, sector in TICKER_SECTORS.items():
         store.run(
@@ -120,7 +127,9 @@ def seed(store: Neo4jStore, entity_db: PostgresStore | None = None) -> dict:
             MERGE (t)-[r:IN_SECTOR]->(s)
             SET r.tweet_id = $tweet_id, r.tweet_url = $tweet_url
             """,
-            ticker=ticker, sector=sector, **SYNTHETIC_SOURCE,
+            ticker=ticker,
+            sector=sector,
+            **SYNTHETIC_SOURCE,
         )
 
     alias_count = 0

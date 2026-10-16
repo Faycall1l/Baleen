@@ -1,4 +1,4 @@
-"""Deterministic brief/digest formatting (L4), split out of :mod:`app.reports.engine`.
+"""Deterministic brief/digest formatting, split out of :mod:`app.reports.engine`.
 
 Pure functions plus the graph queries they need: turning typed events into
 headline, grounded facts, and a template body. No database or LLM handles are
@@ -9,7 +9,6 @@ exact copy the model output is checked against.
 from __future__ import annotations
 
 from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent
-
 
 BRIEF_QUERY = """
 MATCH (e:Event {id: $id})
@@ -34,6 +33,7 @@ OPTIONAL MATCH (e)-[:INVOLVES_POLITICIAN]->(p:Politician)
 RETURN e.type AS type, t.ticker AS ticker, s.name AS sector, p.name AS politician
 """
 
+
 def brief_title(event: Event) -> str:
     """Deterministic headline — never model-generated."""
     if isinstance(event, CongressTradeEvent):
@@ -49,6 +49,7 @@ def brief_title(event: Event) -> str:
         amount = f" ({event.amount_range})" if event.amount_range else ""
         return f"{event.insider_name} {verb} {event.ticker}{amount}"
     return f"Event {event.deterministic_id}"
+
 
 def brief_facts(event: Event, neighborhood: dict) -> dict:
     """Flatten event + graph neighborhood into prompt facts."""
@@ -101,6 +102,7 @@ def brief_facts(event: Event, neighborhood: dict) -> dict:
             facts[f"graph_{key}"] = value
     return facts
 
+
 def template_brief(event: Event, facts: dict) -> str:
     """Deterministic fallback when the LLM is unreachable."""
     if isinstance(event, CongressTradeEvent):
@@ -128,6 +130,7 @@ def template_brief(event: Event, facts: dict) -> str:
         )
     return f"Event recorded. Source: {event.tweet_url}"
 
+
 def brief_refs(event: Event, facts: dict) -> list[str]:
     refs = {event.deterministic_id}
     for key in ("ticker", "politician", "graph_ticker", "graph_politician"):
@@ -138,6 +141,7 @@ def brief_refs(event: Event, facts: dict) -> list[str]:
         for value in facts.get(key) or []:
             refs.add(str(value))
     return sorted(refs)
+
 
 def template_digest(day: str, facts: dict) -> str:
     """Deterministic digest fallback."""

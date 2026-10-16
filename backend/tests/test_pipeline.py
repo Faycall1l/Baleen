@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from app.pipeline import ProcessingPipeline
 from app.ingestion.source import RawTweet
 from app.models.events import OptionsFlowEvent
+from app.pipeline import ProcessingPipeline
 
 
 class _RaisingExtractor:
@@ -68,7 +68,7 @@ def _raw(tweet_id: str) -> RawTweet:
         author_handle="unusual_whales",
         author_id="1",
         text=f"tweet {tweet_id}",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         url=f"https://x.com/unusual_whales/status/{tweet_id}",
     )
 

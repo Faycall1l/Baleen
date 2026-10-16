@@ -1,7 +1,7 @@
 """Reference-roster seeding into the alias registry.
 
 Part of the resolution suite split out of the former
-``tests/test_resolution.py`` (M5). Everything runs against the real
+``tests/test_resolution.py``. Everything runs against the real
 ``baleen_test`` Postgres and the shared Neo4j dev instance (conftest
 fixtures) -- no mocks, in keeping with the research project's rigor bar.
 """
@@ -25,6 +25,7 @@ class TestRosterSeeding:
             "canonical_id": WARREN_ID,
             "canonical_name": WARREN_NAME,
         }
+
     def test_seed_reference_registers_roster_aliases(self, postgres_store, neo4j_store):
         summary = seed(neo4j_store, postgres_store)
         assert summary["aliases_seeded"] > 0

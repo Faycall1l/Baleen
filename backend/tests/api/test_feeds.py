@@ -1,6 +1,6 @@
 """Feed endpoints: alerts, reports, digest, leaderboard, and signals.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
@@ -8,11 +8,12 @@ from __future__ import annotations
 import pytest
 
 from tests.api.conftest import (
-    _quiet_settings,
     _boom_app,
     _client,
+    _quiet_settings,
     _services_available,
 )
+
 
 def test_alerts_list():
     if not _services_available():
@@ -180,10 +181,7 @@ def test_signals_flow_success_path(monkeypatch):
 
     monkeypatch.setattr(routes, "get_signals_engine", lambda: _Flow())
     with _client() as c:
-        body = c.get(
-            "/api/signals/flow?tickers=nvda,aapl&side=call&min_ratio=3"
-            "&window_days=7&limit=5"
-        ).json()
+        body = c.get("/api/signals/flow?tickers=nvda,aapl&side=call&min_ratio=3&window_days=7&limit=5").json()
 
     assert body["count"] == 1
     assert body["flow"][0]["ticker"] == "NVDA"

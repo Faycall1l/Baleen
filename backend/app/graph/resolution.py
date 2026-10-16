@@ -95,8 +95,11 @@ class EntityResolver:
         canonical = self._db.get_canonical_name(entity_type, canonical_id)
         if canonical is not None:
             self._db.ensure_alias(
-                entity_type, alias=mention, canonical_id=canonical_id,
-                canonical_name=canonical, source="llm",
+                entity_type,
+                alias=mention,
+                canonical_id=canonical_id,
+                canonical_name=canonical,
+                source="llm",
             )
             return canonical
 
@@ -112,9 +115,11 @@ class EntityResolver:
             # queued for a human rather than silently clobbered. Idempotent:
             # the queue unique-pair constraint prevents re-insertion.
             logger.warning(
-                "mention %r already resolves to %s for %s but event claims id %s; "
-                "queuing alias clash for review",
-                mention, known["canonical_id"], entity_type, canonical_id,
+                "mention %r already resolves to %s for %s but event claims id %s; queuing alias clash for review",
+                mention,
+                known["canonical_id"],
+                entity_type,
+                canonical_id,
             )
             self._db.insert_resolution_suggestion(
                 entity_type,
@@ -130,8 +135,11 @@ class EntityResolver:
         # First encounter for this canonical_id: the mention IS the canonical
         # spelling (seed). Identity disputes are caught by the fuzzy pass.
         self._db.ensure_alias(
-            entity_type, alias=mention, canonical_id=canonical_id,
-            canonical_name=mention, source="llm",
+            entity_type,
+            alias=mention,
+            canonical_id=canonical_id,
+            canonical_name=mention,
+            source="llm",
         )
         return mention
 
@@ -142,8 +150,11 @@ class EntityResolver:
         by a later LLM mention of the same id).
         """
         self._db.ensure_alias(
-            entity_type, alias=canonical_name, canonical_id=canonical_id,
-            canonical_name=canonical_name, source="seed",
+            entity_type,
+            alias=canonical_name,
+            canonical_id=canonical_id,
+            canonical_name=canonical_name,
+            source="seed",
         )
 
     # ------------------------------------------------------------------
@@ -203,7 +214,9 @@ class EntityResolver:
             added += self._score_bucket(entity_type, bucket)
         logger.info(
             "resolution suggestions for %s: %d new queued across %d blocks",
-            entity_type, added, len(blocks),
+            entity_type,
+            added,
+            len(blocks),
         )
         return added
 
@@ -250,9 +263,7 @@ class EntityResolver:
                 # key is only used to score similarity.
                 name_a = by_id[id_a]
                 name_b = by_id[id_b]
-                ratio = difflib.SequenceMatcher(
-                    None, normalize_mention(name_a), normalize_mention(name_b)
-                ).ratio()
+                ratio = difflib.SequenceMatcher(None, normalize_mention(name_a), normalize_mention(name_b)).ratio()
                 if ratio < REVIEW_MIN_THRESHOLD:
                     continue
                 if ratio >= AUTO_MERGE_THRESHOLD:

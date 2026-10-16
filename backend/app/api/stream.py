@@ -1,6 +1,6 @@
 """Live stream endpoint (Server-Sent Events, ``GET /api/stream``).
 
-Split out of :mod:`app.api.routes` (B3): the route owns nothing else, so it
+Split out of :mod:`app.api.routes`: the route owns nothing else, so it
 gets its own module + router. Registered in :mod:`app.main` alongside
 ``routes.router``. The store is resolved lazily through
 :mod:`app.api.routes` at call time so test monkeypatches on
@@ -42,16 +42,18 @@ async def stream(
         from app.api import routes as routes_mod
 
         async for chunk in stream_events(
-            routes_mod._get_store(), request.is_disconnected,
-            after_report, after_alert, poll_seconds,
+            routes_mod._get_store(),
+            request.is_disconnected,
+            after_report,
+            after_alert,
+            poll_seconds,
         ):
             yield chunk
 
     return StreamingResponse(events(), media_type="text/event-stream")
 
 
-async def stream_events(store, is_disconnected, after_report: int = 0,
-                        after_alert: int = 0, poll_seconds: float = 3.0):
+async def stream_events(store, is_disconnected, after_report: int = 0, after_alert: int = 0, poll_seconds: float = 3.0):
     """Yield SSE-formatted chunks for rows newer than the cursors.
 
     Split out for testability: tests drive this directly with a fake
@@ -62,7 +64,7 @@ async def stream_events(store, is_disconnected, after_report: int = 0,
         if await is_disconnected():
             break
         try:
-            # #17: get_reports_since / get_alerts_since are blocking psycopg
+            # get_reports_since / get_alerts_since are blocking psycopg
             # calls; run them off the event loop so one slow query cannot
             # stall every concurrent stream (or the whole server).
             reports = await asyncio.to_thread(store.get_reports_since, last_report)

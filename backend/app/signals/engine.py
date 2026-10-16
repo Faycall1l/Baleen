@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
@@ -295,9 +295,7 @@ class SignalsEngine:
 
     def options_meter(self) -> list[dict]:
         try:
-            since_ts = (
-                datetime.now(timezone.utc).date() - timedelta(days=30)
-            ).isoformat() + "T00:00:00Z"
+            since_ts = (datetime.now(UTC).date() - timedelta(days=30)).isoformat() + "T00:00:00Z"
             return self.neo4j.run_read(OPTIONS_QUERY, since_ts=since_ts)
         except Exception:
             logger.exception("options meter query failed")
@@ -308,14 +306,12 @@ class SignalsEngine:
         window, first-seen tickers, and the freshest events. Recency uses
         ``first_seen_at`` (set on every node at write time) so options flow
         and dated filings share one clock. Degrades to empty sections."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent_since = (now - timedelta(days=recent_days)).isoformat()
         prior_since = (now - timedelta(days=2 * recent_days)).isoformat()
         empty = {"window_days": recent_days, "movers": [], "newcomers": [], "fresh": []}
         try:
-            movers = self.neo4j.run_read(
-                ACTIVITY_MOVERS_QUERY, recent_since=recent_since, prior_since=prior_since
-            )
+            movers = self.neo4j.run_read(ACTIVITY_MOVERS_QUERY, recent_since=recent_since, prior_since=prior_since)
             newcomers = self.neo4j.run_read(ACTIVITY_NEWCOMERS_QUERY, recent_since=recent_since)
             fresh = self.neo4j.run_read(ACTIVITY_FRESH_QUERY, recent_since=recent_since)
         except Exception:
@@ -339,9 +335,7 @@ class SignalsEngine:
         """
         try:
             symbols = [t.strip().upper() for t in (tickers or []) if t.strip()]
-            since_ts = (
-                datetime.now(timezone.utc).date() - timedelta(days=window_days)
-            ).isoformat() + "T00:00:00Z"
+            since_ts = (datetime.now(UTC).date() - timedelta(days=window_days)).isoformat() + "T00:00:00Z"
             return self.neo4j.run_read(
                 FLOW_QUERY,
                 tickers=symbols,

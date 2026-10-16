@@ -1,13 +1,13 @@
 """SSE stream: resume, off-loop polling, error handling, and the route wrapper.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
 
 from tests.api.conftest import (
-    _StoreBoom,
     _quiet_settings,
+    _StoreBoom,
 )
 
 
@@ -21,9 +21,7 @@ def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
     from app.api.stream import stream_events
 
     marker = uuid.uuid4().hex[:8]
-    postgres_store.insert_report(
-        kind="brief", event_id=f"e-stream-{marker}", title="t", body="b"
-    )
+    postgres_store.insert_report(kind="brief", event_id=f"e-stream-{marker}", title="t", body="b")
 
     async def collect(after_report=0, after_alert=0, max_polls=3):
         polls = {"n": 0}
@@ -35,7 +33,10 @@ def test_stream_emits_new_rows_and_resumes_from_cursor(postgres_store):
         return [
             chunk
             async for chunk in stream_events(
-                postgres_store, fake_disconnected, after_report, after_alert,
+                postgres_store,
+                fake_disconnected,
+                after_report,
+                after_alert,
                 poll_seconds=0.01,
             )
         ]
@@ -147,9 +148,9 @@ def test_stream_route_wraps_events_in_sse_response(monkeypatch):
     yields the keepalive chunk once and terminates."""
     import asyncio
 
-    import app.api.routes as routes
     from starlette.responses import StreamingResponse
 
+    import app.api.routes as routes
     from app.api.stream import stream
 
     _quiet_settings(monkeypatch)
@@ -174,9 +175,7 @@ def test_stream_route_wraps_events_in_sse_response(monkeypatch):
             return self._n > 1  # one quiet poll, then disconnect
 
     async def run():
-        response = await stream(
-            request=_Request(), after_report=0, after_alert=0, poll_seconds=1.0
-        )
+        response = await stream(request=_Request(), after_report=0, after_alert=0, poll_seconds=1.0)
         assert isinstance(response, StreamingResponse)
         assert response.media_type == "text/event-stream"
         chunks = [c async for c in response.body_iterator]

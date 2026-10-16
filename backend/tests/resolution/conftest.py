@@ -1,7 +1,6 @@
 """Shared builders and roster constants for the entity-resolution suite.
 
-Part of the resolution suite split out of the former ``tests/test_resolution.py``
-(M5). Helpers are named ``make_*`` so a call site can bind the result to a
+Helpers are named ``make_*`` so a call site can bind the result to a
 same-named local without shadowing the import.
 """
 
@@ -15,10 +14,10 @@ from app.graph.resolution import (
 )
 from app.models.events import CongressTradeEvent
 
-
 # Elizabeth Warren is part of the reference roster (seed_data.POLITICIANS).
 WARREN_ID = "W000817"
 WARREN_NAME = "Elizabeth Warren"
+
 
 def make_resolver(postgres_store) -> EntityResolver:
     return EntityResolver(postgres_store)

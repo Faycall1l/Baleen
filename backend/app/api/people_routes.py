@@ -32,7 +32,7 @@ def politician(politician_id: str) -> dict:
             person = _engine().person(politician_id)
         except Exception as exc:
             logger.exception("person fetch failed")
-            raise HTTPException(status_code=500, detail=f"person fetch failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"person fetch failed: {exc}") from None
     if person is None:
         raise HTTPException(status_code=404, detail="unknown politician")
     return {"person": json_safe(person)}

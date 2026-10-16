@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from app.graph.writer import GraphWriter
 from app.ingestion.source import RawTweet
@@ -31,7 +31,7 @@ def _trade(tweet_id: str, pid: str, name: str, ticker: str, side: str) -> Congre
         transaction_type=side,
         amount_range="$1,001 - $15,000",
         transaction_date=date(2026, 9, 1),
-        event_time=datetime(2026, 9, 2, tzinfo=timezone.utc),
+        event_time=datetime(2026, 9, 2, tzinfo=UTC),
     )
 
 
@@ -56,7 +56,7 @@ def _option(
         volume=volume,
         open_interest=open_interest,
         sentiment="bullish" if side == "call" else "bearish",
-        event_time=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        event_time=datetime(2026, 10, 2, tzinfo=UTC),
     )
 
 
@@ -132,10 +132,7 @@ def test_flow_filters_by_side_and_ticker(neo4j_store, postgres_store):
     engine = _engine(neo4j_store, postgres_store)
     puts = [r for r in engine.flow(side="put", min_ratio=2.0) if r["ticker"] == "NVDA"]
     assert {r["side"] for r in puts} == {"put"}
-    assert all(
-        r["ticker"] == "NVDA"
-        for r in engine.flow(tickers=["NVDA"], min_ratio=2.0, limit=10)
-    )
+    assert all(r["ticker"] == "NVDA" for r in engine.flow(tickers=["NVDA"], min_ratio=2.0, limit=10))
     assert engine.flow(tickers=["ZZZ"], min_ratio=0, limit=10) == []
 
     _cleanup(neo4j_store, "sig-flow-call", "sig-flow-put")
@@ -156,36 +153,47 @@ def test_similar_finds_shared_ticker_traders(neo4j_store, postgres_store):
 def test_suspicious_timing_ranks_by_excess_return(postgres_store):
     def _ptr(tid: str, filer: str, excess: float | None) -> RawTweet:
         meta: dict = {
-            "source_kind": "congress_disclosure", "filer_name": filer,
-            "ticker": "NVDA", "transaction_type": "Purchase",
-            "transaction_date": "2026-08-01", "amount_range_label": "$1 - $2",
+            "source_kind": "congress_disclosure",
+            "filer_name": filer,
+            "ticker": "NVDA",
+            "transaction_type": "Purchase",
+            "transaction_date": "2026-08-01",
+            "amount_range_label": "$1 - $2",
         }
         if excess is not None:
             meta["excess_since"] = excess
         return RawTweet(
-            tweet_id=tid, author_handle="congress_house", author_id="congress_house",
-            text="x", created_at=datetime.now(timezone.utc),
-            url="https://x.com/y", raw_json=meta,
+            tweet_id=tid,
+            author_handle="congress_house",
+            author_id="congress_house",
+            text="x",
+            created_at=datetime.now(UTC),
+            url="https://x.com/y",
+            raw_json=meta,
         )
 
-    postgres_store.insert_raw_tweets(
-        [_ptr("ptr-sig-1", "Low Guy", 3.0), _ptr("ptr-sig-2", "High Gal", 44.0)]
-    )
+    postgres_store.insert_raw_tweets([_ptr("ptr-sig-1", "Low Guy", 3.0), _ptr("ptr-sig-2", "High Gal", 44.0)])
 
     ranked = SignalsEngine(None, postgres_store).suspicious_timing(min_excess_pct=1.0)
     assert [r["who"] for r in ranked[:2]] == ["High Gal", "Low Guy"]
 
 
 def test_suspicious_timing_survives_junk_excess_values_issues_10(postgres_store):
-    """#10: malformed excess_since strings must not silently kill the signal."""
+    """malformed excess_since strings must not silently kill the signal."""
     junk = RawTweet(
-        tweet_id="ptr-sig-junk", author_handle="congress_house", author_id="congress_house",
-        text="x", created_at=datetime.now(timezone.utc),
+        tweet_id="ptr-sig-junk",
+        author_handle="congress_house",
+        author_id="congress_house",
+        text="x",
+        created_at=datetime.now(UTC),
         url="https://x.com/y",
         raw_json={
-            "source_kind": "congress_disclosure", "filer_name": "Junk Gal",
-            "ticker": "NVDA", "transaction_type": "Purchase",
-            "transaction_date": "2026-08-01", "amount_range_label": "$1 - $2",
+            "source_kind": "congress_disclosure",
+            "filer_name": "Junk Gal",
+            "ticker": "NVDA",
+            "transaction_type": "Purchase",
+            "transaction_date": "2026-08-01",
+            "amount_range_label": "$1 - $2",
             "excess_since": ".",
         },
     )
@@ -209,14 +217,22 @@ def test_suspicious_timing_skips_null_ticker_or_filer(postgres_store):
     postgres_store.insert_raw_tweets(
         [
             RawTweet(
-                tweet_id="ptr-sig-noticker", author_handle="h", author_id="h",
-                text="x", created_at=datetime.now(timezone.utc),
-                url="https://x.com/y", raw_json={**base, "filer_name": "No Ticker"},
+                tweet_id="ptr-sig-noticker",
+                author_handle="h",
+                author_id="h",
+                text="x",
+                created_at=datetime.now(UTC),
+                url="https://x.com/y",
+                raw_json={**base, "filer_name": "No Ticker"},
             ),
             RawTweet(
-                tweet_id="ptr-sig-nofiler", author_handle="h", author_id="h",
-                text="x", created_at=datetime.now(timezone.utc),
-                url="https://x.com/y", raw_json={**base, "ticker": "NVDA"},
+                tweet_id="ptr-sig-nofiler",
+                author_handle="h",
+                author_id="h",
+                text="x",
+                created_at=datetime.now(UTC),
+                url="https://x.com/y",
+                raw_json={**base, "ticker": "NVDA"},
             ),
         ]
     )

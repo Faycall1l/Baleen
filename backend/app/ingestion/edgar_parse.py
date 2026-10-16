@@ -1,4 +1,4 @@
-"""SEC EDGAR Form 4 XML/Atom parsing (L2), split out of :mod:`app.ingestion.edgar`.
+"""SEC EDGAR Form 4 XML/Atom parsing, split out of :mod:`app.ingestion.edgar`.
 
 Pure functions over filing XML: no network, no state, so they stay unit-testable
 without touching the SEC. :mod:`app.ingestion.edgar` re-exports the public names
@@ -13,11 +13,7 @@ from xml.etree import ElementTree as ET
 
 from app.ingestion.source import RawTweet
 
-
-ATOM_URL = (
-    "https://www.sec.gov/cgi-bin/browse-edgar"
-    "?action=getcurrent&type=4&count=100&output=atom"
-)
+ATOM_URL = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&count=100&output=atom"
 
 #: SEC fair-access policy admits only clients that identify with contact
 #: info (undeclared traffic from datacenter IPs gets 403). Override with
@@ -31,7 +27,7 @@ MAX_FILINGS_PER_POLL = 15
 
 #: Cap on the in-memory seen set (accessions). Bounded so a long-running
 #: scheduler doesn't leak memory; eviction only triggers a redundant download
-#: that Postgres dedup drops (see #27).
+#: that Postgres dedup drops.
 SEEN_CAP = 2000
 
 #: Emission window floor: filings trickle 24/7, so always cover the last day.
@@ -51,6 +47,7 @@ def clean_ticker(raw: str | None) -> str:
         return ""
     return ticker
 
+
 #: Open-market codes only — the classic insider signal. Everything else
 #: (grants, gifts, exercises) is a different economic event.
 OPEN_MARKET_CODES = {"P", "S"}
@@ -66,7 +63,7 @@ def parse_atom(xml_text: str) -> list[dict]:
     entries = []
     for entry in root.findall("a:entry", ns):
         accession = None
-        entry_id = (entry.findtext("a:id", default="", namespaces=ns) or "")
+        entry_id = entry.findtext("a:id", default="", namespaces=ns) or ""
         match = re.search(r"accession-number=([\d-]+)", entry_id)
         if match:
             accession = match.group(1)
@@ -161,11 +158,7 @@ def parse_ownership(xml_text: str) -> dict:
             if code not in OPEN_MARKET_CODES:
                 continue
             amounts = txn.find("transactionAmounts")
-            acquired = (
-                _text(amounts, "transactionAcquiredDisposedCode/value")
-                if amounts is not None
-                else None
-            )
+            acquired = _text(amounts, "transactionAcquiredDisposedCode/value") if amounts is not None else None
             if acquired not in ("A", "D"):
                 continue
             transactions.append(
@@ -202,8 +195,9 @@ def _fmt_amount(shares: float | None, price: float | None) -> str | None:
     return f"${shares * price:,.2f}"
 
 
-def _record(rec_id: str, index_url: str, filed_at: datetime,
-            owner: dict, txn: dict, ticker: str, now: datetime) -> RawTweet | None:
+def _record(
+    rec_id: str, index_url: str, filed_at: datetime, owner: dict, txn: dict, ticker: str, now: datetime
+) -> RawTweet | None:
     if not ticker or not owner.get("name"):
         return None
     verb = "bought" if txn["side"] == "buy" else "sold"

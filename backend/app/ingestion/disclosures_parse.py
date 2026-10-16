@@ -1,4 +1,4 @@
-"""Congressional-disclosure row parsing (L5), split out of :mod:`app.ingestion.disclosures`.
+"""Congressional-disclosure row parsing, split out of :mod:`app.ingestion.disclosures`.
 
 Pure functions over the Clerk mirror's JSON rows: name normalization, stable
 identifiers, transaction verbs, and the ``RawTweet`` each row becomes. No
@@ -9,20 +9,16 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from app.graph.seed_data import POLITICIANS
 from app.ingestion.source import RawTweet
 
-
 #: Community mirror of official House/Senate PTR filings (clean JSON, stable
 #: ids, both chambers, refreshed daily). The legacy S3 bucket this replaces
 #: went dark (403); the Clerk source it wrapped is still authoritative.
-MIRROR_URL = (
-    "https://raw.githubusercontent.com/kadoa-org/congress-trading-monitor"
-    "/main/public/data/trades.json"
-)
+MIRROR_URL = "https://raw.githubusercontent.com/kadoa-org/congress-trading-monitor/main/public/data/trades.json"
 
 SOURCE_KIND = "congress_disclosure"
 
@@ -58,10 +54,7 @@ def _stable_id(row: dict) -> str:
     raw = str(row.get("id") or "").strip()
     if raw:
         return f"ptr-{raw}"
-    seed = "|".join(
-        str(row.get(k) or "")
-        for k in ("filer_name", "ticker", "transaction_date", "amount_range_label")
-    )
+    seed = "|".join(str(row.get(k) or "") for k in ("filer_name", "ticker", "transaction_date", "amount_range_label"))
     import hashlib
 
     return f"ptr-{hashlib.sha1(seed.encode()).hexdigest()[:12]}"
@@ -85,7 +78,7 @@ def _coerce_returns(meta: dict) -> None:
     strings) in these return fields. Storing them verbatim forces every query
     to defensively regex-parse text (and silently drops scientific notation).
     Coerce to a finite float here — or drop the field — so the graph only ever
-    sees real numbers (see #25).
+    sees real numbers.
     """
     for key in ("ret_since", "excess_since"):
         if key not in meta:
@@ -125,11 +118,7 @@ def _record(row: dict, now: datetime) -> RawTweet | None:
         f"{f' Filed {filing_day.isoformat()}' if filing_day else ''}."
         f"{f' Disclosure: {doc}' if doc else ''}"
     )
-    created = (
-        datetime(filing_day.year, filing_day.month, filing_day.day, tzinfo=timezone.utc)
-        if filing_day
-        else now
-    )
+    created = datetime(filing_day.year, filing_day.month, filing_day.day, tzinfo=UTC) if filing_day else now
     meta = dict(row)
     meta["source_kind"] = SOURCE_KIND
     _coerce_returns(meta)

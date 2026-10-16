@@ -82,7 +82,7 @@ class BaleenScheduler:
             if self.sources:
                 ingest = self.ingestion.run_once()
                 # A tick that stored records made progress even if one feed
-                # errored — back off only on total failure (see issue #1).
+                # errored — back off only on total failure.
                 ok = not ingest["errors"] or ingest["inserted"] > 0
                 logger.info(
                     "ingested %s records (%s skipped); processing",
@@ -124,9 +124,7 @@ class BaleenScheduler:
 
     def start(self) -> None:
         if not self.settings.x_api_configured:
-            logger.warning(
-                "X API token is not configured; polling disclosures + options radar only"
-            )
+            logger.warning("X API token is not configured; polling disclosures + options radar only")
         self.scheduler.add_job(
             self._tick,
             id=self._job_id,

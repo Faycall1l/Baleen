@@ -1,4 +1,4 @@
-"""``GET /api/signals`` — computed pressure signals (J4).
+"""``GET /api/signals`` — computed pressure signals.
 
 Split out of :mod:`app.api.routes`. The engine is built per request (cheap:
 it holds no cache of its own) from the shared store + Neo4j clients.
@@ -52,7 +52,7 @@ def signals(window_days: int = Query(default=90, ge=1, le=365)) -> dict:
             bundle = _engine().bundle(window_days=window_days)
         except Exception as exc:
             logger.exception("signals failed")
-            raise HTTPException(status_code=500, detail=f"signals failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"signals failed: {exc}") from None
     payload = json_safe(bundle)
 
     if ttl > 0:
@@ -73,7 +73,7 @@ def signals_activity(window_days: int = Query(default=7, ge=1, le=30)) -> dict:
             payload = _engine().activity(recent_days=window_days)
         except Exception as exc:
             logger.exception("signals activity failed")
-            raise HTTPException(status_code=500, detail=f"signals activity failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"signals activity failed: {exc}") from None
     return json_safe(payload)
 
 
@@ -88,11 +88,7 @@ def signals_flow(
     """Per-print unusual-options tape, ranked by volume/open-interest ratio."""
     from app.api import routes
 
-    symbols = (
-        [s.strip().upper() for s in tickers.split(",") if s.strip()]
-        if tickers
-        else []
-    )
+    symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()] if tickers else []
     # Gate outside the try (see /signals): saturation stays a 503.
     with routes.neo4j_read_slot():
         try:
@@ -105,7 +101,7 @@ def signals_flow(
             )
         except Exception as exc:
             logger.exception("options flow failed")
-            raise HTTPException(status_code=500, detail=f"options flow failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"options flow failed: {exc}") from None
     return {
         "flow": json_safe(rows),
         "count": len(rows),
@@ -126,5 +122,5 @@ def signals_similar(politician_id: str = Query(min_length=1)) -> dict:
         rows = _engine().similar(politician_id)
     except Exception as exc:
         logger.exception("similar failed")
-        raise HTTPException(status_code=500, detail=f"similar failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"similar failed: {exc}") from None
     return {"similar": json_safe(rows)}

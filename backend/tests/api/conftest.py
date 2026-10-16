@@ -19,8 +19,7 @@ def _clear_graph_cache():
     """The /api/graph payload cache is module-level and keyed by ``limit``;
     without clearing it, one test's payload (real or boom-mock) leaks into the
     next test's assertions."""
-    from app.api import routes
-    from app.api import signals_routes
+    from app.api import routes, signals_routes
 
     routes._graph_cache.clear()
     signals_routes._signals_cache.clear()
@@ -34,14 +33,12 @@ def _quiet_lifespan(monkeypatch):
     """Every TestClient boot runs app lifespan: with stock settings that spins
     up the real background scheduler (immediate ingest tick -> LLM calls with
     90s timeouts) and seeds alert rules, which made test_api take 40+ minutes
-    and flake on a loaded box (E6). Default every test to scheduler/seed off;
+    and flake on a loaded box. Default every test to scheduler/seed off;
     tests that need the scheduler (lifespan start/stop) or secure settings
     override via their own monkeypatch, which stacks after this fixture."""
     from app.config import get_settings
 
-    quiet = get_settings().model_copy(
-        update={"scheduler_enabled": False, "seed_default_alerts": False}
-    )
+    quiet = get_settings().model_copy(update={"scheduler_enabled": False, "seed_default_alerts": False})
     monkeypatch.setattr("app.main.get_settings", lambda: quiet)
     monkeypatch.setattr("app.api.routes.get_settings", lambda: quiet)
 
@@ -116,9 +113,7 @@ def _quiet_settings(monkeypatch):
     alert seeding switched off, so failure-path tests don't spin up live jobs."""
     from app.config import get_settings
 
-    quiet = get_settings().model_copy(
-        update={"scheduler_enabled": False, "seed_default_alerts": False}
-    )
+    quiet = get_settings().model_copy(update={"scheduler_enabled": False, "seed_default_alerts": False})
     monkeypatch.setattr("app.main.get_settings", lambda: quiet)
     monkeypatch.setattr("app.api.routes.get_settings", lambda: quiet)
     return quiet

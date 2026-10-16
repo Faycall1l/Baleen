@@ -63,9 +63,7 @@ _LABELED_NODE = r"\(\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\b[^()]*\)"
 #: ``-[r:TYPE]->`` with optional variable and the mandatory colon.
 _REL_RIGHT = r"-\[\s*:?\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\s*\]->"
 _EDGE_RIGHT_RE = re.compile(_LABELED_NODE + _REL_RIGHT + _LABELED_NODE)
-_EDGE_LEFT_RE = re.compile(
-    _LABELED_NODE + r"<-\[\s*:?\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\s*\]-" + _LABELED_NODE
-)
+_EDGE_LEFT_RE = re.compile(_LABELED_NODE + r"<-\[\s*:?\s*(?:[A-Za-z_]\w*\s*:)?\s*([A-Za-z_]\w*)\s*\]-" + _LABELED_NODE)
 
 
 def validate_cypher(query: str) -> list[str]:
@@ -77,7 +75,9 @@ def validate_cypher(query: str) -> list[str]:
     violations: list[str] = []
 
     if FORBIDDEN_CLAUSES.search(query):
-        violations.append("statement contains a forbidden clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL/LOAD/USE/SHOW/EXPLAIN/PROFILE)")
+        violations.append(
+            "statement contains a forbidden clause (CREATE/MERGE/SET/DELETE/DETACH/REMOVE/DROP/ALTER/CALL/LOAD/USE/SHOW/EXPLAIN/PROFILE)"
+        )
     if FORBIDDEN_PATTERNS.search(query):
         violations.append("statement contains an index/constraint definition")
     if _has_embedded_statement_separator(query):
@@ -116,9 +116,7 @@ def _check_edge(from_label: str, rel: str, to_label: str, arrow: str) -> list[st
         return []
     if (from_label, rel, to_label) in DIRECTED_EDGES:
         return []
-    return [
-        f"edge `({from_label})-[:{rel}]{arrow}({to_label})` runs against the schema direction"
-    ]
+    return [f"edge `({from_label})-[:{rel}]{arrow}({to_label})` runs against the schema direction"]
 
 
 def _has_embedded_statement_separator(query: str) -> bool:

@@ -1,6 +1,6 @@
 """Auth and rate limiting: sliding window, API key guard, per-IP query limits, client IP resolution.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from tests.api.conftest import _client, _services_available
+
 
 def test_rate_limiter_sliding_window():
     from app.api.routes import _RateLimiter
@@ -35,9 +36,7 @@ def test_api_key_guard_blocks_unauthenticated(monkeypatch):
 
     with _client() as c:
         assert c.get("/api/graph").status_code == 401
-        assert (
-            c.get("/api/graph", headers={"Authorization": "Bearer wrong"}).status_code == 401
-        )
+        assert c.get("/api/graph", headers={"Authorization": "Bearer wrong"}).status_code == 401
 
 
 def test_api_key_guard_accepts_valid_key(monkeypatch):
@@ -69,9 +68,7 @@ def test_query_rate_limited_per_ip(monkeypatch):
     real_settings = get_settings()
 
     def throttled_settings():
-        return real_settings.model_copy(
-            update={"api_rate_window_seconds": 3600, "api_rate_max_requests": 2}
-        )
+        return real_settings.model_copy(update={"api_rate_window_seconds": 3600, "api_rate_max_requests": 2})
 
     monkeypatch.setattr(routes, "get_settings", throttled_settings)
     monkeypatch.setattr(routes, "_rate_limiter", None)
@@ -83,9 +80,10 @@ def test_query_rate_limited_per_ip(monkeypatch):
 
 
 def test_client_ip_honors_forwarded_header():
-    from app.api.auth import client_ip
     from fastapi import Request
     from starlette.datastructures import Headers
+
+    from app.api.auth import client_ip
 
     req = Request(
         {
@@ -101,9 +99,10 @@ def test_client_ip_honors_forwarded_header():
 def test_client_ip_falls_back_to_peer_for_spoofed_forwarded_header():
     """Garbage in X-Forwarded-For must not become a rate-limit key: a client
     could otherwise rotate keys to defeat the limiter and its eviction sweep."""
-    from app.api.auth import client_ip
     from fastapi import Request
     from starlette.datastructures import Headers
+
+    from app.api.auth import client_ip
 
     def req(xff: str):
         return Request(

@@ -11,8 +11,8 @@ registry picks it up for seeding (``definitions``) and evaluation
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from app.db.neo4j import Neo4jStore
 from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent
@@ -73,10 +73,7 @@ class AlertRules:
 
     @classmethod
     def definitions(cls) -> dict[str, dict]:
-        return {
-            name: {"description": meta["description"], "config": {}}
-            for name, meta in _RULES.items()
-        }
+        return {name: {"description": meta["description"], "config": {}} for name, meta in _RULES.items()}
 
     def evaluate(self, rule_name: str, event: Event) -> RuleTrigger:
         """Run ``rule_name`` against ``event``; returns a (possibly empty)
@@ -88,18 +85,13 @@ class AlertRules:
 
     @rule(
         "politician_trades_in_oversight_sector",
-        "Fires when a politician trades a ticker whose sector is overseen "
-        "by one of their committees.",
+        "Fires when a politician trades a ticker whose sector is overseen by one of their committees.",
     )
-    def _politician_trades_in_oversight_sector(
-        self, event: Event
-    ) -> RuleTrigger:
+    def _politician_trades_in_oversight_sector(self, event: Event) -> RuleTrigger:
         if not isinstance(event, CongressTradeEvent):
             return RuleTrigger(rule_name="politician_trades_in_oversight_sector")
 
-        rows = self.neo4j.run_read(
-            OVERSIGHT_PATH_CYPHER, event_id=event.deterministic_id
-        )
+        rows = self.neo4j.run_read(OVERSIGHT_PATH_CYPHER, event_id=event.deterministic_id)
         return RuleTrigger(
             rule_name="politician_trades_in_oversight_sector",
             facts=rows,
@@ -107,8 +99,7 @@ class AlertRules:
 
     @rule(
         "insider_large_buy",
-        "Fires when a corporate insider buys $1M+ of their own stock "
-        "in one disclosed trade.",
+        "Fires when a corporate insider buys $1M+ of their own stock in one disclosed trade.",
     )
     def _insider_large_buy(self, event: Event) -> RuleTrigger:
         if not isinstance(event, InsiderTradeEvent):

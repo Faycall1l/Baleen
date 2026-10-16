@@ -16,10 +16,11 @@ from __future__ import annotations
 import argparse
 import logging
 
+from sqlalchemy import text
+
 from app.config import get_settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from sqlalchemy import text
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ from datetime import date
 
 import pytest
 
-from app.graph.identity import IdentityEngine, _MERGEABLE_LABELS
+from app.graph.identity import _MERGEABLE_LABELS, IdentityEngine
 from app.graph.resolution import EntityResolver
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent
@@ -48,21 +48,15 @@ def _write(neo4j_store, event: CongressTradeEvent) -> str:
 def _confirmed_resolution(postgres_store, candidate_id: str, alias: str) -> int:
     """Approve a gray-band pair so candidate_id resolves into a canonical id."""
     resolver = EntityResolver(postgres_store)
-    postgres_store.ensure_alias(
-        "Politician", alias, candidate_id, alias, source="seed"
-    )
-    postgres_store.ensure_alias(
-        "Politician", "John Johnsen", "P-CANON", "John Johnsen", source="seed"
-    )
+    postgres_store.ensure_alias("Politician", alias, candidate_id, alias, source="seed")
+    postgres_store.ensure_alias("Politician", "John Johnsen", "P-CANON", "John Johnsen", source="seed")
     resolver.suggest_merges("Politician")
     queue_id = resolver.pending_reviews()[0]["id"]
     assert resolver.approve(queue_id)
     return queue_id
 
 
-def _cleanup(
-    neo4j_store, politician_ids: list[str] | None = None, event_ids: list[str] | None = None
-) -> None:
+def _cleanup(neo4j_store, politician_ids: list[str] | None = None, event_ids: list[str] | None = None) -> None:
     if politician_ids:
         neo4j_store.run(
             """
@@ -76,9 +70,7 @@ def _cleanup(
         neo4j_store.run("MATCH (e:Event {id: $id}) DETACH DELETE e", id=event_id)
 
 
-def test_apply_merge_transfers_relationships_and_tombstones(
-    neo4j_store, postgres_store
-):
+def test_apply_merge_transfers_relationships_and_tombstones(neo4j_store, postgres_store):
     cand_id, canon_id = "P-CAND", "P-CANON"
     event_a = _write(neo4j_store, _congress("ident-ea", cand_id, "John Johnson", ["C1"]))
     event_b = _write(neo4j_store, _congress("ident-eb", canon_id, "John Johnsen", ["C2", "C1"]))
@@ -100,8 +92,7 @@ def test_apply_merge_transfers_relationships_and_tombstones(
 
         assert (
             neo4j_store.run(
-                "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->(:Politician {id: $pid}) "
-                "RETURN count(*) AS count",
+                "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->(:Politician {id: $pid}) RETURN count(*) AS count",
                 id=event_a,
                 pid=canon_id,
             )[0]["count"]
@@ -110,8 +101,7 @@ def test_apply_merge_transfers_relationships_and_tombstones(
         # Canonical accumulated both committees.
         assert (
             neo4j_store.run(
-                "MATCH (:Politician {id: $pid})-[:MEMBER_OF]->(c:Committee) "
-                "RETURN count(c) AS count",
+                "MATCH (:Politician {id: $pid})-[:MEMBER_OF]->(c:Committee) RETURN count(c) AS count",
                 pid=canon_id,
             )[0]["count"]
             == 2
@@ -135,8 +125,7 @@ def test_apply_merge_transfers_relationships_and_tombstones(
         # No stray relationship survives on the tombstone.
         assert (
             neo4j_store.run(
-                "MATCH (p:Politician {id: $id})-[r]->() WHERE type(r) <> 'SAME_AS' "
-                "RETURN count(r) AS count",
+                "MATCH (p:Politician {id: $id})-[r]->() WHERE type(r) <> 'SAME_AS' RETURN count(r) AS count",
                 id=cand_id,
             )[0]["count"]
             == 0
@@ -147,8 +136,7 @@ def test_apply_merge_transfers_relationships_and_tombstones(
         assert again["already_merged"] is True
         assert (
             neo4j_store.run(
-                "MATCH (:Politician {id: $id})-[:MEMBER_OF]->(c:Committee) "
-                "RETURN count(c) AS count",
+                "MATCH (:Politician {id: $id})-[:MEMBER_OF]->(c:Committee) RETURN count(c) AS count",
                 id=canon_id,
             )[0]["count"]
             == 2
@@ -184,11 +172,9 @@ def test_apply_merge_raises_when_events_missing(neo4j_store, postgres_store):
         engine.apply_merge(queue_id, "Politician")
 
 
-def test_apply_merge_resumes_pre_existing_tombstone_without_same_as(
-    neo4j_store, postgres_store
-):
+def test_apply_merge_resumes_pre_existing_tombstone_without_same_as(neo4j_store, postgres_store):
     """A tombstone that lost its SAME_AS edge (aborted/manual op) is healed by
-    re-applying the merge instead of reporting 'already merged' (#22)."""
+    re-applying the merge instead of reporting 'already merged'."""
     cand_id, canon_id = "P-CAND", "P-CANON"
     event_a = _write(neo4j_store, _congress("ident-ra", cand_id, "John Johnson", ["C1"]))
     _write(neo4j_store, _congress("ident-rb", canon_id, "John Johnsen", ["C2"]))
@@ -212,8 +198,7 @@ def test_apply_merge_resumes_pre_existing_tombstone_without_same_as(
         # Transfer completed and provenance healed.
         assert (
             neo4j_store.run(
-                "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->"
-                "(:Politician {id: $pid}) RETURN count(*) AS count",
+                "MATCH (:Event {id: $id})-[:INVOLVES_POLITICIAN]->(:Politician {id: $pid}) RETURN count(*) AS count",
                 id=event_a,
                 pid=canon_id,
             )[0]["count"]
@@ -221,8 +206,7 @@ def test_apply_merge_resumes_pre_existing_tombstone_without_same_as(
         )
         assert (
             neo4j_store.run(
-                "MATCH (:Politician {id: $c})-[r:SAME_AS]->(:Politician {id: $o}) "
-                "RETURN r.resolution_id AS rid",
+                "MATCH (:Politician {id: $c})-[r:SAME_AS]->(:Politician {id: $o}) RETURN r.resolution_id AS rid",
                 c=cand_id,
                 o=canon_id,
             )[0]["rid"]
@@ -248,12 +232,8 @@ def test_writer_remaps_candidate_id_after_merge(neo4j_store, postgres_store):
 
         # A new mention of the *candidate* id must land on the canonical node,
         # not resurrect a second candidate node.
-        writer = GraphWriter(
-            neo4j_store, entity_resolver=EntityResolver(postgres_store)
-        )
-        event_c = writer.write_event(
-            _congress("ident-wc", cand_id, "John Johnson", ["C3"])
-        )
+        writer = GraphWriter(neo4j_store, entity_resolver=EntityResolver(postgres_store))
+        event_c = writer.write_event(_congress("ident-wc", cand_id, "John Johnson", ["C3"]))
 
         assert (
             neo4j_store.run(
@@ -273,8 +253,7 @@ def test_writer_remaps_candidate_id_after_merge(neo4j_store, postgres_store):
         # (event_a was transferred, event_b + event_c went straight there).
         assert (
             neo4j_store.run(
-                "MATCH (:Event)-[:INVOLVES_POLITICIAN]->(:Politician {id: $id}) "
-                "RETURN count(*) AS count",
+                "MATCH (:Event)-[:INVOLVES_POLITICIAN]->(:Politician {id: $id}) RETURN count(*) AS count",
                 id=canon_id,
             )[0]["count"]
             == 3
@@ -318,9 +297,7 @@ def test_apply_merge_refuses_candidate_merged_elsewhere(neo4j_store, postgres_st
     queue_id = _confirmed_resolution(postgres_store, cand_id, "John Johnson")
     # The queued direction resolves P-CANON into our candidate: tombstone
     # the candidate side elsewhere first.
-    neo4j_store.run(
-        "MATCH (p:Politician {id: $id}) SET p.merged_into = 'P-OTHER'", id="P-CANON"
-    )
+    neo4j_store.run("MATCH (p:Politician {id: $id}) SET p.merged_into = 'P-OTHER'", id="P-CANON")
     engine = IdentityEngine(EntityResolver(postgres_store), neo4j_store)
     try:
         with pytest.raises(RuntimeError):
@@ -368,10 +345,6 @@ def test_suggest_merges_empty_and_unrelated_names(postgres_store):
 
     resolver = EntityResolver(postgres_store)
     assert resolver.suggest_merges("Politician") == 0
-    postgres_store.ensure_alias(
-        "Politician", "Jonathan Abernathy", "Z1", "Jonathan Abernathy", source="seed"
-    )
-    postgres_store.ensure_alias(
-        "Politician", "Joshua Zebra", "Z2", "Joshua Zebra", source="seed"
-    )
+    postgres_store.ensure_alias("Politician", "Jonathan Abernathy", "Z1", "Jonathan Abernathy", source="seed")
+    postgres_store.ensure_alias("Politician", "Joshua Zebra", "Z2", "Joshua Zebra", source="seed")
     assert resolver.suggest_merges("Politician") == 0

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from app.ingestion.edgar import (
     SOURCE_KIND,
@@ -79,9 +79,7 @@ def test_parse_ownership_extracts_open_market_only():
     filing = parse_ownership(OWNERSHIP_XML)
 
     assert filing["ticker"] == "GPUS"
-    assert filing["owners"] == [
-        {"cik": "1212502", "name": "AULT MILTON C III", "role": "Executive Chairman"}
-    ]
+    assert filing["owners"] == [{"cik": "1212502", "name": "AULT MILTON C III", "role": "Executive Chairman"}]
     assert len(filing["transactions"]) == 1  # gift (G) skipped
     txn = filing["transactions"][0]
     assert (txn["side"], txn["shares"], txn["price"]) == ("buy", 1000.0, 2.5)
@@ -152,15 +150,22 @@ def test_transient_filing_failure_retried_next_poll_issues_12():
 
 def _tweet() -> RawTweet:
     return RawTweet(
-        tweet_id="edgar-x", author_handle="edgar_form4", author_id="edgar_form4",
+        tweet_id="edgar-x",
+        author_handle="edgar_form4",
+        author_id="edgar_form4",
         text="INSIDER FILING: AULT MILTON C III (Executive Chairman), GPUS",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         url="https://www.sec.gov/Archives/edgar/data/1/2-index.htm",
         raw_json={
-            "source_kind": SOURCE_KIND, "filer_name": "AULT MILTON C III",
-            "insider_cik": "1212502", "role": "Executive Chairman",
-            "ticker": "GPUS", "transaction_type": "buy",
-            "shares": 1000.0, "price": 2.5, "amount_range_label": "$2,500.00",
+            "source_kind": SOURCE_KIND,
+            "filer_name": "AULT MILTON C III",
+            "insider_cik": "1212502",
+            "role": "Executive Chairman",
+            "ticker": "GPUS",
+            "transaction_type": "buy",
+            "shares": 1000.0,
+            "price": 2.5,
+            "amount_range_label": "$2,500.00",
             "transaction_date": "2026-09-09",
         },
     )
@@ -168,8 +173,12 @@ def _tweet() -> RawTweet:
 
 def _event() -> InsiderTradeEvent:
     return InsiderTradeEvent(
-        tweet_id="edgar-x", tweet_url="https://www.sec.gov/x", confidence=0.9,
-        insider_name="Wrong Name", insider_id="WRONG", ticker="WRONG",
+        tweet_id="edgar-x",
+        tweet_url="https://www.sec.gov/x",
+        confidence=0.9,
+        insider_name="Wrong Name",
+        insider_id="WRONG",
+        ticker="WRONG",
         transaction_type="sell",
     )
 
@@ -211,8 +220,11 @@ def test_maybe_enrich_is_noop_without_marker_or_other_types():
     assert maybe_enrich_insider(tweet, event) is event
 
     options = OptionsFlowEvent(
-        tweet_id="edgar-x", tweet_url="https://www.sec.gov/x", confidence=0.9,
-        ticker="GPUS", contract_type="call",
+        tweet_id="edgar-x",
+        tweet_url="https://www.sec.gov/x",
+        confidence=0.9,
+        ticker="GPUS",
+        contract_type="call",
     )
     assert maybe_enrich_insider(_tweet(), options) is options
 
@@ -309,8 +321,9 @@ def test_parse_ownership_skips_owner_without_name():
 
 
 def test_text_flag_number_and_day_helpers():
-    from app.ingestion.edgar_parse import _flag, _number, _parse_day, _text
     import xml.etree.ElementTree as ET
+
+    from app.ingestion.edgar_parse import _flag, _number, _parse_day, _text
 
     assert _text(None, "x") is None
     root = ET.fromstring("<r><a>  hello  </a><b /></r>")
@@ -329,8 +342,9 @@ def test_text_flag_number_and_day_helpers():
 
 
 def test_owner_role_orders_multiple_flags():
-    from app.ingestion.edgar_parse import _owner_role
     import xml.etree.ElementTree as ET
+
+    from app.ingestion.edgar_parse import _owner_role
 
     owner = ET.fromstring(
         "<o><reportingOwnerRelationship><isOfficer>true</isOfficer>"
@@ -345,8 +359,9 @@ def test_owner_role_orders_multiple_flags():
 def test_owner_role_lists_flags_without_officer_title():
     """No officer title: the roles are joined in a fixed order (no title
     overrides), and the empty-role case returns None."""
-    from app.ingestion.edgar_parse import _owner_role
     import xml.etree.ElementTree as ET
+
+    from app.ingestion.edgar_parse import _owner_role
 
     owner = ET.fromstring(
         "<o><reportingOwnerRelationship>"
@@ -394,7 +409,7 @@ def test_fmt_amount_requires_shares_and_price():
 def test_record_requires_ticker_and_owner_name():
     from app.ingestion.edgar_parse import _record
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     owner = {"name": "Ada Lovelace", "role": ""}
     txn = {"side": "buy", "shares": 100, "price": 25.0, "transaction_date": date(2026, 9, 9)}
 
@@ -453,7 +468,7 @@ def test_filing_records_raise_without_ownership_xml_link():
     with pytest.raises(ValueError, match="no ownership XML link"):
         src._filing_records(
             {"index_url": "https://www.sec.gov/i", "accession": "1", "updated": "x"},
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
         )
 
 
@@ -462,9 +477,11 @@ def test_enrich_insider_trade_tolerates_invalid_dates():
     enrichment; other authoritative fields still overwrite the model's."""
     from app.ingestion.edgar import enrich_insider_trade
 
-    tweet = _tweet().model_copy(update={
-        "raw_json": {**_tweet().raw_json, "transaction_date": "not-a-date"},
-    })
+    tweet = _tweet().model_copy(
+        update={
+            "raw_json": {**_tweet().raw_json, "transaction_date": "not-a-date"},
+        }
+    )
     grounded = enrich_insider_trade(tweet, _event())
 
     assert grounded.ticker == "GPUS"  # filed facts still win

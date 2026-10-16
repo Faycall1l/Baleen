@@ -3,7 +3,7 @@
 Tests that require live services (Postgres, Neo4j) connect on demand and are
 skipped when the service is unreachable, so unit tests always run.
 
-Neo4j isolation (#24): the integration suite prefers the dedicated
+Neo4j isolation: the integration suite prefers the dedicated
 ``neo4j-test`` container (bolt://localhost:7690, see docker-compose.yml) so
 tests never mutate the live graph the scheduler writes to. When that container
 is not running, the suite falls back to the regular instance on 7687 so plain
@@ -37,14 +37,14 @@ def _prefer_test_neo4j_if_available() -> None:
             # every run_read then dies on auth. Point the read role at the
             # same credentials so reads keep working under pytest.
             os.environ.setdefault("NEO4J_READ_USER", os.getenv("NEO4J_USER", "neo4j"))
-            os.environ.setdefault(
-                "NEO4J_READ_PASSWORD", os.getenv("NEO4J_PASSWORD", "baleen_dev_pass")
-            )
+            os.environ.setdefault("NEO4J_READ_PASSWORD", os.getenv("NEO4J_PASSWORD", "baleen_dev_pass"))
     except OSError:
         pass  # dev fallback: tests run against the regular 7687 instance
 
 
 _prefer_test_neo4j_if_available()
+
+from datetime import UTC
 
 from app.config import Settings
 from app.db.neo4j import Neo4jStore
@@ -92,7 +92,7 @@ def neo4j_store():
     """Neo4jStore for integration tests. Skipped when Neo4j is unreachable.
 
     Targets the isolated ``neo4j-test`` instance (7688) when it is up — the
-    suite then never touches the live graph the scheduler writes to (#24) —
+    suite then never touches the live graph the scheduler writes to —
     and falls back to the regular instance otherwise.
 
     The read-only role (see docs/SETUP.md) is not provisioned in CI, so the
@@ -125,15 +125,15 @@ def future_event_time():
     """A fixed future timestamp for graph-visibility fixtures.
 
     The live scheduler ingests new events minute-by-minute into the shared
-    graph (see #21), so fixtures that must appear inside the
+    graph, so fixtures that must appear inside the
     ``/api/graph?limit=N`` "most recent N events" window cannot rely on "now" —
     by the time a slow integration test renders the graph, newer events have
-    pushed the fixtures out (#24). Events seeded with a far-future ``event_time``
+    pushed the fixtures out. Events seeded with a far-future ``event_time``
     always sort newest; every such fixture must clean up after itself.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime(2031, 1, 1, tzinfo=timezone.utc)
+    return datetime(2031, 1, 1, tzinfo=UTC)
 
 
 class StubLLM:

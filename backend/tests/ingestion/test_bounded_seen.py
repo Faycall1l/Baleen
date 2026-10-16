@@ -1,13 +1,13 @@
 """``BoundedSeen`` dedup window: cap eviction and invalid caps.
 
-Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` (M4).
+Part of the ingestion suite split out of the former ``tests/test_ingestion.py``.
 """
 
 from __future__ import annotations
 
 
 def test_bounded_seen_evicts_oldest_issues_27():
-    """#27: the seen-set is capped; evicted keys can be re-remembered."""
+    """the seen-set is capped; evicted keys can be re-remembered."""
     from app.ingestion.source import BoundedSeen
 
     seen = BoundedSeen(cap=3)

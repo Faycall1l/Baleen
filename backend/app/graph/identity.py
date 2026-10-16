@@ -34,14 +34,13 @@ _MERGEABLE_LABELS = {"Politician", "Insider"}
 
 
 class IdentityEngine:
-    def __init__(self, resolver: EntityResolver, neo4j: Neo4jStore,
-                 merge_timeout: int | None = None):
+    def __init__(self, resolver: EntityResolver, neo4j: Neo4jStore, merge_timeout: int | None = None):
         self.resolver = resolver
         self.neo4j = neo4j
         # The whole rewrite needs one cumulative budget distinct from the
-        # per-statement cap (#23): finite so a stalled Neo4j can't hold locks
+        # per-statement cap: finite so a stalled Neo4j can't hold locks
         # indefinitely, and failure is safe because the merge is atomic and
-        # re-apply resumes an incomplete tombstone (#22).
+        # re-apply resumes an incomplete tombstone.
         self.merge_timeout = merge_timeout or get_settings().neo4j_merge_timeout_seconds
 
     def apply_merge(self, resolution_id: int, label: str) -> dict:
@@ -65,7 +64,7 @@ class IdentityEngine:
         canonical_id = resolution["canonical_id"]
         confidence = resolution["confidence"]
         # Merges must not be aborted mid-flight by the app-wide statement cap
-        # (#23): the whole rewrite is one transaction, so an abort commits
+        #: the whole rewrite is one transaction, so an abort commits
         # nothing and no partial transfer can corrupt the graph. Merges are
         # human-gated and small; they run inside one atomic transaction with
         # their own cumulative budget (neo4j_merge_timeout_seconds). Should a
@@ -73,9 +72,7 @@ class IdentityEngine:
         # ops, older versions), the merge resumes and heals it instead of
         # reporting "already merged" (see _merge_tx).
         return self.neo4j.write_transaction(
-            lambda run: self._merge_tx(
-                run, label, candidate_id, canonical_id, confidence, resolution_id
-            ),
+            lambda run: self._merge_tx(run, label, candidate_id, canonical_id, confidence, resolution_id),
             timeout=self.merge_timeout,
         )
 
@@ -89,17 +86,11 @@ class IdentityEngine:
             xid=canonical_id,
         )
         if not anchor:
-            raise ValueError(
-                f"candidate {candidate_id!r} or canonical {canonical_id!r} "
-                f"not found in the {label} graph"
-            )
+            raise ValueError(f"candidate {candidate_id!r} or canonical {canonical_id!r} not found in the {label} graph")
         if anchor[0]["merged_into"] == canonical_id and anchor[0]["same_as"] > 0:
             return {"transferred": 0, "skipped_duplicates": 0, "same_as": 0, "already_merged": True}
         if anchor[0]["merged_into"] is not None and anchor[0]["merged_into"] != canonical_id:
-            raise RuntimeError(
-                f"candidate {candidate_id!r} is already merged into "
-                f"{anchor[0]['merged_into']!r}"
-            )
+            raise RuntimeError(f"candidate {candidate_id!r} is already merged into {anchor[0]['merged_into']!r}")
         # Tombstoned into THIS canonical but SAME_AS missing (pre-existing
         # partial state): resume — transfers are idempotent and we re-create
         # the provenance edge.
@@ -151,8 +142,7 @@ class IdentityEngine:
             skipped += rel["total"] - created
 
         run(
-            f"MATCH (cand:{label} {{id:$cid}})-[r]-(x) "
-            "WHERE type(r) <> 'SAME_AS' DELETE r",
+            f"MATCH (cand:{label} {{id:$cid}})-[r]-(x) WHERE type(r) <> 'SAME_AS' DELETE r",
             cid=candidate_id,
         )
         run(

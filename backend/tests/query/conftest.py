@@ -1,13 +1,11 @@
 """Shared stubs for the query-agent suite.
 
-Split out of the former ``tests/test_query_agent.py`` (M3): Cypher allowlist,
+Split out of the former ``tests/test_query_agent.py``: Cypher allowlist,
 the agent loop, statement bounding, and the live-service example queries now
 live in sibling modules.
 """
 
 from __future__ import annotations
-
-
 
 from app.extraction.client import LLMResponse, ToolCall
 
@@ -37,9 +35,7 @@ class QueryStubLLM:
                     )
                 ]
             )
-        return LLMResponse(
-            tool_calls=[ToolCall("generate_cypher", {"cypher": self.cypher})]
-        )
+        return LLMResponse(tool_calls=[ToolCall("generate_cypher", {"cypher": self.cypher})])
 
 
 def stub_llm(cypher=None, **kwargs):

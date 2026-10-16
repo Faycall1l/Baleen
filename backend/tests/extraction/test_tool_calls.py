@@ -1,8 +1,4 @@
-"""Constrained-JSON tool-call parsing and the tools/json/auto mode policy.
-
-Part of the extraction suite split out of the former ``tests/test_extraction.py``
-(M2), mirroring the ``app/extraction`` module split.
-"""
+"""Constrained-JSON tool-call parsing and the tools/json/auto mode policy."""
 
 from __future__ import annotations
 
@@ -12,14 +8,13 @@ from app.extraction.client import LLMClient, LLMError, LLMResponse, ToolCall
 from app.extraction.extractor import EventExtractor, build_tool_definitions
 from app.extraction.tool_calls import parse_tool_calls_from_json
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
-
 from tests.extraction.conftest import _tweet
 
 EXTRACTOR = EventExtractor(client=LLMClient("http://x", "k", "m"), max_tries=2)
 
 
 def test_constrained_json_parse_tool_call():
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
     calls = parse_tool_calls_from_json(
@@ -33,7 +28,7 @@ def test_constrained_json_parse_tool_call():
 
 
 def test_constrained_json_parse_single_object():
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
     calls = parse_tool_calls_from_json(
@@ -52,19 +47,17 @@ def test_constrained_json_parse_single_object():
 def test_constrained_json_rejects_unknown_tool():
     from app.extraction.client import InvalidJSONError
 
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
     with pytest.raises(InvalidJSONError):
-        parse_tool_calls_from_json(
-            '{"name": "extract_dark_pool", "ticker": "NVDA"}', tools
-        )
+        parse_tool_calls_from_json('{"name": "extract_dark_pool", "ticker": "NVDA"}', tools)
 
 
 def test_constrained_json_unwraps_name_arguments_envelope():
     """Some models wrap fields OpenAI-style ({"name", "arguments"}) instead of
     emitting them flat. The parser must validate the inner object, not the
     envelope — otherwise every such reply becomes unparsed."""
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
     calls = parse_tool_calls_from_json(
@@ -87,7 +80,7 @@ def test_constrained_json_unwraps_name_arguments_envelope():
 
 def test_constrained_json_unwraps_tool_parameters_envelope():
     """Same unwrapping for the {"tool", "parameters"} envelope shape."""
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
     tools = build_tool_definitions()
 
     calls = parse_tool_calls_from_json(
@@ -109,7 +102,7 @@ def test_constrained_json_unwraps_action_envelope():
     bare string (the query agent's single-input generator tool)."""
     from app.query.tools import GENERATE_TOOL
 
-    client = LLMClient("http://x", "k", "m", tool_mode="json")
+    LLMClient("http://x", "k", "m", tool_mode="json")
 
     calls = parse_tool_calls_from_json(
         '{"action": "generate_cypher", "action_input": "MATCH (t:Ticker) RETURN t"}',
@@ -124,6 +117,7 @@ def test_constrained_json_unwraps_action_envelope():
 def test_auto_mode_falls_back_to_json(monkeypatch):
 
     client = LLMClient("http://x", "k", "m", tool_mode="auto")
+
     def broken_tools(messages, tools, tool_choice):
         raise LLMError("tools unsupported")
 
@@ -177,7 +171,7 @@ def test_unwrap_arguments_handles_envelopes_and_bare_action_input():
 def test_constrained_json_empty_array_raises():
     from app.extraction.client import InvalidJSONError
 
-    client = LLMClient("http://x", "k", "m")
+    LLMClient("http://x", "k", "m")
 
     with pytest.raises(InvalidJSONError, match="no tool call matched"):
         parse_tool_calls_from_json("[]", [])
@@ -185,27 +179,33 @@ def test_constrained_json_empty_array_raises():
 
 def test_malformed_closed_json_block_is_invalid_json_error():
     """A JSON-looking block that is balanced-brace but invalid inside surfaces
-    InvalidJSONError (issue #14), not a bare JSONDecodeError."""
+    InvalidJSONError, not a bare JSONDecodeError."""
     from app.extraction.client import InvalidJSONError
 
-    client = LLMClient("http://x", "k", "m")
+    LLMClient("http://x", "k", "m")
 
     with pytest.raises(InvalidJSONError, match="malformed JSON block"):
         parse_tool_calls_from_json('prefix {"ticker": } trailing', [])
 
 
 def test_malformed_json_block_is_invalid_json_error(monkeypatch):
-    """#14: a matched-but-truncated JSON block surfaces InvalidJSONError,
+    """a matched-but-truncated JSON block surfaces InvalidJSONError,
     not a bare json.JSONDecodeError that no caller catches."""
     from app.extraction.client import InvalidJSONError, LLMClient
 
     monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
     monkeypatch.setattr(
         "app.extraction.client.LLMClient._post_once",
-        lambda *a, **k: {"choices": [{"message": {
-            "role": "assistant",
-            "content": "prefix {\"ticker\": \"NVDA\", \"conf",
-        }}]},
+        lambda *a, **k: {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": 'prefix {"ticker": "NVDA", "conf',
+                    }
+                }
+            ]
+        },
     )
 
     client = LLMClient("http://x", "k", "m", tool_mode="json", max_retries=0)

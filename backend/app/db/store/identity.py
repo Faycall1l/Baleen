@@ -1,4 +1,4 @@
-"""Entity identity persistence, split out of :mod:`app.db.postgres` (K3).
+"""Entity identity persistence, split out of :mod:`app.db.postgres`.
 
 Three registries share one table family: the alias registry that canonicalizes
 spelling, the human review queue for ambiguous mentions, and the identity
@@ -61,16 +61,20 @@ class AliasRegistryMixin:
     def get_canonical(self, entity_type: str, alias: str) -> dict | None:
         """The canonical (id, name) a visited alias already resolves to."""
         with self.engine.connect() as conn:
-            row = conn.execute(
-                text(
-                    """
+            row = (
+                conn.execute(
+                    text(
+                        """
                     SELECT canonical_id, canonical_name
                     FROM entity_aliases
                     WHERE entity_type = :entity_type AND alias = :alias
                     """
-                ),
-                {"entity_type": entity_type, "alias": alias},
-            ).mappings().first()
+                    ),
+                    {"entity_type": entity_type, "alias": alias},
+                )
+                .mappings()
+                .first()
+            )
             return dict(row) if row is not None else None
 
     def get_canonical_name(self, entity_type: str, canonical_id: str) -> str | None:
@@ -205,17 +209,21 @@ class ResolutionQueueMixin:
         resolved or unknown — idempotent).
         """
         with self.engine.begin() as conn:
-            row = conn.execute(
-                text(
-                    """
+            row = (
+                conn.execute(
+                    text(
+                        """
                     UPDATE entity_resolution_queue
                     SET status = 'confirmed', resolved_at = now()
                     WHERE id = :id AND status = 'pending'
                     RETURNING entity_type, candidate_id, canonical_id, confidence
                     """
-                ),
-                {"id": queue_id},
-            ).mappings().first()
+                    ),
+                    {"id": queue_id},
+                )
+                .mappings()
+                .first()
+            )
             if row is None:
                 return False
             conn.execute(
@@ -243,17 +251,21 @@ class ResolutionQueueMixin:
     def get_resolution(self, queue_id: int) -> dict | None:
         """A queue entry by id, regardless of status (for the apply/undo flows)."""
         with self.engine.connect() as conn:
-            row = conn.execute(
-                text(
-                    """
+            row = (
+                conn.execute(
+                    text(
+                        """
                     SELECT id, entity_type, candidate_id, candidate_name,
                            canonical_id, canonical_name, confidence, reason, status, created_at
                     FROM entity_resolution_queue
                     WHERE id = :id
                     """
-                ),
-                {"id": queue_id},
-            ).mappings().first()
+                    ),
+                    {"id": queue_id},
+                )
+                .mappings()
+                .first()
+            )
             return dict(row) if row is not None else None
 
 
@@ -263,16 +275,20 @@ class IdentityTombstoneMixin:
     def get_identity(self, entity_type: str, candidate_id: str) -> dict | None:
         """The canonical an id has been remapped to, if any."""
         with self.engine.connect() as conn:
-            row = conn.execute(
-                text(
-                    """
+            row = (
+                conn.execute(
+                    text(
+                        """
                     SELECT candidate_id, canonical_id, confidence
                     FROM entity_identities
                     WHERE entity_type = :entity_type AND candidate_id = :candidate_id
                     """
-                ),
-                {"entity_type": entity_type, "candidate_id": candidate_id},
-            ).mappings().first()
+                    ),
+                    {"entity_type": entity_type, "candidate_id": candidate_id},
+                )
+                .mappings()
+                .first()
+            )
             return dict(row) if row is not None else None
 
     def record_identity(

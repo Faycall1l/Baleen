@@ -1,4 +1,4 @@
-"""``POST /api/query`` — natural-language question through the query agent (J4).
+"""``POST /api/query`` — natural-language question through the query agent.
 
 Split out of :mod:`app.api.routes`.
 """
@@ -37,7 +37,7 @@ def ask_question(request: QueryRequest) -> dict:
         result = agent.ask(request.question)
     except Exception as exc:
         logger.exception("query agent failed for question %r", request.question)
-        raise HTTPException(status_code=500, detail=f"query agent failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"query agent failed: {exc}") from None
     payload = result.as_dict()
     payload["rows"] = json_safe(payload["rows"])
     return payload

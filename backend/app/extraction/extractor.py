@@ -67,16 +67,8 @@ def build_tool_definitions() -> list[dict[str, Any]]:
     tools = []
     for name, (description, model) in TOOLS.items():
         schema = as_json_schema(model)
-        properties = {
-            key: value
-            for key, value in schema["properties"].items()
-            if key not in PROVENANCE_FIELDS
-        }
-        required = [
-            key
-            for key in schema.get("required", [])
-            if key not in PROVENANCE_FIELDS
-        ]
+        properties = {key: value for key, value in schema["properties"].items() if key not in PROVENANCE_FIELDS}
+        required = [key for key in schema.get("required", []) if key not in PROVENANCE_FIELDS]
         tools.append(
             {
                 "type": "function",
@@ -151,9 +143,7 @@ class EventExtractor:
     # ------------------------------------------------------------------
 
     def _messages(self, tweet: RawTweet, tools: list[dict]) -> list[dict]:
-        schema_blocks = "\n\n".join(
-            self._schema_block(tool) for tool in tools
-        )
+        schema_blocks = "\n\n".join(self._schema_block(tool) for tool in tools)
         system = (
             "You are Baleen, a strict financial-data extractor. Given a tweet you "
             "must call exactly one of the provided tools to extract structured "
@@ -216,9 +206,7 @@ class EventExtractor:
                 event.confidence,
                 self.threshold,
             )
-            return self._unparsed(
-                tweet, f"confidence {event.confidence:.2f} below threshold {self.threshold}"
-            )
+            return self._unparsed(tweet, f"confidence {event.confidence:.2f} below threshold {self.threshold}")
         logger.info(
             "tweet %s extracted as %s (confidence=%.2f)",
             tweet.tweet_id,

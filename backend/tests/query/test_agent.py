@@ -1,10 +1,9 @@
 """QueryAgent: generation, validation, grounding, retries, and failure paths.
 
-Part of the query suite split out of the former ``tests/test_query_agent.py`` (M3).
+Part of the query suite split out of the former ``tests/test_query_agent.py``.
 """
 
 from __future__ import annotations
-
 
 from app.extraction.client import LLMResponse, ToolCall
 from app.query.agent import NO_DATA_ANSWER, QueryAgent
@@ -18,6 +17,7 @@ from tests.query.conftest import (
     stub_llm,
     tool_text,
 )
+
 
 def test_agent_says_no_data_on_empty_result():
     agent = QueryAgent(llm=stub_llm(), store=EmptyStore())
@@ -41,16 +41,14 @@ def test_agent_recovers_on_second_attempt_after_rejected_first():
     """A valid follow-up attempt must win over an earlier rejection. Regresses
     the bug where `allowed` stayed False after attempt 1, discarding a good
     attempt 2."""
-    store = EmptyStore()
+    EmptyStore()
 
     class OneRowStore(EmptyStore):
         def run_read(self, cypher, **params):
             return [{"ticker": "NVDA"}]
 
     agent = QueryAgent(
-        llm=SequencedStubLLM(
-            ["MATCH (u:User) RETURN u", "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"]
-        ),
+        llm=SequencedStubLLM(["MATCH (u:User) RETURN u", "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"]),
         store=OneRowStore(),
     )
     result = agent.ask("What tickers exist?")
@@ -92,11 +90,11 @@ def test_agent_accepts_nameless_answer_arguments():
         def chat_with_tools(self, messages, tools, tool_choice="auto"):
             user = next((m["content"] for m in messages if m["role"] == "user"), "")
             if "Query results (ground truth" in user:
-                return LLMResponse(
-                    tool_calls=[ToolCall("", {"answer": "CHRW and MRNA.", "sources": []})]
-                )
+                return LLMResponse(tool_calls=[ToolCall("", {"answer": "CHRW and MRNA.", "sources": []})])
             return LLMResponse(
-                tool_calls=[ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})]
+                tool_calls=[
+                    ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})
+                ]
             )
 
     class OneRowStore(EmptyStore):
@@ -135,7 +133,9 @@ def test_agent_falls_back_when_answer_contains_no_answer_call():
     class StubbornLLM:
         def chat_with_tools(self, messages, tools, tool_choice="auto"):
             return LLMResponse(
-                tool_calls=[ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})]
+                tool_calls=[
+                    ToolCall("generate_cypher", {"cypher": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1"})
+                ]
             )
 
     class OneRowStore(EmptyStore):
@@ -166,17 +166,10 @@ def test_generate_cypher_returns_empty_when_llm_never_calls_tool():
 
     class _WrongToolLLM:
         def chat_with_tools(self, messages, tools, tool_choice="auto"):
-            return LLMResponse(
-                tool_calls=[
-                    ToolCall("answer_question", {"answer": "42", "sources": []})
-                ]
-            )
+            return LLMResponse(tool_calls=[ToolCall("answer_question", {"answer": "42", "sources": []})])
 
     agent = QueryAgent(llm=_WrongToolLLM(), store=EmptyStore())
-    assert (
-        agent._generate_cypher([{"role": "user", "content": "How many tickers?"}])
-        == ""
-    )
+    assert agent._generate_cypher([{"role": "user", "content": "How many tickers?"}]) == ""
 
 
 def test_agent_retries_with_feedback_after_cypher_execution_error():
@@ -331,9 +324,7 @@ def test_ask_fails_when_bounded_query_empties_degenerate_cypher():
 
     class _SemicolonLLM:
         def chat_with_tools(self, messages, tools, tool_choice="auto"):
-            return LLMResponse(
-                tool_calls=[ToolCall("generate_cypher", {"cypher": ";"})]
-            )
+            return LLMResponse(tool_calls=[ToolCall("generate_cypher", {"cypher": ";"})])
 
     class _LenientStore(EmptyStore):
         def run_read(self, cypher, **params):

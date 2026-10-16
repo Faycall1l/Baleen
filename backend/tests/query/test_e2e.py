@@ -1,13 +1,12 @@
 """The three documented example questions, run against live Neo4j.
 
-Part of the query suite split out of the former ``tests/test_query_agent.py`` (M3).
+Part of the query suite split out of the former ``tests/test_query_agent.py``.
 Skipped when the Neo4j container is unreachable.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-
+from datetime import UTC, date, datetime
 
 from app.models.events import CongressTradeEvent, OptionsFlowEvent
 from app.query.agent import QueryAgent
@@ -34,7 +33,7 @@ def _seed_and_write_demo_events(neo4j_store):
         transaction_type="buy",
         amount_range="$1,001 - $15,000",
         transaction_date=date(2026, 1, 15),
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
     options = OptionsFlowEvent(
         tweet_id="q-demo-2",
@@ -44,7 +43,7 @@ def _seed_and_write_demo_events(neo4j_store):
         contract_type="call",
         strike=250.0,
         sentiment="bullish",
-        event_time=datetime.now(timezone.utc),
+        event_time=datetime.now(UTC),
     )
     return writer.write_event(congress), writer.write_event(options)
 

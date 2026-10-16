@@ -17,8 +17,8 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 import httpx
 
@@ -34,8 +34,16 @@ QUOTE_URL = "https://finance.yahoo.com/quote/{ticker}"
 
 #: Liquid names with active option markets (subset of the reference sectors).
 WATCHLIST: list[str] = [
-    "NVDA", "TSLA", "AAPL", "AMD", "MSFT",
-    "META", "GOOGL", "JPM", "XOM", "LLY",
+    "NVDA",
+    "TSLA",
+    "AAPL",
+    "AMD",
+    "MSFT",
+    "META",
+    "GOOGL",
+    "JPM",
+    "XOM",
+    "LLY",
 ]
 
 #: Unusual = day volume at least this multiple of open interest, with at least
@@ -125,10 +133,7 @@ def _record(anomaly: dict, now: datetime) -> RawTweet:
     meta = dict(anomaly)
     meta["source_kind"] = SOURCE_KIND
     return RawTweet(
-        tweet_id=(
-            f"opt-{ticker}-{anomaly['expiry']}-{strike}-"
-            f"{anomaly['kind']}-{anomaly['day']}"
-        ),
+        tweet_id=(f"opt-{ticker}-{anomaly['expiry']}-{strike}-{anomaly['kind']}-{anomaly['day']}"),
         author_handle="options_radar",
         author_id="options_radar",
         text=text,
@@ -154,7 +159,7 @@ class OptionsChainSource(TweetSource):
         self.timeout_seconds = timeout_seconds
         self._fetcher = fetcher or self._fetch_chain
         self._cache: dict[str, tuple[float, dict]] = {}
-        # issue #13: recent failures are remembered briefly so a dead chain
+        # recent failures are remembered briefly so a dead chain
         # isn't re-downloaded every poll while it sits failing.
         self._fail_until: dict[str, float] = {}
 
@@ -165,7 +170,7 @@ class OptionsChainSource(TweetSource):
     def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
         """``handles``/``since_seconds`` don't apply to a chain sweep; every
         poll re-emits today's anomalies under stable ids (dedup downstream)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         day = now.date().isoformat()
         tweets: list[RawTweet] = []
         errors: list[str] = []
@@ -173,11 +178,11 @@ class OptionsChainSource(TweetSource):
             try:
                 payload = self._cached_chain(ticker)
             except Exception as exc:
-                # issue #13: one failing ticker must not starve the rest of
+                # one failing ticker must not starve the rest of
                 # the watchlist — log the error and keep sweeping.
                 errors.append(f"{ticker} chain fetch failed: {exc}")
                 continue
-            contracts = ((payload.get("data") or {}).get("options") or [])
+            contracts = (payload.get("data") or {}).get("options") or []
             for anomaly in _anomalies(contracts, day):
                 tweets.append(_record(anomaly, now))
             time.sleep(FETCH_GAP_SECONDS)
@@ -207,8 +212,6 @@ class OptionsChainSource(TweetSource):
         return payload
 
     def _fetch_chain(self, ticker: str) -> dict:
-        response = httpx.get(
-            CHAIN_URL.format(ticker=ticker), headers=_UA, timeout=self.timeout_seconds
-        )
+        response = httpx.get(CHAIN_URL.format(ticker=ticker), headers=_UA, timeout=self.timeout_seconds)
         response.raise_for_status()
         return response.json()

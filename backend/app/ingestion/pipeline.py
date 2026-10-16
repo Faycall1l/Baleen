@@ -8,7 +8,7 @@ already-seen tweets inserts nothing.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import Settings
 from app.db.postgres import PostgresStore
@@ -29,7 +29,7 @@ class IngestionPipeline:
         Returns a metrics dict for logging/tests. Never raises for per-handle
         API failures — those are recorded in ``errors``.
         """
-        started = datetime.now(timezone.utc)
+        started = datetime.now(UTC)
         result = self.source.fetch_recent(
             self.settings.x_handles,
             self.settings.x_search_window_seconds,
@@ -41,7 +41,7 @@ class IngestionPipeline:
             "inserted": inserted,
             "duplicates_skipped": skipped,
             "errors": result.errors,
-            "duration_seconds": round((datetime.now(timezone.utc) - started).total_seconds(), 3),
+            "duration_seconds": round((datetime.now(UTC) - started).total_seconds(), 3),
             "timestamp": started.isoformat(),
         }
         logger.info(

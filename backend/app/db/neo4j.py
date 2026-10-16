@@ -15,7 +15,7 @@ from __future__ import annotations
 import contextlib
 import logging
 
-from neo4j import GraphDatabase, Driver, unit_of_work
+from neo4j import Driver, GraphDatabase, unit_of_work
 
 from app.config import Settings
 
@@ -164,7 +164,7 @@ class Neo4jStore:
 
     @contextlib.contextmanager
     def transaction(self, timeout: float | None = None):
-        """Run a group of statements in one server transaction (#19).
+        """Run a group of statements in one server transaction.
 
         The graph writer fans out one event into several node/edge MERGEs
         (up to ~8 + 3x per committee); batching them cuts that from N

@@ -1,15 +1,15 @@
 """Query endpoint: success payload and JSON 500 on LLM/store failure.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
 
-
 from tests.api.conftest import (
-    _quiet_settings,
     _client,
+    _quiet_settings,
 )
+
 
 def test_query_route_returns_payload(monkeypatch):
     """/api/query happy path with a stubbed agent: no live LLM needed."""
@@ -23,7 +23,16 @@ def test_query_route_returns_payload(monkeypatch):
             return type(
                 "Res",
                 (),
-                {"as_dict": lambda self: {"answer": "a", "rows": [{"ticker": "NVDA"}], "sources": [], "allowed": True, "has_data": True, "error": None}},
+                {
+                    "as_dict": lambda self: {
+                        "answer": "a",
+                        "rows": [{"ticker": "NVDA"}],
+                        "sources": [],
+                        "allowed": True,
+                        "has_data": True,
+                        "error": None,
+                    }
+                },
             )()
 
     monkeypatch.setattr(routes, "QueryAgent", FakeAgent)

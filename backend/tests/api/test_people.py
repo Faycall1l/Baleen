@@ -6,8 +6,8 @@ Part of the API suite; the engine is faked so no live services are needed.
 from __future__ import annotations
 
 from tests.api.conftest import (
-    _quiet_settings,
     _client,
+    _quiet_settings,
 )
 
 

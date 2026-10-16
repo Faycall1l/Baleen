@@ -1,7 +1,7 @@
 """Identity remap on approve: atomics, chains, cycles.
 
 Part of the resolution suite split out of the former
-``tests/test_resolution.py`` (M5). Everything runs against the real
+``tests/test_resolution.py``. Everything runs against the real
 ``baleen_test`` Postgres and the shared Neo4j dev instance (conftest
 fixtures) -- no mocks, in keeping with the research project's rigor bar.
 """
@@ -15,12 +15,8 @@ from tests.resolution.conftest import (
 
 class TestIdentityRemap:
     def _confirmed_pair(self, postgres_store) -> int:
-        postgres_store.ensure_alias(
-            "Politician", "John Johnson", "X080", "John Johnson", source="seed"
-        )
-        postgres_store.ensure_alias(
-            "Politician", "John Johnsen", "X081", "John Johnsen", source="seed"
-        )
+        postgres_store.ensure_alias("Politician", "John Johnson", "X080", "John Johnson", source="seed")
+        postgres_store.ensure_alias("Politician", "John Johnsen", "X081", "John Johnsen", source="seed")
         resolver = make_resolver(postgres_store)
         resolver.suggest_merges("Politician")
         queue_id = resolver.pending_reviews()[0]["id"]
@@ -52,9 +48,7 @@ class TestIdentityRemap:
     def test_canonical_identity_follows_consolidation_chains(self, postgres_store):
         self._confirmed_pair(postgres_store)  # X080 -> X081
         # Later the human consolidates X081 into X082 (roster spelling).
-        postgres_store.record_identity(
-            "Politician", "X081", "X082", confidence=1.0, source="review"
-        )
+        postgres_store.record_identity("Politician", "X081", "X082", confidence=1.0, source="review")
         resolver = make_resolver(postgres_store)
         assert resolver.canonical_identity("Politician", "X080") == "X082"
 

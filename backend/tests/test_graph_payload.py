@@ -1,4 +1,4 @@
-"""Unit tests for the pure /api/graph payload helpers (B1).
+"""Unit tests for the pure /api/graph payload helpers.
 
 No DB required: rows are faked as plain dicts (the route only uses
 ``row["node"].items()``, ``row["labels"]``, ``row["rel"]``,
@@ -7,7 +7,7 @@ No DB required: rows are faked as plain dicts (the route only uses
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from app.api.graph_payload import (
     build_graph_payload,
@@ -44,7 +44,7 @@ def test_json_safe_temporal_and_passthrough():
 
     assert json_safe(Neo4jDateTime(2026, 1, 16, 12, 30, 0)) == "2026-01-16T12:30:00.000000000"
     assert json_safe(Neo4jDate(2026, 1, 15)) == "2026-01-15"
-    assert json_safe(datetime(2026, 1, 16, tzinfo=timezone.utc)) == "2026-01-16T00:00:00+00:00"
+    assert json_safe(datetime(2026, 1, 16, tzinfo=UTC)) == "2026-01-16T00:00:00+00:00"
     assert json_safe(date(2026, 1, 15)) == "2026-01-15"
     assert json_safe("NVDA") == "NVDA"
     assert json_safe(42) == 42
@@ -76,8 +76,7 @@ def test_build_nodes_dedupes_and_falls_back_title():
 
 
 def test_build_nodes_serializes_props_and_tweet_url():
-    rows = [_row({"id": "e1", "at": datetime(2026, 1, 1, tzinfo=timezone.utc),
-                  "tweet_url": "https://x.com/1"}, "Event")]
+    rows = [_row({"id": "e1", "at": datetime(2026, 1, 1, tzinfo=UTC), "tweet_url": "https://x.com/1"}, "Event")]
     nodes, _ = build_nodes(rows)
     assert nodes[0]["props"]["at"] == "2026-01-01T00:00:00+00:00"
     assert nodes[0]["tweet_url"] == "https://x.com/1"
@@ -85,11 +84,9 @@ def test_build_nodes_serializes_props_and_tweet_url():
 
 def test_build_links_drops_dangling_and_null_rel():
     rows = [
-        _row({"ticker": "NVDA"}, "Ticker", rel="IN_SECTOR",
-             target_props={"name": "Chips"}, target_label="Sector"),
+        _row({"ticker": "NVDA"}, "Ticker", rel="IN_SECTOR", target_props={"name": "Chips"}, target_label="Sector"),
         _row({"ticker": "NVDA"}, "Ticker"),  # rel None -> no link
-        _row({"ticker": "ORPH"}, "Ticker", rel="IN_SECTOR",
-             target_props={"name": "Ghost"}, target_label="Sector"),
+        _row({"ticker": "ORPH"}, "Ticker", rel="IN_SECTOR", target_props={"name": "Ghost"}, target_label="Sector"),
         # Every kept node also appears as `n` in some row (the combined
         # query returns each node as the match head), so targets resolve.
         _row({"name": "Chips"}, "Sector"),

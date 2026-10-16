@@ -1,7 +1,7 @@
 """Mention normalization: case, punctuation, token order.
 
 Part of the resolution suite split out of the former
-``tests/test_resolution.py`` (M5). Everything runs against the real
+``tests/test_resolution.py``. Everything runs against the real
 ``baleen_test`` Postgres and the shared Neo4j dev instance (conftest
 fixtures) -- no mocks, in keeping with the research project's rigor bar.
 """

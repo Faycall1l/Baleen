@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
@@ -104,7 +104,7 @@ class ReportEngine:
 
     def ensure_digest(self, period: str | None = None) -> dict:
         """Return today's digest, generating it on first request. Never raises."""
-        day = period or datetime.now(timezone.utc).date().isoformat()
+        day = period or datetime.now(UTC).date().isoformat()
         try:
             existing = self.store.get_digest(day)
             if existing is not None:
@@ -123,13 +123,20 @@ class ReportEngine:
                 if existing is not None:
                     return existing
             return {
-                "id": report_id, "kind": "digest", "period": day,
-                "title": f"Market digest — {day}", "body": body,
+                "id": report_id,
+                "kind": "digest",
+                "period": day,
+                "title": f"Market digest — {day}",
+                "body": body,
             }
         except Exception:
             logger.exception("digest generation failed for %s", day)
-            return {"kind": "digest", "period": day, "title": f"Market digest — {day}",
-                    "body": "Digest unavailable (backend error)."}
+            return {
+                "kind": "digest",
+                "period": day,
+                "title": f"Market digest — {day}",
+                "body": "Digest unavailable (backend error).",
+            }
 
     def _digest_facts(self, day: str) -> dict:
         since = f"{day}T00:00:00Z"
@@ -144,7 +151,7 @@ class ReportEngine:
         politicians = sorted({r.get("politician") for r in rows if r.get("politician")})
         try:
             alerts = self.store.get_alerts(limit=50)
-            day_start = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
+            day_start = datetime.fromisoformat(day).replace(tzinfo=UTC)
             day_end = day_start + timedelta(days=1)
             alert_titles = []
             for a in alerts:

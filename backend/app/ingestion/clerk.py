@@ -19,8 +19,8 @@ import logging
 import re
 import time
 import zipfile
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 import httpx
 from pypdf import PdfReader
@@ -46,7 +46,7 @@ LOOKBACK_DAYS = 3
 
 #: Cap on the in-memory seen set (doc ids). Bounded so a long-running
 #: scheduler doesn't leak memory; eviction only causes a redundant download
-#: that Postgres dedup drops (see #27).
+#: that Postgres dedup drops.
 SEEN_CAP = 500
 
 
@@ -171,7 +171,7 @@ class ClerkHouseSource(TweetSource):
         fetch_index: Callable[[int], str] | None = None,
         fetch_pdf: Callable[[str, str], bytes] | None = None,
     ) -> None:
-        self.year = year or datetime.now(timezone.utc).year
+        self.year = year or datetime.now(UTC).year
         self.lookback_days = lookback_days
         self.max_pdfs_per_poll = max_pdfs_per_poll
         self.timeout_seconds = timeout_seconds
@@ -190,13 +190,11 @@ class ClerkHouseSource(TweetSource):
             index_text = self._cached_index()
         except Exception as exc:
             return FetchResult(tweets=[], errors=[f"clerk index fetch failed: {exc}"])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window = max(since_seconds, self.lookback_days * 86400)
         cutoff = now.date().toordinal() - window // 86400 - 1
         filings = [
-            f
-            for f in parse_index(index_text)
-            if datetime.fromisoformat(f["filing_date"]).date().toordinal() >= cutoff
+            f for f in parse_index(index_text) if datetime.fromisoformat(f["filing_date"]).date().toordinal() >= cutoff
         ]
         filings.sort(key=lambda f: (f["filing_date"], f["doc_id"]), reverse=True)
         tweets: list[RawTweet] = []
@@ -212,7 +210,7 @@ class ClerkHouseSource(TweetSource):
                 pdf = self._fetch_pdf(filing["year"], filing["doc_id"])
                 trades = parse_ptr_pdf(pdf)
             except Exception as exc:
-                # issue #12: only mark a filing seen once it parses cleanly,
+                # only mark a filing seen once it parses cleanly,
                 # otherwise a transient download failure retries forever off.
                 errors.append(f"PTR {filing['doc_id']} failed: {exc}")
                 continue
@@ -249,8 +247,6 @@ class ClerkHouseSource(TweetSource):
             return archive.read(names[0]).decode("utf-8-sig", errors="replace")
 
     def _download_pdf(self, year: str, doc_id: str) -> bytes:
-        response = httpx.get(
-            PTR_PDF_URL.format(year=year, doc_id=doc_id), timeout=self.timeout_seconds
-        )
+        response = httpx.get(PTR_PDF_URL.format(year=year, doc_id=doc_id), timeout=self.timeout_seconds)
         response.raise_for_status()
         return response.content

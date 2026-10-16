@@ -1,6 +1,6 @@
 """Pure helpers shaping the ``GET /api/graph`` payload (spec §6).
 
-Split out of :mod:`app.api.routes` (B1) so the shaping logic is unit-testable
+Split out of :mod:`app.api.routes` so the shaping logic is unit-testable
 without a live Neo4j: every function here is a pure function of its inputs —
 no DB, no FastAPI, no settings. The route owns Cypher + cache; this module
 owns keys, JSON-safety, node/link shaping, and envelope flags.

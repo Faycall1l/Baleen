@@ -1,6 +1,6 @@
 """App lifecycle: health, engine wiring, scheduler start/stop, and clean shutdown.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from tests.api.conftest import _client, _quiet_settings, _services_available
+
 
 def test_health():
     with _client() as c:
@@ -163,9 +164,7 @@ def test_lifespan_starts_and_stops_scheduler(monkeypatch):
         def stop(self):
             captured["stopped"] = True
 
-    enabled = _quiet_settings(monkeypatch).model_copy(
-        update={"scheduler_enabled": True}
-    )
+    enabled = _quiet_settings(monkeypatch).model_copy(update={"scheduler_enabled": True})
     monkeypatch.setattr("app.main.get_settings", lambda: enabled)
     monkeypatch.setattr("app.api.routes.get_settings", lambda: enabled)
     monkeypatch.setattr("app.main._build_scheduler", lambda s: _Recorder())

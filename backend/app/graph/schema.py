@@ -15,9 +15,7 @@ from __future__ import annotations
 # Node labels
 # ---------------------------------------------------------------------------
 
-ALLOWED_LABELS = frozenset(
-    ["Ticker", "Sector", "Politician", "Committee", "Event", "Insider"]
-)
+ALLOWED_LABELS = frozenset(["Ticker", "Sector", "Politician", "Committee", "Event", "Insider"])
 
 # ---------------------------------------------------------------------------
 # Relationship types
@@ -25,13 +23,13 @@ ALLOWED_LABELS = frozenset(
 
 ALLOWED_RELATIONSHIPS = frozenset(
     [
-        "IN_SECTOR",            # (Ticker)-[:IN_SECTOR]->(Sector)
-        "MEMBER_OF",            # (Politician)-[:MEMBER_OF]->(Committee)
-        "OVERSEES",             # (Committee)-[:OVERSEES]->(Sector)
-        "INVOLVES_TICKER",      # (Event)-[:INVOLVES_TICKER]->(Ticker)
+        "IN_SECTOR",  # (Ticker)-[:IN_SECTOR]->(Sector)
+        "MEMBER_OF",  # (Politician)-[:MEMBER_OF]->(Committee)
+        "OVERSEES",  # (Committee)-[:OVERSEES]->(Sector)
+        "INVOLVES_TICKER",  # (Event)-[:INVOLVES_TICKER]->(Ticker)
         "INVOLVES_POLITICIAN",  # (Event)-[:INVOLVES_POLITICIAN]->(Politician)
-        "INVOLVES_INSIDER",     # (Event)-[:INVOLVES_INSIDER]->(Insider)
-        "IN_COMMITTEE",         # (Event)-[:IN_COMMITTEE]->(Committee)
+        "INVOLVES_INSIDER",  # (Event)-[:INVOLVES_INSIDER]->(Insider)
+        "IN_COMMITTEE",  # (Event)-[:IN_COMMITTEE]->(Committee)
     ]
 )
 

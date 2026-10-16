@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -179,7 +179,8 @@ def test_parse_ptr_pdf_skips_trade_with_invalid_transaction_date():
         "Name: Hon. David J. Taylor State/District:OH02 "
         "Apple Inc. (AAPL) [ST] "
         "P 99/99/202609/03/2026$1,001 - $15,000 F S: New "
-        + "padding to exceed the 500-byte scanned-form threshold. " * 10
+        + "padding to exceed the 500-byte scanned-form threshold. "
+        * 10
     )
     trades = parse_ptr_pdf(_pdf_bytes(text))
     assert trades == []
@@ -317,7 +318,7 @@ def test_index_short_line_no_crash():
 
 
 def test_today_is_used_for_window():
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     iso = today.isoformat()
     index = (
         "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\r\n"

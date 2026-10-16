@@ -1,6 +1,6 @@
 """Postgres ingest store: dedup on tweet_id, status machine, rerun safety.
 
-Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` (M4).
+Part of the ingestion suite split out of the former ``tests/test_ingestion.py``.
 """
 
 from __future__ import annotations
@@ -43,11 +43,7 @@ def test_bulk_insert_empty_batch_is_noop(postgres_store):
 def test_schema_is_idempotent_and_serves_new_tweet_query(postgres_store):
     postgres_store.init_schema()  # second run must not fail
     with postgres_store.engine.connect() as conn:
-        indexes = conn.execute(
-            text(
-                "SELECT indexname FROM pg_indexes WHERE tablename = 'raw_tweets'"
-            )
-        ).scalars().all()
+        indexes = conn.execute(text("SELECT indexname FROM pg_indexes WHERE tablename = 'raw_tweets'")).scalars().all()
     assert "idx_raw_tweets_status_created" in indexes
 
 
@@ -104,9 +100,7 @@ def test_multi_source_fans_out_and_namespaces_errors():
 
     good = FakeSource([make_tweet("a-1")])
     bad = FakeSource([])
-    bad.fetch_recent = lambda handles, since_seconds: FetchResult(
-        tweets=[], errors=["throttled"]
-    )
+    bad.fetch_recent = lambda handles, since_seconds: FetchResult(tweets=[], errors=["throttled"])
 
     result = MultiSource([good, bad, ExplodingSource()]).fetch_recent(["h"], 60)
 

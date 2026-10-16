@@ -33,7 +33,7 @@ def ticker(sym: str) -> dict:
             card = _engine().ticker(sym)
         except Exception as exc:
             logger.exception("ticker fetch failed")
-            raise HTTPException(status_code=500, detail=f"ticker fetch failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"ticker fetch failed: {exc}") from None
     if card is None:
         raise HTTPException(status_code=404, detail="unknown ticker")
     return {"ticker": json_safe(card)}

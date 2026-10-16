@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from app.ingestion.disclosures import (
     SOURCE_KIND,
@@ -42,7 +42,7 @@ def _source(rows, **kwargs):
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def test_filters_out_executive_branch_and_stale_filings():
 
 
 def test_coerces_mirror_return_fields_to_numbers_issues_25():
-    """#25: numeric-looking mirror values become JSON numbers; junk sentinels
+    """numeric-looking mirror values become JSON numbers; junk sentinels
     are dropped at ingest so no query ever parses text defensively."""
     src = _source(
         [
@@ -100,7 +100,7 @@ def test_coerces_mirror_return_fields_to_numbers_issues_25():
 
 
 def test_mirror_emits_senate_only_issues_9():
-    """#9: the mirror covers Senate; Clerk owns House, so House rows are
+    """the mirror covers Senate; Clerk owns House, so House rows are
     dropped here to avoid double events from the two lanes."""
     src = _source(
         [
@@ -147,14 +147,22 @@ def test_caps_at_max_rows_newest_first():
 
 
 def _tweet(filer="Maxine Waters", **meta_overrides) -> RawTweet:
-    meta = {"source_kind": SOURCE_KIND, "filer_name": filer, "party": "D",
-            "chamber": "house", "ticker": "JPM",
-            "transaction_date": "2026-08-01", "amount_range_label": "$1,001 - $15,000"}
+    meta = {
+        "source_kind": SOURCE_KIND,
+        "filer_name": filer,
+        "party": "D",
+        "chamber": "house",
+        "ticker": "JPM",
+        "transaction_date": "2026-08-01",
+        "amount_range_label": "$1,001 - $15,000",
+    }
     meta.update(meta_overrides)
     return RawTweet(
-        tweet_id="ptr-x", author_handle="congress_house", author_id="congress_house",
+        tweet_id="ptr-x",
+        author_handle="congress_house",
+        author_id="congress_house",
         text="REPORTED: Rep. Maxine Waters (D-CA, house) sold $JPM shares worth $1,001 - $15,000.",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         url="https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/1.pdf",
         raw_json=meta,
     )
@@ -162,11 +170,18 @@ def _tweet(filer="Maxine Waters", **meta_overrides) -> RawTweet:
 
 def _event() -> CongressTradeEvent:
     return CongressTradeEvent(
-        tweet_id="ptr-x", tweet_url="https://x/y", confidence=0.9,
-        politician_name="Maxine Waters", politician_id="WRONG",
-        chamber="senate", party="R", committee_ids=["MADEUP"],
-        ticker="WRONG", transaction_type="sell",
-        amount_range="wrong", transaction_date=date(2000, 1, 1),
+        tweet_id="ptr-x",
+        tweet_url="https://x/y",
+        confidence=0.9,
+        politician_name="Maxine Waters",
+        politician_id="WRONG",
+        chamber="senate",
+        party="R",
+        committee_ids=["MADEUP"],
+        ticker="WRONG",
+        transaction_type="sell",
+        amount_range="wrong",
+        transaction_date=date(2000, 1, 1),
     )
 
 
@@ -223,8 +238,11 @@ def test_maybe_enrich_is_noop_without_marker():
 def test_maybe_enrich_is_noop_for_non_congress_events():
     tweet = _tweet()
     options = OptionsFlowEvent(
-        tweet_id="ptr-x", tweet_url="https://x/y", confidence=0.9,
-        ticker="JPM", contract_type="call",
+        tweet_id="ptr-x",
+        tweet_url="https://x/y",
+        confidence=0.9,
+        ticker="JPM",
+        contract_type="call",
     )
     assert maybe_enrich_event(tweet, options) is options
 
@@ -303,7 +321,7 @@ def test_malformed_row_is_skipped_not_crash(monkeypatch):
             raise AttributeError("unexpected field type")
         return real(row, now)
 
-    # The source resolves `_record` in its own module (L5), so patch there.
+    # The source resolves `_record` in its own module, so patch there.
     monkeypatch.setattr(disclosures, "_record", flaky)
     src = _source([broken, good], lookback_days=3650)
     result = src.fetch_recent([], 3600)
@@ -348,9 +366,7 @@ def test_fetch_mirror_uses_httpx(monkeypatch):
         return _Resp()
 
     monkeypatch.setattr(httpx, "get", fake_get)
-    src = CongressDisclosureSource(
-        mirror_url="https://example.com/trades.json", timeout_seconds=5
-    )
+    src = CongressDisclosureSource(mirror_url="https://example.com/trades.json", timeout_seconds=5)
 
     assert src._fetch_mirror() == [{"id": "senate_1"}]
     assert "trades.json" in seen["url"]
@@ -359,6 +375,7 @@ def test_fetch_mirror_uses_httpx(monkeypatch):
 def test_maybe_enrich_event_never_raises_on_enrichment_error(monkeypatch):
     """Even if grounding itself crashes, maybe_enrich_event keeps the model's
     output and never raises."""
+
     def boom(tweet, event):
         raise RuntimeError("grounding failed")
 

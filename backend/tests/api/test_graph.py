@@ -1,22 +1,22 @@
 """Graph endpoint: payload shape, limits, tombstones, caching, and delta.
 
-Part of the API suite split out of the former ``tests/test_api.py`` (M1).
+Part of the API suite split out of the former ``tests/test_api.py``.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
+
 import pytest
 
-from datetime import date, datetime, timezone
-
 from app.models.events import CongressTradeEvent, OptionsFlowEvent, UnparsedEvent
-
 from tests.api.conftest import (
     _boom_app,
     _client,
     _quiet_settings,
     _services_available,
 )
+
 
 class _CountingNeo4j:
     def __init__(self):
@@ -60,7 +60,7 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
         transaction_type="buy",
         amount_range="$1,001 - $15,000",
         transaction_date=date(2020, 1, 1),
-        event_time=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        event_time=datetime(2020, 1, 1, tzinfo=UTC),
     )
     recent = OptionsFlowEvent(
         tweet_id="g-limit-new",
@@ -70,7 +70,7 @@ def test_graph_limit_truncates_to_recent_events(neo4j_store):
         contract_type="call",
         strike=250.0,
         sentiment="bullish",
-        event_time=datetime(2030, 6, 1, tzinfo=timezone.utc),
+        event_time=datetime(2030, 6, 1, tzinfo=UTC),
     )
     writer.write_event(old)
     writer.write_event(recent)
@@ -187,7 +187,7 @@ def test_graph_excludes_tombstoned_politicians(postgres_store, neo4j_store, futu
             confidence=0.9,
             ticker="NVDA",
             contract_type="call",
-            event_time=datetime(2031, 6, 1, tzinfo=timezone.utc),
+            event_time=datetime(2031, 6, 1, tzinfo=UTC),
         )
     )
 
@@ -316,12 +316,8 @@ def test_graph_delta_returns_only_newer_events(postgres_store, neo4j_store):
         )
 
     writer = GraphWriter(neo4j_store)
-    old_id = writer.write_event(
-        _evt("g-delta-old", "D900", "ZZD1", datetime(2026, 1, 10, tzinfo=timezone.utc))
-    )
-    new_id = writer.write_event(
-        _evt("g-delta-new", "D901", "ZZD2", datetime(2026, 3, 10, tzinfo=timezone.utc))
-    )
+    old_id = writer.write_event(_evt("g-delta-old", "D900", "ZZD1", datetime(2026, 1, 10, tzinfo=UTC)))
+    new_id = writer.write_event(_evt("g-delta-new", "D901", "ZZD2", datetime(2026, 3, 10, tzinfo=UTC)))
     try:
         with _client() as c:
             body = c.get("/api/graph?limit=100&since=2026-02-01T00%3A00%3A00%2B00%3A00").json()
@@ -429,6 +425,7 @@ def test_graph_path_empty_when_disconnected(monkeypatch):
 def test_graph_path_finds_live_connection(neo4j_store):
     """Live: a fresh event links its ticker in one hop."""
     from datetime import date
+
     from app.graph.writer import GraphWriter
     from app.models.events import CongressTradeEvent
 
@@ -445,7 +442,7 @@ def test_graph_path_finds_live_connection(neo4j_store):
         transaction_type="buy",
         amount_range="$1 - $2",
         transaction_date=date(2026, 1, 1),
-        event_time=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 2, tzinfo=UTC),
     )
     event_id = GraphWriter(neo4j_store).write_event(event)
     try:
@@ -455,12 +452,8 @@ def test_graph_path_finds_live_connection(neo4j_store):
         assert body["rels"] == ["INVOLVES_TICKER"]
         assert body["nodes"][-1]["id"] == f"Event:{event_id}"
     finally:
-        neo4j_store.run(
-            "MATCH (e:Event) WHERE e.id = $id DETACH DELETE e", id=event_id
-        )
-        neo4j_store.run(
-            "MATCH (t:Ticker) WHERE t.ticker = 'ZZPQ' DETACH DELETE t"
-        )
+        neo4j_store.run("MATCH (e:Event) WHERE e.id = $id DETACH DELETE e", id=event_id)
+        neo4j_store.run("MATCH (t:Ticker) WHERE t.ticker = 'ZZPQ' DETACH DELETE t")
 
 
 def test_graph_since_and_before_are_mutually_exclusive():
@@ -524,12 +517,8 @@ def test_graph_before_returns_only_older_events(neo4j_store):
         )
 
     writer = GraphWriter(neo4j_store)
-    old_id = writer.write_event(
-        _evt("g-asof-old", "A900", "ZZA1", datetime(2026, 1, 10, tzinfo=timezone.utc))
-    )
-    new_id = writer.write_event(
-        _evt("g-asof-new", "A901", "ZZA2", datetime(2026, 3, 10, tzinfo=timezone.utc))
-    )
+    old_id = writer.write_event(_evt("g-asof-old", "A900", "ZZA1", datetime(2026, 1, 10, tzinfo=UTC)))
+    new_id = writer.write_event(_evt("g-asof-new", "A901", "ZZA2", datetime(2026, 3, 10, tzinfo=UTC)))
     try:
         with _client() as c:
             body = c.get("/api/graph?limit=100&before=2026-02-01T00%3A00%3A00%2B00%3A00").json()

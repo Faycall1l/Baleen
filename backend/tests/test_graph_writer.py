@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
-
+from datetime import UTC, date, datetime
 
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent
 
 # ---------------------------------------------------------------------------
-# Batching (#19)
+# Batching
 # ---------------------------------------------------------------------------
 
 
@@ -41,7 +40,7 @@ class _FakeTxStore:
 
 
 def test_write_event_fans_out_inside_one_transaction():
-    """#19: the whole event write (nodes + sectors + N committees) is one
+    """the whole event write (nodes + sectors + N committees) is one
     server transaction, not ~8 + 3N sequential round-trips."""
     store = _FakeTxStore()
     writer = GraphWriter(store)  # type: ignore[arg-type]
@@ -79,7 +78,7 @@ def _event(event_id: str = "t1") -> CongressTradeEvent:
         transaction_type="buy",
         amount_range="$1,001 - $15,000",
         transaction_date=date(2026, 1, 15),
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
 
 
@@ -111,22 +110,11 @@ def test_writing_event_twice_is_idempotent(neo4j_store):
     second = writer.write_event(event)
     assert first == second == event.deterministic_id
 
-    assert (
-        _count(neo4j_store, "MATCH (e:Event {id: $id}) RETURN count(e) AS count", id=first)
-        == 1
-    )
-    assert (
-        _count(neo4j_store, "MATCH (p:Politician {id: 'W000817'}) RETURN count(p) AS count")
-        == 1
-    )
-    assert (
-        _count(neo4j_store, "MATCH (t:Ticker {ticker: 'NVDA'}) RETURN count(t) AS count")
-        == 1
-    )
+    assert _count(neo4j_store, "MATCH (e:Event {id: $id}) RETURN count(e) AS count", id=first) == 1
+    assert _count(neo4j_store, "MATCH (p:Politician {id: 'W000817'}) RETURN count(p) AS count") == 1
+    assert _count(neo4j_store, "MATCH (t:Ticker {ticker: 'NVDA'}) RETURN count(t) AS count") == 1
     # Event-written committees resolve their display name from the reference set.
-    rows = neo4j_store.run(
-        "MATCH (c:Committee {id: 'SSBK'}) RETURN c.name AS name, c.first_seen_at AS first_seen"
-    )
+    rows = neo4j_store.run("MATCH (c:Committee {id: 'SSBK'}) RETURN c.name AS name, c.first_seen_at AS first_seen")
     assert rows and rows[0]["name"] == "Senate Banking, Housing and Urban Affairs Committee"
     assert rows[0]["first_seen"] is not None
     assert (
@@ -175,7 +163,7 @@ def test_event_time_is_stored_as_native_temporal(neo4j_store):
         confidence=0.9,
         ticker="NVDA",
         contract_type="call",
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
     event_id = writer.write_event(event)
 
@@ -200,7 +188,7 @@ def test_options_flow_writes_ticker_and_sector(neo4j_store):
         contract_type="call",
         strike=190.0,
         sentiment="bullish",
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
     event_id = writer.write_event(event)
 
@@ -251,9 +239,7 @@ def test_insider_trade_writes_insider_and_ticker(neo4j_store):
         )
         == 1
     )
-    rows = neo4j_store.run(
-        "MATCH (i:Insider {id: '0001212502'}) RETURN i.name AS name, i.role AS role"
-    )
+    rows = neo4j_store.run("MATCH (i:Insider {id: '0001212502'}) RETURN i.name AS name, i.role AS role")
     assert rows and rows[0]["name"] == "Milton C Ault III"
     assert rows[0]["role"] == "Chairman"
 
@@ -287,8 +273,7 @@ def test_insider_write_applies_entity_resolver_canonical_identity(neo4j_store):
     try:
         event_id = GraphWriter(neo4j_store, entity_resolver=_StubResolver()).write_event(event)
         rows = neo4j_store.run(
-            "MATCH (e:Event {id: $id})-[:INVOLVES_INSIDER]->(i:Insider) "
-            "RETURN i.id AS id, i.name AS name",
+            "MATCH (e:Event {id: $id})-[:INVOLVES_INSIDER]->(i:Insider) RETURN i.id AS id, i.name AS name",
             id=event_id,
         )
         assert [(r["id"], r["name"]) for r in rows] == [("CANON-1", "Canonical Person")]

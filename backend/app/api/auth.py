@@ -1,4 +1,4 @@
-"""API-key guard and per-IP rate limiting (J5).
+"""API-key guard and per-IP rate limiting.
 
 Split out of :mod:`app.api.routes`, which keeps owning the limiter singleton
 and the settings lookup so there is a single place to monkeypatch. The policy
@@ -48,10 +48,7 @@ class _RateLimiter:
                 return False
             hits.append(now)
             self._hits[key] = hits
-            if (
-                len(self._hits) > 4096
-                and now - self._last_sweep >= self.window_seconds
-            ):
+            if len(self._hits) > 4096 and now - self._last_sweep >= self.window_seconds:
                 # Once per window: evict every key whose newest hit is stale.
                 self._hits = {k: v for k, v in self._hits.items() if v[-1] > cutoff}
                 self._last_sweep = now

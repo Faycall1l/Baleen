@@ -1,13 +1,13 @@
 """Shared helpers for the ingestion suite.
 
-Split out of the former ``tests/test_ingestion.py`` (M4), which now has one
+Split out of the former ``tests/test_ingestion.py``, which now has one
 module per ingestion concern: models, the Postgres store, the X source, and
 pagination.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from app.ingestion.source import RawTweet
@@ -19,7 +19,7 @@ def make_tweet(tweet_id: str) -> RawTweet:
         author_handle="unusual_whales",
         author_id="1",
         text=f"tweet {tweet_id}",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         url=f"https://x.com/unusual_whales/status/{tweet_id}",
     )
 

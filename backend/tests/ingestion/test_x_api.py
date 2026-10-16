@@ -1,6 +1,6 @@
 """X API source: token validation, timeouts, retry/backoff, error reporting.
 
-Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` (M4).
+Part of the ingestion suite split out of the former ``tests/test_ingestion.py``.
 """
 
 from __future__ import annotations
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
     import tweepy
 
 
-def _rate_limited() -> "tweepy.errors.TooManyRequests":
+def _rate_limited() -> tweepy.errors.TooManyRequests:
     import tweepy
 
     fake_response = SimpleNamespace(status_code=429, reason="Too Many Requests")
     return tweepy.errors.TooManyRequests(fake_response, response_json={"errors": []})
 
 
-def _unauthorized() -> "tweepy.errors.Unauthorized":
+def _unauthorized() -> tweepy.errors.Unauthorized:
     import tweepy
 
     fake_response = SimpleNamespace(status_code=401, reason="Unauthorized")

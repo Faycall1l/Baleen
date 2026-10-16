@@ -1,4 +1,4 @@
-"""Tool schemas and the read-only Cypher guardrails (L6), split out of
+"""Tool schemas and the read-only Cypher guardrails, split out of
 :mod:`app.query.agent`.
 
 The two tool definitions handed to the LLM, the shared limits, and the
@@ -74,8 +74,6 @@ NO_DATA_ANSWER = (
     "Try asking about a ticker, sector, politician, or committee that has "
     "been ingested."
 )
-
-
 
 
 def bounded_query(query: str) -> str:

@@ -1,4 +1,4 @@
-"""The LLM response/error contract (L3), split out of :mod:`app.extraction.client`.
+"""The LLM response/error contract, split out of :mod:`app.extraction.client`.
 
 These types are the only thing callers should know about the model: a
 ``LLMResponse`` with optional ``ToolCall``s, and a small error hierarchy that
@@ -23,6 +23,7 @@ class LLMTransportError(LLMError):
     unparsed — the endpoint is unreachable or misbehaving at the transport
     level. Callers should leave the tweet pending and retry later.
     """
+
 
 class InvalidJSONError(LLMError):
     """The model returned content that could not be parsed as JSON."""

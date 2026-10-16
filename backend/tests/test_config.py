@@ -77,7 +77,10 @@ def test_missing_url_scheme_rejected():
         Settings(_env_file=None, llm_base_url="localhost:8001/v1")
     with pytest.raises(ValidationError):
         Settings(_env_file=None, llm_base_url="ftp://localhost:8001/v1")
-    assert Settings(_env_file=None, llm_base_url="http://host.docker.internal:8001/v1").llm_base_url == "http://host.docker.internal:8001/v1"
+    assert (
+        Settings(_env_file=None, llm_base_url="http://host.docker.internal:8001/v1").llm_base_url
+        == "http://host.docker.internal:8001/v1"
+    )
 
 
 def test_bolt_scheme_required():
@@ -92,7 +95,10 @@ def test_database_url_scheme_required():
         Settings(_env_file=None, database_url="sqlite:///x.db")
     with pytest.raises(ValidationError):
         Settings(_env_file=None, database_url="neo4j://localhost:7687")
-    assert Settings(_env_file=None, database_url="postgresql+psycopg://u:p@localhost:5432/b").database_url == "postgresql+psycopg://u:p@localhost:5432/b"
+    assert (
+        Settings(_env_file=None, database_url="postgresql+psycopg://u:p@localhost:5432/b").database_url
+        == "postgresql+psycopg://u:p@localhost:5432/b"
+    )
 
 
 def test_postgres_dsn_prefers_explicit_database_url():

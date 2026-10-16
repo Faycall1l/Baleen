@@ -2,7 +2,7 @@
 
 Polls the House Clerk's periodic-transaction mirror and emits one record per
 trade, then grounds the extracted event in the filed row. The XML/JSON parsing
-itself lives in :mod:`app.ingestion.disclosures_parse` (L5); this module owns
+itself lives in :mod:`app.ingestion.disclosures_parse`; this module owns
 the network source and the deterministic enrichment.
 """
 
@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -75,13 +76,14 @@ class CongressDisclosureSource(TweetSource):
             rows = self._cached_rows()
         except Exception as exc:
             return FetchResult(tweets=[], errors=[f"disclosure mirror fetch failed: {exc}"])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window = max(since_seconds, self.lookback_days * 86400)
         cutoff = now.date().toordinal() - window // 86400 - 1
         fresh = [
             r
             for r in rows
-            if (r.get("branch") or "") == "congress" and r.get("ticker")
+            if (r.get("branch") or "") == "congress"
+            and r.get("ticker")
             and (r.get("chamber") or "").strip().lower() == "senate"
             and (day := _parse_day(r.get("filing_date"))) is not None
             and day.toordinal() >= cutoff
@@ -180,11 +182,7 @@ def maybe_enrich_event(tweet: RawTweet, event: Event) -> Event:
     """
     try:
         meta = tweet.raw_json or {}
-        if (
-            isinstance(event, CongressTradeEvent)
-            and isinstance(meta, dict)
-            and meta.get("source_kind") == SOURCE_KIND
-        ):
+        if isinstance(event, CongressTradeEvent) and isinstance(meta, dict) and meta.get("source_kind") == SOURCE_KIND:
             return enrich_congress_trade(tweet, event)
     except Exception:
         logger.exception("disclosure enrichment failed for %s; keeping model output", tweet.tweet_id)

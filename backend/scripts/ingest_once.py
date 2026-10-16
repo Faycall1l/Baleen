@@ -155,7 +155,7 @@ def main() -> None:
             f"Processing failed because the LLM endpoint is unreachable "
             f"({settings.llm_base_url}). Tweets are left pending and will be "
             f"processed once vLLM recovers."
-        )
+        ) from None
     logger.info("processing summary: %s", summary)
     print(f"\nDone. Ingested {inserted}, processed {summary}.")
 

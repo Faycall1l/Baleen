@@ -59,7 +59,9 @@ def _ids(neo4j: Neo4jStore, query: str) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Re-queue genuinely-unparsed tweets")
     parser.add_argument("--process", action="store_true", help="run the processing pipeline after resetting")
-    parser.add_argument("--purge", action="store_true", help="also delete genuine unparsed Event nodes (stale ones are always purged)")
+    parser.add_argument(
+        "--purge", action="store_true", help="also delete genuine unparsed Event nodes (stale ones are always purged)"
+    )
     parser.add_argument("--dry-run", action="store_true", help="only report what would change")
     args = parser.parse_args()
 

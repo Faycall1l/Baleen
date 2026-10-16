@@ -1,5 +1,5 @@
 """Congressional-trade leaderboard projection, split out of
-:mod:`app.db.postgres` (K2).
+:mod:`app.db.postgres`.
 
 Mixed into ``PostgresStore``, which owns the shared SQLAlchemy engine, so every
 method here stays a thin, auditable ``text()`` call.

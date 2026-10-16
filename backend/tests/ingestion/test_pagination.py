@@ -1,15 +1,12 @@
 """X API pagination: next-token following and the max-pages stop.
 
-Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` (M4).
+Part of the ingestion suite split out of the former ``tests/test_ingestion.py``.
 """
 
 from __future__ import annotations
 
-
 from app.ingestion.x_api import XApiSource
 from tests.ingestion.conftest import page, page_tweet
-
-
 
 
 def test_pagination_follows_next_token(monkeypatch):

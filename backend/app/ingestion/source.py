@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -142,7 +142,7 @@ class SampleSource(TweetSource):
     """
 
     def fetch_recent(self, handles: list[str], since_seconds: int) -> FetchResult:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tweets = [
             _sample(
                 "sample-1001",

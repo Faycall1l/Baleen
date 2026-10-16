@@ -33,7 +33,7 @@ def committee(cid: str) -> dict:
             card = _engine().committee(cid)
         except Exception as exc:
             logger.exception("committee fetch failed")
-            raise HTTPException(status_code=500, detail=f"committee fetch failed: {exc}")
+            raise HTTPException(status_code=500, detail=f"committee fetch failed: {exc}") from None
     if card is None:
         raise HTTPException(status_code=404, detail="unknown committee")
     return {"committee": json_safe(card)}

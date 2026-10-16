@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Callable
+from collections.abc import Callable
 
 from app.db.neo4j import Neo4jStore
 from app.graph.resolution import EntityResolver
@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 #: Resolves a ticker symbol to its sector name; ``None`` when unknown.
 SectorResolver = Callable[[str], str | None]
 
-DEFAULT_RESOLVER: SectorResolver = lambda ticker: TICKER_SECTORS.get(ticker)
+
+def default_sector_resolver(ticker: str) -> str | None:
+    return TICKER_SECTORS.get(ticker)
+
 
 _AMOUNT_NUMBER_RE = re.compile(r"([\d,]+(?:\.\d+)?)\s*([MmKk])?")
 _AMOUNT_MULTIPLIER = {"M": 1_000_000.0, "K": 1_000.0}
@@ -72,7 +75,7 @@ class GraphWriter:
         entity_resolver: EntityResolver | None = None,
     ) -> None:
         self.store = store
-        self.sector_resolver = sector_resolver or DEFAULT_RESOLVER
+        self.sector_resolver = sector_resolver or default_sector_resolver
         # When set, Politician/Insider nodes are written with their canonical
         # spelling (entity resolution, naming layer) instead of whatever mention
         # the LLM produced. None keeps the historical raw-mention behaviour.
@@ -85,10 +88,10 @@ class GraphWriter:
     def write_event(self, event: Event) -> str:
         """Upsert one event into the graph. Returns its deterministic id.
 
-        All merges for the event run inside a single server transaction
-        (#19): the fan-out (nodes, sector resolution, N committees) is one
-        round-trip instead of ~8 + 3N sequential ones, and the event becomes
-        visible atomically.
+         All merges for the event run inside a single server transaction
+        : the fan-out (nodes, sector resolution, N committees) is one
+         round-trip instead of ~8 + 3N sequential ones, and the event becomes
+         visible atomically.
         """
         self._stmts: list[tuple[str, dict]] = []
         self._merge_event(event)
@@ -129,9 +132,7 @@ class GraphWriter:
             },
         )
 
-    def _merge_relation(
-        self, a_label: str, a_key_value, rel: str, b_label: str, b_key_value, provenance: dict
-    ) -> None:
+    def _merge_relation(self, a_label: str, a_key_value, rel: str, b_label: str, b_key_value, provenance: dict) -> None:
         a_key, b_key = LABEL_KEYS[a_label], LABEL_KEYS[b_label]
         self._record(
             # Two MATCH clauses, not one comma-joined pattern: the comma form
@@ -186,7 +187,11 @@ class GraphWriter:
         if sector:
             self._merge_sector(sector, tweet_id, tweet_url)
             self._merge_relation(
-                "Ticker", ticker, "IN_SECTOR", "Sector", sector,
+                "Ticker",
+                ticker,
+                "IN_SECTOR",
+                "Sector",
+                sector,
                 {"tweet_id": tweet_id, "tweet_url": tweet_url},
             )
         return sector
@@ -201,7 +206,11 @@ class GraphWriter:
     def _write_ticker_flow(self, event: OptionsFlowEvent | CongressTradeEvent | InsiderTradeEvent) -> None:
         self._merge_ticker(event.ticker, event.tweet_id, event.tweet_url)
         self._merge_relation(
-            "Event", event.deterministic_id, "INVOLVES_TICKER", "Ticker", event.ticker,
+            "Event",
+            event.deterministic_id,
+            "INVOLVES_TICKER",
+            "Ticker",
+            event.ticker,
             self._provenance(event),
         )
 
@@ -227,8 +236,12 @@ class GraphWriter:
             provenance,
         )
         self._merge_relation(
-            "Event", event.deterministic_id, "INVOLVES_POLITICIAN", "Politician",
-            identity_id, provenance,
+            "Event",
+            event.deterministic_id,
+            "INVOLVES_POLITICIAN",
+            "Politician",
+            identity_id,
+            provenance,
         )
         for committee_id in event.committee_ids:
             self._merge_node(
@@ -240,11 +253,19 @@ class GraphWriter:
                 provenance,
             )
             self._merge_relation(
-                "Event", event.deterministic_id, "IN_COMMITTEE", "Committee", committee_id,
+                "Event",
+                event.deterministic_id,
+                "IN_COMMITTEE",
+                "Committee",
+                committee_id,
                 provenance,
             )
             self._merge_relation(
-                "Politician", identity_id, "MEMBER_OF", "Committee", committee_id,
+                "Politician",
+                identity_id,
+                "MEMBER_OF",
+                "Committee",
+                committee_id,
                 provenance,
             )
 
@@ -266,6 +287,10 @@ class GraphWriter:
             provenance,
         )
         self._merge_relation(
-            "Event", event.deterministic_id, "INVOLVES_INSIDER", "Insider",
-            identity_id, provenance,
+            "Event",
+            event.deterministic_id,
+            "INVOLVES_INSIDER",
+            "Insider",
+            identity_id,
+            provenance,
         )

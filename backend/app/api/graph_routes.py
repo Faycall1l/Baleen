@@ -1,4 +1,4 @@
-"""``GET /api/graph`` — the knowledge-graph payload for the Sigma UI (J2).
+"""``GET /api/graph`` — the knowledge-graph payload for the Sigma UI.
 
 Split out of :mod:`app.api.routes` so the Cypher/serialization path reads on
 its own. Every service lookup goes through ``app.api.routes`` at call time, so
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -37,7 +37,7 @@ def _parse_since(since: str | None) -> datetime | None:
         dt = datetime.fromisoformat(since)
     except ValueError:
         return None
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 @router.get("/graph", dependencies=[Depends(_require_api_key)])
@@ -54,7 +54,7 @@ def graph(
     large live graph stays responsive. ``limit=0`` returns everything (demo /
     small graphs). The response carries ``truncated``/``event_count`` so the UI
     can tell a partial view from a full one. ``limit`` is capped at 5000
-    (#16) so a single request cannot force an unbounded materialization.
+    so a single request cannot force an unbounded materialization.
 
     With ``since`` (ISO timestamp), only events at/after that time (plus
     their neighborhoods) are returned, flagged with ``delta: true`` — the
@@ -63,7 +63,7 @@ def graph(
     ``since`` falls back to a full render. Deltas skip the total-events count
     and the cache (both pointless for a moving window).
 
-    Deltas are deliberately NOT ``limit``-bounded (E4, see C2 numbers): a
+    Deltas are deliberately NOT ``limit``-bounded : a
     capped delta could silently drop events and break merge correctness, and
     ``truncated`` cannot signal it (``event_count`` is None for deltas). A
     wide catch-up window can therefore exceed a capped full render (measured:
@@ -88,9 +88,7 @@ def graph(
     since_dt = _parse_since(since)
     before_dt = _parse_since(before)
     if since_dt is not None and before_dt is not None:
-        raise HTTPException(
-            status_code=400, detail="since and before are mutually exclusive"
-        )
+        raise HTTPException(status_code=400, detail="since and before are mutually exclusive")
     ttl = routes.get_settings().graph_cache_ttl_seconds
     if ttl > 0 and since_dt is None and before_dt is None:
         with routes._graph_cache_lock:
@@ -139,9 +137,7 @@ def graph_path(
     parsed_from = _split_node_ref(from_node)
     parsed_to = _split_node_ref(to_node)
     if parsed_from is None or parsed_to is None:
-        raise HTTPException(
-            status_code=422, detail="from/to must be Label:key with a known label"
-        )
+        raise HTTPException(status_code=422, detail="from/to must be Label:key with a known label")
     (from_label, from_key), (to_label, to_key) = parsed_from, parsed_to
 
     try:
@@ -159,7 +155,7 @@ def graph_path(
             )
     except Exception as exc:
         logger.exception("graph path failed")
-        raise HTTPException(status_code=500, detail=f"graph path failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"graph path failed: {exc}") from None
     if not rows:
         return {"from": from_node, "to": to_node, "nodes": [], "rels": [], "length": 0}
     path = rows[0]
@@ -207,15 +203,11 @@ def _render_graph(
             )[0]["n"]
         else:
             total = neo4j.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"]
-        keep_ids = (
-            _keep_ids(neo4j, limit, since_dt, delta, before_dt)
-            if limit > 0 or delta
-            else None
-        )
+        keep_ids = _keep_ids(neo4j, limit, since_dt, delta, before_dt) if limit > 0 or delta else None
         rows = _fetch_nodes_and_links(neo4j, keep_ids, without_events)
     except Exception as exc:
         logger.exception("graph export failed")
-        raise HTTPException(status_code=500, detail=f"graph export failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"graph export failed: {exc}") from None
 
     return build_graph_payload(rows, total, limit, delta, keep_ids)
 
@@ -304,9 +296,7 @@ def _keep_ids(
     return keep_ids
 
 
-def _fetch_nodes_and_links(
-    neo4j, keep_ids: list[str] | None, without_events: bool = False
-) -> list[dict]:
+def _fetch_nodes_and_links(neo4j, keep_ids: list[str] | None, without_events: bool = False) -> list[dict]:
     """One round trip for nodes + links (previously two sequential scans):
     every kept node's outgoing edges ride along, and links touching a node
     outside the kept set (or a tombstoned node) are dropped in Python exactly
@@ -324,7 +314,7 @@ def _fetch_nodes_and_links(
         node_conditions.append("(NOT n:Event)")
     return neo4j.run(
         f"""
-        MATCH (n) WHERE {' AND '.join(node_conditions)}
+        MATCH (n) WHERE {" AND ".join(node_conditions)}
         OPTIONAL MATCH (n)-[r]->(m)
         RETURN n AS node, labels(n) AS labels,
                type(r) AS rel, m AS target, labels(m) AS target_labels

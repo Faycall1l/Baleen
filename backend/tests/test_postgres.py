@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.ingestion.source import RawTweet
 
@@ -34,7 +34,7 @@ def _ptr(tweet_id: str, filer: str, ticker: str, ret: float | None) -> RawTweet:
         author_handle="congress_house",
         author_id="congress_house",
         text=f"{filer} bought {ticker}",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         url="https://disclosures-clerk.house.gov/x.pdf",
         raw_json=meta,
     )
@@ -58,7 +58,7 @@ def test_leaderboard_orders_by_return_since(postgres_store):
 
 
 def test_leaderboard_ignores_non_numeric_excess_since_issues_10(postgres_store):
-    """#10: a junk excess_since must not abort the whole leaderboard query."""
+    """a junk excess_since must not abort the whole leaderboard query."""
     meta = {
         "source_kind": "congress_disclosure",
         "filer_name": "Bad Row",
@@ -70,10 +70,13 @@ def test_leaderboard_ignores_non_numeric_excess_since_issues_10(postgres_store):
         "excess_since": "N/A",
     }
     row = RawTweet(
-        tweet_id="ptr-lb-junk", author_handle="congress_house",
-        author_id="congress_house", text="x",
-        created_at=datetime.now(timezone.utc),
-        url="https://example.com/x.pdf", raw_json=meta,
+        tweet_id="ptr-lb-junk",
+        author_handle="congress_house",
+        author_id="congress_house",
+        text="x",
+        created_at=datetime.now(UTC),
+        url="https://example.com/x.pdf",
+        raw_json=meta,
     )
     postgres_store.insert_raw_tweets([row])
 
@@ -83,10 +86,8 @@ def test_leaderboard_ignores_non_numeric_excess_since_issues_10(postgres_store):
 
 
 def test_leaderboard_accepts_scientific_notation_issues_25(postgres_store):
-    """#25: a JSONB number in scientific notation must rank, not be dropped."""
-    postgres_store.insert_raw_tweets(
-        [_ptr("ptr-sci-1", "Sci Gal", "DDD", 1.2e-5)]
-    )
+    """a JSONB number in scientific notation must rank, not be dropped."""
+    postgres_store.insert_raw_tweets([_ptr("ptr-sci-1", "Sci Gal", "DDD", 1.2e-5)])
 
     leaders = postgres_store.get_leaderboard(limit=10)
 
@@ -95,12 +96,8 @@ def test_leaderboard_accepts_scientific_notation_issues_25(postgres_store):
 
 
 def test_since_cursors_return_only_newer_rows(postgres_store):
-    first = postgres_store.insert_report(
-        kind="brief", event_id="e-1", title="t1", body="b1"
-    )
-    second = postgres_store.insert_report(
-        kind="brief", event_id="e-2", title="t2", body="b2"
-    )
+    first = postgres_store.insert_report(kind="brief", event_id="e-1", title="t1", body="b1")
+    second = postgres_store.insert_report(kind="brief", event_id="e-2", title="t2", body="b2")
 
     assert [r["event_id"] for r in postgres_store.get_reports_since(0)] == ["e-1", "e-2"]
     assert [r["event_id"] for r in postgres_store.get_reports_since(first)] == ["e-2"]
@@ -109,8 +106,12 @@ def test_since_cursors_return_only_newer_rows(postgres_store):
     postgres_store.ensure_rule("test-rule", "desc", {})
     rule_id = next(r["id"] for r in postgres_store.get_active_rules() if r["name"] == "test-rule")
     postgres_store.insert_alert(
-        rule_id=rule_id, event_id="ev-a", tweet_id="t", tweet_url="u",
-        title="ta", summary="sa",
+        rule_id=rule_id,
+        event_id="ev-a",
+        tweet_id="t",
+        tweet_url="u",
+        title="ta",
+        summary="sa",
     )
     assert [a["event_id"] for a in postgres_store.get_alerts_since(0)] == ["ev-a"]
 

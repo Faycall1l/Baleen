@@ -13,7 +13,6 @@ Scheduler ticking is disabled in tests (see ``tests/conftest.py``).
 from __future__ import annotations
 
 import logging
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -47,9 +46,7 @@ async def lifespan(app: FastAPI):
         n = seed_aliases(store)
         logger.info("reference roster aliases ensured (%d politicians)", n)
     except Exception:
-        logger.warning(
-            "reference roster alias seeding failed; entity names may drift", exc_info=True
-        )
+        logger.warning("reference roster alias seeding failed; entity names may drift", exc_info=True)
 
     try:
         routes._get_neo4j().ensure_indexes()
@@ -126,6 +123,4 @@ def _check_neo4j() -> None:
 
 def _check_llm() -> None:
     if not routes._get_llm().healthy():
-        raise RuntimeError(
-            f"LLM endpoint unreachable (probe GET {routes._get_llm().base_url}/models)"
-        )
+        raise RuntimeError(f"LLM endpoint unreachable (probe GET {routes._get_llm().base_url}/models)")

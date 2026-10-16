@@ -1,5 +1,5 @@
 """Alert rules, alert rows, and the SSE cursor read, split out of
-:mod:`app.db.postgres` (K2).
+:mod:`app.db.postgres`.
 
 Mixed into ``PostgresStore``, which owns the shared SQLAlchemy engine, so every
 method here stays a thin, auditable ``text()`` call.
@@ -8,6 +8,7 @@ method here stays a thin, auditable ``text()`` call.
 from __future__ import annotations
 
 import json
+
 from sqlalchemy import text
 
 
@@ -29,18 +30,14 @@ class AlertStoreMixin:
     def get_active_rules(self) -> list[dict]:
         with self.engine.connect() as conn:
             rows = conn.execute(
-                text(
-                    "SELECT id, name, description, config FROM alert_rules WHERE active = true"
-                )
+                text("SELECT id, name, description, config FROM alert_rules WHERE active = true")
             ).mappings()
             return [dict(row) for row in rows]
 
     def get_rules(self) -> list[dict]:
         """All rules with their muted state, for the inbox filter bar."""
         with self.engine.connect() as conn:
-            rows = conn.execute(
-                text("SELECT name, active FROM alert_rules ORDER BY name")
-            ).mappings()
+            rows = conn.execute(text("SELECT name, active FROM alert_rules ORDER BY name")).mappings()
             return [dict(row) for row in rows]
 
     def set_rule_active(self, name: str, active: bool) -> bool:

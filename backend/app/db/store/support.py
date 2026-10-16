@@ -1,4 +1,4 @@
-"""NUL-byte scrubbing shared by the Postgres store mixins (K2).
+"""NUL-byte scrubbing shared by the Postgres store mixins.
 
 Postgres text cannot hold NUL bytes, so a single poisoned row from a hostile
 source would otherwise abort an entire ingest batch.
@@ -13,6 +13,7 @@ def _strip_nulls(value: str) -> str:
     if "\x00" in value:
         return value.replace("\x00", "")
     return value
+
 
 def _scrub_nulls(value):
     """Recursively strip actual NUL bytes (``\\x00``) from JSON payloads.

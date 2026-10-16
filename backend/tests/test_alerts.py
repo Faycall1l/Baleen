@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+
+from conftest import StubLLM
 
 from app.alerts.engine import AlertEngine
 from app.alerts.rules import AlertRules
 from app.graph.writer import GraphWriter
 from app.models.events import CongressTradeEvent, InsiderTradeEvent, OptionsFlowEvent
 from scripts.seed_reference import seed
-
-from conftest import StubLLM
 
 
 def _congress_event(
@@ -33,7 +33,7 @@ def _congress_event(
         transaction_type="buy",
         amount_range="$1,001 - $15,000",
         transaction_date=date(2026, 1, 15),
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
 
 
@@ -47,9 +47,7 @@ def _engine(postgres_store, neo4j_store) -> AlertEngine:
     return engine
 
 
-def test_rule_triggers_when_politician_trades_in_oversight_sector(
-    postgres_store, neo4j_store
-):
+def test_rule_triggers_when_politician_trades_in_oversight_sector(postgres_store, neo4j_store):
     seed(neo4j_store)
     engine = _engine(postgres_store, neo4j_store)
 
@@ -74,9 +72,7 @@ def test_rule_triggers_when_politician_trades_in_oversight_sector(
     assert "Warren" in alert["summary"]
 
 
-def test_rule_does_not_trigger_for_non_oversight_sector(
-    postgres_store, neo4j_store
-):
+def test_rule_does_not_trigger_for_non_oversight_sector(postgres_store, neo4j_store):
     seed(neo4j_store)
     engine = _engine(postgres_store, neo4j_store)
 
@@ -107,7 +103,7 @@ def test_rule_ignores_options_flow_events(postgres_store, neo4j_store):
         ticker="JPM",
         contract_type="call",
         sentiment="bullish",
-        event_time=datetime(2026, 1, 16, tzinfo=timezone.utc),
+        event_time=datetime(2026, 1, 16, tzinfo=UTC),
     )
     GraphWriter(neo4j_store).write_event(options)
 
@@ -133,9 +129,7 @@ def test_stored_alert_is_retrievable(postgres_store, neo4j_store):
     assert "JPM" in alerts[0]["title"]
 
 
-def test_re_evaluating_the_same_event_creates_no_duplicate_alert(
-    postgres_store, neo4j_store
-):
+def test_re_evaluating_the_same_event_creates_no_duplicate_alert(postgres_store, neo4j_store):
     seed(neo4j_store)
     engine = _engine(postgres_store, neo4j_store)
     event = _congress_event(
@@ -165,9 +159,7 @@ class _DownLLM:
         raise LLMTransportError("connection refused")
 
 
-def test_llm_down_during_summary_drafting_uses_template_fallback(
-    postgres_store, neo4j_store
-):
+def test_llm_down_during_summary_drafting_uses_template_fallback(postgres_store, neo4j_store):
     seed(neo4j_store)
     engine = AlertEngine(
         store=postgres_store,
@@ -255,7 +247,7 @@ def _insider_event(tweet_id: str, side: str, shares: float | None, price: float 
         shares=shares,
         price=price,
         transaction_date=date(2026, 9, 9),
-        event_time=datetime(2026, 9, 10, tzinfo=timezone.utc),
+        event_time=datetime(2026, 9, 10, tzinfo=UTC),
     )
 
 
@@ -270,7 +262,7 @@ def _options_event(tweet_id: str, volume: int, open_interest: int) -> OptionsFlo
         sentiment="bullish",
         volume=volume,
         open_interest=open_interest,
-        event_time=datetime(2026, 9, 10, tzinfo=timezone.utc),
+        event_time=datetime(2026, 9, 10, tzinfo=UTC),
     )
 
 
@@ -360,17 +352,21 @@ def test_rules_ignore_wrong_event_types():
     Neo4j — wrong-typed events short-circuit before any query."""
     rules = AlertRules(neo4j=None)  # type: ignore[arg-type]
 
-    assert rules.evaluate(
-        "politician_trades_in_oversight_sector",
-        _insider_event("a-x-1", "buy", 5000.0, 250.0),
-    ).triggered is False
-    assert rules.evaluate(
-        "insider_large_buy", _options_event("a-x-2", 10_000, 1_000)
-    ).triggered is False
-    assert rules.evaluate(
-        "unusual_options_sweep",
-        _insider_event("a-x-3", "buy", 5000.0, 250.0),
-    ).triggered is False
+    assert (
+        rules.evaluate(
+            "politician_trades_in_oversight_sector",
+            _insider_event("a-x-1", "buy", 5000.0, 250.0),
+        ).triggered
+        is False
+    )
+    assert rules.evaluate("insider_large_buy", _options_event("a-x-2", 10_000, 1_000)).triggered is False
+    assert (
+        rules.evaluate(
+            "unusual_options_sweep",
+            _insider_event("a-x-3", "buy", 5000.0, 250.0),
+        ).triggered
+        is False
+    )
 
 
 def test_options_sweep_ignores_below_threshold_volume():

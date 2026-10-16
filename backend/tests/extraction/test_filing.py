@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.extraction.filing import event_from_filing_row
 from app.ingestion.source import RawTweet
@@ -14,7 +14,7 @@ def _tweet(meta: dict, tweet_id: str = "t1") -> RawTweet:
         author_handle="edgar_form4",
         author_id="edgar_form4",
         text="x",
-        created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        created_at=datetime(2026, 10, 1, tzinfo=UTC),
         url="https://sec.gov/idx",
         raw_json=meta,
     )

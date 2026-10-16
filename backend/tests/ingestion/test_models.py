@@ -1,13 +1,13 @@
 """Ingested payload models: required fields, base validation, clean schema.
 
-Part of the ingestion suite split out of the former ``tests/test_ingestion.py`` (M4).
+Part of the ingestion suite split out of the former ``tests/test_ingestion.py``.
 """
 
 from __future__ import annotations
 
-import pytest
+from datetime import UTC, datetime
 
-from datetime import datetime, timezone
+import pytest
 from pydantic import ValidationError
 
 from app.ingestion.source import RawTweet
@@ -19,7 +19,7 @@ def test_raw_tweet_requires_tweet_id():
             author_handle="unusual_whales",
             author_id="1",
             text="hello",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             url="https://x.com/x/status/1",
         )
 

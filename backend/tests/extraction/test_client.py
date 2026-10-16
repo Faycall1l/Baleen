@@ -1,8 +1,4 @@
-"""LLMClient transport: health, retries, payload guards, session reuse, drafting.
-
-Part of the extraction suite split out of the former ``tests/test_extraction.py``
-(M2), mirroring the ``app/extraction`` module split.
-"""
+"""LLMClient transport: health, retries, payload guards, session reuse, drafting."""
 
 from __future__ import annotations
 
@@ -117,7 +113,7 @@ def test_json_mode_gives_up_after_invalid_json_retries(monkeypatch):
 
 
 def test_auto_mode_does_not_double_pay_for_transport_failures(monkeypatch):
-    """#14: transport errors re-raise after their own backoff; the JSON
+    """transport errors re-raise after their own backoff; the JSON
     fallback must not run a second full retry budget on top."""
     from app.extraction.client import LLMClient, LLMResponse, LLMTransportError
 
@@ -335,7 +331,8 @@ def test_plain_chat_round_trip(monkeypatch):
     """chat() without tools runs the plain (non-tool) path end to end."""
     client = LLMClient("http://x", "k", "m")
     monkeypatch.setattr(
-        client, "_post",
+        client,
+        "_post",
         lambda payload: {"choices": [{"message": {"role": "assistant", "content": "hello"}}]},
     )
 
@@ -353,9 +350,7 @@ def test_chat_tools_success_path(monkeypatch):
                 "message": {
                     "role": "assistant",
                     "content": "",
-                    "tool_calls": [
-                        {"function": {"name": "extract_options_flow", "arguments": '{"ticker": "NVDA"}'}}
-                    ],
+                    "tool_calls": [{"function": {"name": "extract_options_flow", "arguments": '{"ticker": "NVDA"}'}}],
                 }
             }
         ]
@@ -379,7 +374,8 @@ def test_chat_tools_raises_when_model_ignores_tool_request(monkeypatch):
 
     client = LLMClient("http://x", "k", "m", tool_mode="tools")
     monkeypatch.setattr(
-        client, "_post",
+        client,
+        "_post",
         lambda payload: {"choices": [{"message": {"role": "assistant", "content": "sorry"}}]},
     )
 

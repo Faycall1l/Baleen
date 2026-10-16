@@ -102,9 +102,7 @@ def test_llm_transport_error_in_tick_triggers_backoff():
     from app.extraction.client import LLMTransportError
 
     scheduler = _started_scheduler(_live_settings(), interval=60)
-    scheduler.ingestion.run_once = Mock(
-        return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []}
-    )
+    scheduler.ingestion.run_once = Mock(return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []})
     scheduler.processing.process_new = Mock(side_effect=LLMTransportError("connection refused"))
 
     scheduler._tick()
@@ -119,9 +117,7 @@ def test_llm_transport_error_in_tick_triggers_backoff():
 def test_tick_uses_configured_process_batch_size():
     settings = _live_settings()
     scheduler = _started_scheduler(settings, interval=60)
-    scheduler.ingestion.run_once = Mock(
-        return_value={"inserted": 0, "duplicates_skipped": 0, "errors": []}
-    )
+    scheduler.ingestion.run_once = Mock(return_value={"inserted": 0, "duplicates_skipped": 0, "errors": []})
     scheduler.processing.process_new = Mock(return_value={"processed": 0})
 
     scheduler._tick()
@@ -139,9 +135,7 @@ def test_placeholder_token_excludes_x_but_still_ingests_and_processes():
     assert not any(isinstance(s, XApiSource) for s in scheduler.sources)
     assert len(scheduler.sources) == 4  # disclosures + clerk-direct + EDGAR + options radar
 
-    scheduler.ingestion.run_once = Mock(
-        return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []}
-    )
+    scheduler.ingestion.run_once = Mock(return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []})
     scheduler.processing.process_new = Mock(return_value={"processed": 2})
 
     scheduler._tick()
@@ -171,9 +165,7 @@ def test_no_sources_skips_ingestion_but_still_processes():
 def test_start_and_stop_lifecycle() -> None:
     """start() registers the interval job on a running scheduler; stop()
     shuts the background thread down (and is safe to call twice)."""
-    scheduler = BaleenScheduler(
-        _live_settings(), _FakeProcessing(), interval_seconds=60
-    )
+    scheduler = BaleenScheduler(_live_settings(), _FakeProcessing(), interval_seconds=60)
 
     scheduler.start()
     try:
@@ -232,12 +224,11 @@ def test_build_scheduler_uses_poll_interval(monkeypatch):
 
 
 def test_partial_source_failure_does_not_back_off():
-    """Issue #1: one erroring feed must not back off the healthy ones — a
+    """one erroring feed must not back off the healthy ones — a
     tick that ingested records made progress."""
     scheduler = _started_scheduler(_live_settings(), interval=60)
     scheduler.ingestion.run_once = Mock(
-        return_value={"inserted": 5, "duplicates_skipped": 0,
-                      "errors": ["OptionsChainSource: 429 throttled"]}
+        return_value={"inserted": 5, "duplicates_skipped": 0, "errors": ["OptionsChainSource: 429 throttled"]}
     )
     scheduler.processing.process_new = Mock(return_value={"processed": 0})
 
