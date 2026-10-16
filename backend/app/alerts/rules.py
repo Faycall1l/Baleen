@@ -88,8 +88,9 @@ class AlertRules:
         "Fires when a politician trades a ticker whose sector is overseen by one of their committees.",
     )
     def _politician_trades_in_oversight_sector(self, event: Event) -> RuleTrigger:
+        miss = RuleTrigger(rule_name="politician_trades_in_oversight_sector")
         if not isinstance(event, CongressTradeEvent):
-            return RuleTrigger(rule_name="politician_trades_in_oversight_sector")
+            return miss
 
         rows = self.neo4j.run_read(OVERSIGHT_PATH_CYPHER, event_id=event.deterministic_id)
         return RuleTrigger(
@@ -102,15 +103,16 @@ class AlertRules:
         "Fires when a corporate insider buys $1M+ of their own stock in one disclosed trade.",
     )
     def _insider_large_buy(self, event: Event) -> RuleTrigger:
+        miss = RuleTrigger(rule_name="insider_large_buy")
         if not isinstance(event, InsiderTradeEvent):
-            return RuleTrigger(rule_name="insider_large_buy")
+            return miss
         if event.transaction_type != "buy":
-            return RuleTrigger(rule_name="insider_large_buy")
+            return miss
         if event.shares is None or event.price is None:
-            return RuleTrigger(rule_name="insider_large_buy")
+            return miss
         notional = event.shares * event.price
         if notional < INSIDER_NOTIONAL_THRESHOLD_USD:
-            return RuleTrigger(rule_name="insider_large_buy")
+            return miss
         amount = f"~${notional:,.0f}"
         return RuleTrigger(
             rule_name="insider_large_buy",
@@ -135,12 +137,13 @@ class AlertRules:
         "Fires when one contract's day volume is 5×+ its open interest.",
     )
     def _unusual_options_sweep(self, event: Event) -> RuleTrigger:
+        miss = RuleTrigger(rule_name="unusual_options_sweep")
         if not isinstance(event, OptionsFlowEvent):
-            return RuleTrigger(rule_name="unusual_options_sweep")
+            return miss
         volume = event.volume or 0
         ratio = volume / max(event.open_interest or 0, 1)
         if ratio < OPTIONS_SWEEP_RATIO_THRESHOLD:
-            return RuleTrigger(rule_name="unusual_options_sweep")
+            return miss
         side = "calls" if event.contract_type == "call" else "puts"
         return RuleTrigger(
             rule_name="unusual_options_sweep",
