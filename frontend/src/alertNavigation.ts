@@ -1,6 +1,6 @@
 import type { Alert, GraphData, GraphNode } from './types';
 
-// Resolves an alert row to the best graph node to reveal (R20).
+// Resolves an alert row to the best graph node to reveal.
 //
 // Order matters: the exact event first (full context), then the ticker,
 // then a person name. Returns undefined when the event hasn't reached the

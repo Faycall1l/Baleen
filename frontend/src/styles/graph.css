@@ -54,7 +54,7 @@ button.graph-error-action:hover {
   flex-direction: column;
 }
 
-/* Tile dock (P1, split tree in L4): rail-opened panels share the main area.
+/* Tile dock: rail-opened panels share the main area.
  * The board tile takes the wide share; content tiles take the narrow one.
  * Enlarging hides siblings (they stay open underneath). Below 1280px every
  * split stacks vertically so narrow screens keep working.
@@ -161,7 +161,7 @@ button.graph-error-action:hover {
   justify-content: center;
 }
 
-/* Split tree (L4): rows tile side by side, columns stack. Every level
+/* Split tree: rows tile side by side, columns stack. Every level
  * shares space evenly; tiles keep a usable minimum. Narrow screens force
  * a single column whatever the split directions.
  */
@@ -225,7 +225,7 @@ button.graph-error-action:hover {
   padding: 26px 30px;
 }
 
-/* Embed mode (E1): one panel chromeless for publishers. The tile body
+/* Embed mode: one panel chromeless for publishers. The tile body
  * fills the viewport with a slim attribution bar; no rail, no chrome. */
 .embed {
   display: flex;
@@ -258,7 +258,7 @@ button.graph-error-action:hover {
   color: var(--accent);
 }
 
-/* Ranked signal list (S1): kind tag plus a strength bar, one line per
+/* Ranked signal list: kind tag plus a strength bar, one line per
  * signal, everything tappable. Reuses the alert item frame. */
 .signal-list {
   display: flex;
@@ -478,7 +478,7 @@ button.graph-error-action:hover {
   background: rgba(35, 35, 40, 0.92);
 }
 
-/* Time scrubber (R47b): range slider plus a live/frozen readout. */
+/* Time scrubber: range slider plus a live/frozen readout. */
 .time-scrub {
   display: flex;
   align-items: center;
@@ -501,7 +501,7 @@ button.graph-error-action:hover {
   color: #7ee787;
 }
 
-/* Empty-by-filter overlay (R31): centered card, distinct from the
+/* Empty-by-filter overlay: centered card, distinct from the
    loading/empty-data states so "I hid everything" never reads as
    "there is no data". */
 .graph-empty-filter {
@@ -525,7 +525,7 @@ button.graph-error-action:hover {
   margin-top: 10px;
 }
 
-/* Type filter pills (R18): every hidden type is visible here and reversible
+/* Type filter pills: every hidden type is visible here and reversible
    in one click — no silent filter state anywhere. */
 .type-filters {
   display: flex;
@@ -613,7 +613,7 @@ button.graph-error-action:hover {
   display: inline-block;
 }
 
-/* Signal board (T1): time-aligned event lanes replacing the node canvas. */
+/* Signal board: time-aligned event lanes replacing the node canvas. */
 
 .tl-zoom {
   display: flex;

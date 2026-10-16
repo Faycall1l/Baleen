@@ -74,7 +74,7 @@ export function useFeeds() {
   alertsRef.current = alerts;
 
   useEffect(() => {
-    // A hidden tab skips health polls like every other tick (R7).
+    // A hidden tab skips health polls like every other tick.
     const checkHealth = () => {
       if (document.hidden) return;
       fetchHealth()

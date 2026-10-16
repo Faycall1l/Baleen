@@ -1,4 +1,4 @@
-// Terminal keyboard map (R39): every shortcut in one table so the help
+// Terminal keyboard map: every shortcut in one table so the help
 // overlay and the handlers can't drift apart.
 
 export interface Shortcut {

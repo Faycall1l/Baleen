@@ -1,4 +1,4 @@
-// Alt-click solo semantics for legend toggles (R43): alt-clicking a type
+// Alt-click solo semantics for legend toggles: alt-clicking a type
 // hides everything else; alt-clicking while soloed restores all. Pure so
 // the set algebra unit-tests without a browser.
 

@@ -1,8 +1,8 @@
-// Dockable workspace tiles (P1, board freed in P6): the rail opens panels
+// Dockable workspace tiles: the rail opens panels
 // side-by-side in the main area. Every tile — board included — toggles,
 // reorders, enlarges, and closes freely; an empty dock offers quick-open.
 //
-// Splittable workspace (L1): the flat tile list becomes a binary split
+// Splittable workspace: the flat tile list becomes a binary split
 // tree. A split is either a row (tiles side by side, divided vertically)
 // or a column (tiles stacked, divided horizontally). All ops are pure and
 // immutable; closing collapses degenerate splits so the tree never holds

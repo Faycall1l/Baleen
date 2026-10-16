@@ -1,6 +1,6 @@
 import type { Alert, GraphNode, Report } from './types';
 
-// Which feed rows mention a node (R21): an Event matches its own id;
+// Which feed rows mention a node: an Event matches its own id;
 // anything else matches rows whose graph_refs name it. Pure so the
 // matching rules unit-test without a browser.
 export function alertsForNode(node: GraphNode, alerts: Alert[]): Alert[] {

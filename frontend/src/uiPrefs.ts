@@ -2,7 +2,7 @@ import { FLOW_DEFAULTS } from './flow';
 import { DEFAULT_LAYOUT, sanitizeLayout, type Layout } from './tileState';
 import type { FlowFilters } from './types';
 
-// Workspace persistence (R40): the terminal greets return visits with
+// Workspace persistence: the terminal greets return visits with
 // their layout, not a reset — hidden types and tape filters survive
 // reloads. Everything is validated on load; garbage reads as defaults.
 

@@ -9,7 +9,7 @@ interface Props {
   onTickerClick: (ticker: string) => void;
 }
 
-/** Story leads (J1): today's pitches for a congressional-trading beat —
+/** Story leads: today's pitches for a congressional-trading beat —
  * numbered, headlined like a story, every ticker tappable into the graph.
  * The window label keeps the timeframe honest.
  */

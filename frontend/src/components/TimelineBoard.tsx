@@ -53,7 +53,7 @@ const SECTION_TAG: Record<LaneKind, string> = {
   congress: 'CONG',
 };
 
-/** Floating hover card (T2): flips left when the anchor is past mid-plot
+/** Floating hover card: flips left when the anchor is past mid-plot
  * so it never clips off the right edge. Pointer-transparent — dots stay
  * clickable and hoverable through it.
  */
@@ -111,7 +111,7 @@ function fmtTime(ms: number): string {
   return `${fmtDay(ms)} ${hh}:${mm}`;
 }
 
-/** Signal board (T1): options-flow events as dots on one row per ticker
+/** Signal board: options-flow events as dots on one row per ticker
  * over a shared time axis. Replaces the node-link canvas: vertical scanning
  * correlates tickers at a glance, zoom presets focus the window, and every
  * dot opens the same inspector the graph fed.
@@ -138,9 +138,9 @@ export default function TimelineBoard({
   const plotRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [plotW, setPlotW] = useState(720);
-  // Crosshair (T2): mouse x in svg coords; the time readout inverts it.
+  // Crosshair: mouse x in svg coords; the time readout inverts it.
   const [xhair, setXhair] = useState<number | null>(null);
-  // Rich hover tooltip (T2): dot + anchor in plot-container coords.
+  // Rich hover tooltip: dot + anchor in plot-container coords.
   const [tip, setTip] = useState<{ dot: TimelineDot; x: number; y: number } | null>(null);
 
   useEffect(() => {

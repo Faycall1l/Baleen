@@ -1,6 +1,6 @@
 import type { GraphData, GraphNode } from '../types';
 
-// Pure data shaping for the TimelineBoard (T1): options-flow events grouped
+// Pure data shaping for the TimelineBoard: options-flow events grouped
 // into one row per ticker, positioned on a shared time axis. Insider and
 // congress-trade lanes arrive in T3; the row model already supports them.
 

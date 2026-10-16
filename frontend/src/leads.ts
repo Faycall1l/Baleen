@@ -1,6 +1,6 @@
 import type { SignalsBundle } from './types';
 
-// Story leads (J1): the signals bundle reframed for an investigative
+// Story leads: the signals bundle reframed for an investigative
 // journalist. Only congress-relevant kinds make the cut — insider clusters
 // and raw options volume stay in the Signals tile for traders. Leads read
 // like story pitches: person, action, and why it matters, ranked with the

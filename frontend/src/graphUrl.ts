@@ -1,12 +1,12 @@
 import { sanitizeTiles, type TileId } from './tileState';
 
-// Share-link deep URLs (R46, tiles in P5): selection, hidden types, and open
+// Share-link deep URLs: selection, hidden types, and open
 // panels encoded in the query string so any view is linkable. Pure
 // parse/build pair so the round-trip unit-tests without a browser. Unknown
 // values read as absent. The legacy `drawer` param (single panel, pre-tiles)
 // still opens — it maps to a tile.
 //
-// Embed mode (E1): `embed=<tile>` renders that single panel chromeless for
+// Embed mode: `embed=<tile>` renders that single panel chromeless for
 // publishers. Only parsed, never written — embeds are made by hand.
 
 const ALL_TILES: readonly TileId[] = [

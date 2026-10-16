@@ -1,6 +1,6 @@
 import type { Report } from './types';
 
-// Markdown export for briefs and digests (R51): the evidence leaves the
+// Markdown export for briefs and digests: the evidence leaves the
 // terminal as a shareable document — title, body, sources, provenance.
 // Pure string building so the formatting unit-tests without a browser.
 

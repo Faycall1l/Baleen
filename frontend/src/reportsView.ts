@@ -1,6 +1,6 @@
 import type { Report } from './types';
 
-// Reports view helpers (R12): the tile mixes the daily digest with an
+// Reports view helpers: the tile mixes the daily digest with an
 // undifferentiated brief scroll. Split them: one digest header card, then
 // briefs grouped by day with their graph refs as chips.
 

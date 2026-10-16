@@ -58,12 +58,12 @@ export default function App() {
   const { selected, handleSelect, setSelected } = useSelection(graph);
   const { flow, count: flowCount, error: flowError, filters: flowFilters, setFilters: setFlowFilters, reload: reloadFlow } =
     useFlow();
-  // Deep-link state (R46, tiles in P5): selection, hidden types, and open
+  // Deep-link state: selection, hidden types, and open
   // panels encoded in the URL so any view is shareable. Read once on mount;
   // written back on every change below. An explicit tiles param beats prefs;
   // otherwise the workspace restores the last layout.
   const [initialUrl] = useState(() => parseGraphUrl(window.location.search));
-  // Tile dock (P1): rail-opened panels share the main area. Persisted like
+  // Tile dock: rail-opened panels share the main area. Persisted like
   // other workspace prefs; the board is permanent (see tileState).
   const [layout, setLayout] = useState<Layout>(() =>
     initialUrl.tiles ? sanitizeLayout(initialUrl.tiles) : loadLayout(),
@@ -102,22 +102,22 @@ export default function App() {
       return next;
     });
   }, []);
-  // Shortcut help (R39): `?` outside inputs toggles it.
+  // Shortcut help: `?` outside inputs toggles it.
   const [showHelp, setShowHelp] = useState(false);
-  // First-run tour (R11): shown until dismissed, persisted across visits.
+  // First-run tour: shown until dismissed, persisted across visits.
   const [showTour, setShowTour] = useState(() => !loadOnboarded());
   const dismissTour = () => {
     saveOnboarded();
     setShowTour(false);
   };
 
-  // Staggered poll phases (R7): feeds at :00/:30, flow at :10/:40, graph at
+  // Staggered poll phases: feeds at :00/:30, flow at :10/:40, graph at
   // :20/:50, so the heaviest request bursts never coincide on the database.
   // Ticks pause while the tab is hidden.
   const feedsTick = usePollingTick(30_000, 0);
   const graphTick = usePollingTick(30_000, 20_000);
 
-  // Time scrubber (R47b): days-ago offset, null for live. The frozen
+  // Time scrubber: days-ago offset, null for live. The frozen
   // snapshot replaces the board data until cleared; live polls continue
   // underneath so jumping back is instant.
   const [scrubDaysAgo, setScrubDaysAgo] = useState<number | null>(null);
@@ -166,9 +166,9 @@ export default function App() {
     loadGraph();
   }, [graphTick, loadGraph]);
 
-  // Select the deep-linked node once it loads (R46). Consumed on first
+  // Select the deep-linked node once it loads. Consumed on first
   // success — or on any manual selection — so clearing it stays cleared.
-  // J3: when the node never loads (outside the window), resolve entity cards
+  // when the node never loads (outside the window), resolve entity cards
   // directly — Politician/Ticker/Committee links open anywhere, so member
   // profiles are shareable even with no graph context loaded.
   const urlNodeConsumed = useRef(false);
@@ -213,7 +213,7 @@ export default function App() {
     };
   }, [graph, selected, initialUrl.node, handleSelect]);
 
-  // Write the view state back to the URL on every change (R46, tiles P5).
+  // Write the view state back to the URL on every change.
   useEffect(() => {
     const url = buildGraphUrl({
       node: selected?.id ?? null,
@@ -223,7 +223,7 @@ export default function App() {
     window.history.replaceState(null, '', url);
   }, [selected?.id, hiddenTypes, layout]);
 
-  // Path mode (R53b): armed from any inspector via PathFromButton; the next
+  // Path mode: armed from any inspector via PathFromButton; the next
   // selected node completes the pair and opens the path tile. Declared
   // before the key handler below so Esc can disarm.
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null);
@@ -231,7 +231,7 @@ export default function App() {
   const [pathError, setPathError] = useState<string | null>(null);
 
   // Esc restores an enlarged tile, disarms path mode, or clears the
-  // inspector selection (R15/R16). `?` outside inputs opens help.
+  // inspector selection. `?` outside inputs opens help.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -252,7 +252,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [enlarged, showHelp, pathFrom]);
 
-  // Alerts inbox (R8): unread watermark + rule/text filtering live here so
+  // Alerts inbox: unread watermark + rule/text filtering live here so
   // the rail badge and the tile share one source of truth.
   const openTiles = useMemo(() => flattenLayout(layout), [layout]);
   const inbox = useAlertsInbox(alerts, openTiles.includes('alerts'));
@@ -290,9 +290,9 @@ export default function App() {
   };
 
   // Member clicks from any surface: the graph node when loaded, else the
-  // person card as a synthetic node (J3 mechanism). Never a dead click.
+  // person card as a synthetic node. Never a dead click.
   // Member clicks from any surface: the graph node when loaded, else the
-  // person card as a synthetic node (J3 mechanism). Never a dead click.
+  // person card as a synthetic node. Never a dead click.
   const openMemberAnywhere = (pid: string) => {
     if (openPoliticianNode(pid)) return;
     fetchPerson(pid)
@@ -330,14 +330,14 @@ export default function App() {
     handleSelect,
   );
 
-  // Person view (R17b): a selected Politician node loads its card instead
+  // Person view: a selected Politician node loads its card instead
   // of the generic property list.
   const politicianId = selected
     ? personIdForNode(selected.label, selected.id, selected.props)
     : null;
   const { person, error: personError, similar } = usePerson(politicianId);
 
-  // Ticker view (R24b): same card pattern as politicians.
+  // Ticker view: same card pattern as politicians.
   const tickerSymbol =
     selected?.label === 'Ticker'
       ? (typeof selected.props.ticker === 'string' && selected.props.ticker) ||
@@ -346,7 +346,7 @@ export default function App() {
       : null;
   const { card: tickerCard, error: tickerError } = useTicker(tickerSymbol);
 
-  // Committee view (R45b): same card pattern as politicians and tickers.
+  // Committee view: same card pattern as politicians and tickers.
   const committeeId =
     selected?.label === 'Committee'
       ? (typeof selected.props.id === 'string' && selected.props.id) ||
@@ -355,21 +355,21 @@ export default function App() {
       : null;
   const { card: committeeCard, error: committeeError } = useCommittee(committeeId);
 
-  // Cross-surface jump (R36): filter the tape to this ticker and make
+  // Cross-surface jump: filter the tape to this ticker and make
   // sure its tile is open.
   const viewTickerInTape = (ticker: string) => {
     setFlowFilters((f) => ({ ...f, tickers: [ticker] }));
     setLayout((prev) => openInLayout(prev, 'flow'));
   };
 
-  // Rail toggle (P5): every tab docks its tile, board included.
+  // Rail toggle: every tab docks its tile, board included.
   const handleRailToggle = (key: RailKey) => {
     setLayout((prev) => toggleInLayout(prev, key));
   };
   const railOpen: RailKey[] = [...openTiles];
 
   // Ticker clicks from any surface: the graph node when loaded, else the
-  // ticker card as a synthetic node (same J3 mechanism as deep links), else
+  // ticker card as a synthetic node (deep-link mechanism), else
   // the filtered tape. Never opens an empty tape blind.
   const openSignalTicker = (t: string) => {
     if (openTickerNode(t)) return;

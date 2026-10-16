@@ -182,8 +182,7 @@ function SplitView({
   );
 }
 
-/** Bloomberg-style tile dock (P1, unified in P5, freed in P6, splittable
- * in L4): rail-opened panels share the main area in a split tree. Tiles
+/** Bloomberg-style tile dock: rail-opened panels share the main area in a split tree. Tiles
  * split vertically (side by side) or horizontally (stacked) with a panel
  * picker; the rail is the single opener, so an empty dock only hints at it.
  */

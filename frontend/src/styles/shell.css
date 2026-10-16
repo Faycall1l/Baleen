@@ -116,7 +116,7 @@
   }
 }
 
-/* Health pill (R14): dot plus text — hue alone fails color-blind users. */
+/* Health pill: dot plus text — hue alone fails color-blind users. */
 .health-pill {
   display: inline-flex;
   align-items: center;
@@ -144,7 +144,7 @@
   color: var(--text-dim);
 }
 
-/* First-run tour (R11): a centered card over a dimmed terminal. */
+/* First-run tour: a centered card over a dimmed terminal. */
 .onboarding-overlay {
   position: fixed;
   inset: 0;

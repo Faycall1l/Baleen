@@ -16,7 +16,7 @@ export function truncate(s: string | null | undefined, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-// Second label line for the on-canvas table cards (R49): the fields that
+// Second label line for the on-canvas table cards: the fields that
 // make a node self-describing without opening the inspector. Anything
 // without a meaningful second line returns null (single-line label).
 export function nodeSubline(label: string, props: Record<string, unknown>): string | null {

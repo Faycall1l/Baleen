@@ -7,7 +7,7 @@ import { usePollingTick } from './usePollingTick';
 
 // Live options tape: poll on the shared 30s cadence (flow phase :10/:40) so
 // the tape, graph, alerts, and reports stay in the same temporal frame
-// without bursting together. Filters persist across visits (R40).
+// without bursting together. Filters persist across visits.
 export function useFlow() {
   const [filters, setFiltersState] = useState<FlowFilters>(() => loadFlowFilters());
 

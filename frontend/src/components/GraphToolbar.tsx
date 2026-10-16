@@ -43,7 +43,7 @@ export default function GraphToolbar({
   showEvents,
   onToggleEvents,
 }: Props) {
-  // Keyboard navigation through results (R27): arrows move the highlight
+  // Keyboard navigation through results: arrows move the highlight
   // (wrapping), Enter picks it, Escape clears. Resets on new matches.
   const [activeIndex, setActiveIndex] = useState(0);
   useEffect(() => {

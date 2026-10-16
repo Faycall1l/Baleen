@@ -1,6 +1,6 @@
 import type { Alert, PersonTrade } from './types';
 
-// Join event-carrying rows to fired alerts by event id (R17b/R24b): cards
+// Join event-carrying rows to fired alerts by event id: cards
 // show which rows already raised an alert without a second round-trip.
 export interface RowWithAlerts<T> {
   row: T;

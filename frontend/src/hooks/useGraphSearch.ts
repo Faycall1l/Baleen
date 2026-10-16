@@ -44,7 +44,7 @@ export function useGraphSearch({
       .slice(0, 8);
   }, [query, data]);
 
-  // Total hits behind the capped dropdown (R34): "3 of 27" beats guessing.
+  // Total hits behind the capped dropdown: "3 of 27" beats guessing.
   const matchTotal = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!data || q.length < 2) return 0;

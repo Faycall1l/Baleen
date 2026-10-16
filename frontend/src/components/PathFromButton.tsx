@@ -4,7 +4,7 @@ interface Props {
   onCancel: () => void;
 }
 
-// Shared "how is this connected" entry (R53b): arms path-picking from any
+// Shared "how is this connected" entry: arms path-picking from any
 // inspector; the next canvas click or search pick becomes the target.
 export default function PathFromButton({ armed, onArm, onCancel }: Props) {
   if (!armed) {

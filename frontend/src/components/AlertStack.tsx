@@ -18,7 +18,7 @@ function fmtTime(iso: string): string {
   }
 }
 
-// Live arrivals pop as cards on the right (P3): only alerts that land AFTER
+// Live arrivals pop as cards on the right: only alerts that land AFTER
 // mount toast — the initial history load is marked seen silently, so opening
 // the app never storms. Each toast auto-dismisses; click jumps to the node.
 export default function AlertStack({ alerts, onAlertClick }: Props) {

@@ -1,4 +1,4 @@
-// First-run onboarding: a four-step tour of the terminal (R11).
+// First-run onboarding: a four-step tour of the terminal.
 //
 // Research is blunt about the failure mode here: knowledge-graph tools
 // confront new users with scope uncertainty (what's in here?), ontology

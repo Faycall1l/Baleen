@@ -1,4 +1,4 @@
-// Time scrubber helpers (R47b): the canvas can freeze on an as-of snapshot
+// Time scrubber helpers: the canvas can freeze on an as-of snapshot
 // ("what did the graph look like last Tuesday?") and jump back to live.
 // Day granularity, 30-day window: matches the options-radar horizon and
 // keeps each frozen frame to one bounded render.

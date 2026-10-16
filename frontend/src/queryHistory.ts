@@ -1,4 +1,4 @@
-// Asked-question history for the command bar (R13).
+// Asked-question history for the command bar.
 //
 // Terminal users re-ask and refine: the last questions persist locally,
 // most-recent first, deduped and capped, and surface as one-click chips in

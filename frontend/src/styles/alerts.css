@@ -42,7 +42,7 @@
   font-size: 11px;
 }
 
-/* Inbox filter bar (R8): rule chips + text search above the list. */
+/* Inbox filter bar: rule chips + text search above the list. */
 .inbox-controls {
   display: flex;
   flex-direction: column;
@@ -89,7 +89,7 @@
   vertical-align: baseline;
 }
 
-/* Rule mute switches (R52b): one per known rule, dimmed when muted. */
+/* Rule mute switches: one per known rule, dimmed when muted. */
 .inbox-rules {
   display: flex;
   flex-wrap: wrap;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchRules, setRuleActive, type AlertRule } from '../api';
 
-// Alert rule mute state (R52b): loaded once on mount (rules change rarely),
+// Alert rule mute state: loaded once on mount (rules change rarely),
 // toggled optimistically with rollback on failure.
 export function useAlertRules() {
   const [rules, setRules] = useState<AlertRule[]>([]);

@@ -17,7 +17,7 @@
   line-height: 1.5;
 }
 
-/* Digest + grouped briefs (R12): one header card per day, ref chips back to
+/* Digest + grouped briefs: one header card per day, ref chips back to
    the graph via the row click. */
 .digest-card {
   margin: 8px 0 12px;
@@ -68,7 +68,7 @@
   padding: 1px 6px;
 }
 
-/* Path mode (R53b): armed hint in the inspector, step list in the drawer. */
+/* Path mode: armed hint in the inspector, step list in the drawer. */
 .path-armed {
   margin-top: 10px;
   padding: 8px 10px;

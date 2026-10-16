@@ -49,11 +49,11 @@ export function useGraphFeed(): {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphStage, setGraphStage] = useState<GraphStage>('first');
-  // Focused default (R54b, T4): the signal board aggregates events into
+  // Focused default: the signal board aggregates events into
   // capped lanes, so it loads with events on — unlike the old canvas, the
   // full window stays readable. The toggle still opts out to entities only.
   const [showEvents, setShowEvents] = useState(true);
-  // Last successful fetch time (R38): honesty about freshness in the
+  // Last successful fetch time: honesty about freshness in the
   // status bar. Stamped on fetch success, not on merge — an unchanged
   // snapshot is still fresh data.
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
