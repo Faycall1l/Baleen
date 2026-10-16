@@ -299,17 +299,10 @@ def _keep_ids(
 def _fetch_nodes_and_links(neo4j, keep_ids: list[str] | None, without_events: bool = False) -> list[dict]:
     """One round trip for nodes + links (previously two sequential scans):
     every kept node's outgoing edges ride along, and links touching a node
-    outside the kept set (or a tombstoned node) are dropped in Python exactly
+    outside the kept set are dropped in Python exactly
     as before.
     """
-    node_conditions = [
-        *(["elementId(n) IN $keep_ids"] if keep_ids is not None else []),
-        # Tombstoned identity nodes (merged_into set, see IdentityEngine)
-        # are hidden from the UI: their SAME_AS edge is provenance, not a
-        # user-facing connection.
-        "(NOT n:Politician OR n.merged_into IS NULL)",
-        "(NOT n:Insider OR n.merged_into IS NULL)",
-    ]
+    node_conditions = ["elementId(n) IN $keep_ids"] if keep_ids is not None else ["true"]
     if without_events:
         node_conditions.append("(NOT n:Event)")
     return neo4j.run(

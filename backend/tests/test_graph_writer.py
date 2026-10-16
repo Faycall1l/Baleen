@@ -246,16 +246,11 @@ def test_insider_trade_writes_insider_and_ticker(neo4j_store):
     _cleanup(neo4j_store, event_id)
 
 
-def test_insider_write_applies_entity_resolver_canonical_identity(neo4j_store):
+def test_insider_write_applies_entity_resolver_canonical_name(neo4j_store):
     """With a resolver set, insider nodes are written under the canonical
-    id and spelling instead of the raw mention."""
+    spelling instead of the raw mention."""
 
     class _StubResolver:
-        @staticmethod
-        def canonical_identity(entity_type, candidate_id):
-            assert entity_type == "Insider"
-            return "CANON-1"
-
         @staticmethod
         def canonical_name(entity_type, mention, canonical_id):
             return "Canonical Person"
@@ -276,7 +271,7 @@ def test_insider_write_applies_entity_resolver_canonical_identity(neo4j_store):
             "MATCH (e:Event {id: $id})-[:INVOLVES_INSIDER]->(i:Insider) RETURN i.id AS id, i.name AS name",
             id=event_id,
         )
-        assert [(r["id"], r["name"]) for r in rows] == [("CANON-1", "Canonical Person")]
+        assert [(r["id"], r["name"]) for r in rows] == [("RAW1", "Canonical Person")]
     finally:
         _cleanup(neo4j_store, event.deterministic_id)
 

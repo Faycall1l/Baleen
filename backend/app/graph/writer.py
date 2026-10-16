@@ -219,11 +219,6 @@ class GraphWriter:
         name = event.politician_name
         identity_id = event.politician_id
         if self.entity_resolver is not None:
-            # A confirmed identity remap collapses the id onto its canonical
-            # BEFORE any write: mentions of a tombstoned candidate never
-            # resurrect a separate node, and INVOLVES_*/MEMBER_OF attach to the
-            # canonical node the engine merged into.
-            identity_id = self.entity_resolver.canonical_identity("Politician", event.politician_id)
             name = self.entity_resolver.canonical_name("Politician", event.politician_name, identity_id)
         self._merge_node(
             "Politician",
@@ -274,7 +269,6 @@ class GraphWriter:
         name = event.insider_name
         identity_id = event.insider_id
         if self.entity_resolver is not None:
-            identity_id = self.entity_resolver.canonical_identity("Insider", event.insider_id)
             name = self.entity_resolver.canonical_name("Insider", event.insider_name, identity_id)
         self._merge_node(
             "Insider",

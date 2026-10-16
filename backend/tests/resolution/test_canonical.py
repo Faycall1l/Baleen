@@ -49,36 +49,20 @@ class TestCanonicalName:
         canonical = resolver.canonical_name("Politician", "elizabeth.warren", WARREN_ID)
         assert canonical == alias["canonical_name"]
 
-    def test_conflicting_canonical_id_keeps_first_registered_and_queues_clash(self, postgres_store):
+    def test_conflicting_canonical_id_keeps_first_registered(self, postgres_store):
         resolver = make_resolver(postgres_store)
         # Someone else claimed this exact name first.
         resolver.canonical_name("Politician", "Ben Carson", "C0010721")
 
         # A later event claims the same spelling for a different id: we cannot
         # tell who is right from spelling alone, so the first-registered id
-        # stays authoritative and the clash is queued for a human to review.
+        # stays authoritative.
         canonical = resolver.canonical_name("Politician", "Ben Carson", "C9999999")
         assert canonical == "Ben Carson"
         assert postgres_store.get_canonical("Politician", "Ben Carson") == {
             "canonical_id": "C0010721",
             "canonical_name": "Ben Carson",
         }
-
-        pending = resolver.pending_reviews()
-        assert len(pending) == 1
-        assert pending[0]["reason"] == "alias_clash"
-        assert {pending[0]["candidate_id"], pending[0]["canonical_id"]} == {
-            "C0010721",
-            "C9999999",
-        }
-        assert pending[0]["confidence"] == 1.0
-
-    def test_alias_clash_is_not_requeued_on_every_write(self, postgres_store):
-        resolver = make_resolver(postgres_store)
-        resolver.canonical_name("Politician", "Ben Carson", "C0010721")
-        resolver.canonical_name("Politician", "Ben Carson", "C9999999")
-        resolver.canonical_name("Politician", "Ben Carson", "C9999999")
-        assert len(resolver.pending_reviews()) == 1
 
     def test_llm_alias_never_clobbers_seeded_spelling(self, postgres_store):
         resolver = make_resolver(postgres_store)

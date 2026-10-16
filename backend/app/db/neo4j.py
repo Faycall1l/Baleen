@@ -107,7 +107,7 @@ class Neo4jStore:
 
         ``run(query, **params)`` behaves like :meth:`run` (list-of-dict rows),
         but all statements commit together — either the whole multi-statement
-        rewrite (identity merge) lands or none of it does. The configured query
+        write lands or none of it does. The configured query
         cap applies to every statement via the same ``_resolve_timeout`` path.
         """
         cap = self._resolve_timeout(timeout)
@@ -134,7 +134,7 @@ class Neo4jStore:
         the schema-change statements are committed in their own transaction.
 
         Besides the two query-path indexes, every node key in ``LABEL_KEYS`` is
-        indexed so the writer's equality MERGEs and the identity rewrite resolve
+        indexed so the writer's equality MERGEs resolve
         the anchor node through an index instead of a full label scan.
         """
         stmts = [
@@ -149,8 +149,7 @@ class Neo4jStore:
             "CREATE RANGE INDEX event_first_seen_at IF NOT EXISTS FOR (e:Event) ON (e.first_seen_at)",
             # Covers the ``WHERE e.tweet_id = ...`` dedup path in the writer.
             "CREATE RANGE INDEX event_tweet_id IF NOT EXISTS FOR (e:Event) ON (e.tweet_id)",
-            # Equality anchors for GraphWriter MERGEs and IdentityEngine
-            # anchor/lookup statements (LABEL_KEYS in app/graph/schema.py).
+            # Equality anchors for GraphWriter MERGEs (LABEL_KEYS in app/graph/schema.py).
             "CREATE RANGE INDEX event_id IF NOT EXISTS FOR (e:Event) ON (e.id)",
             "CREATE RANGE INDEX politician_id IF NOT EXISTS FOR (p:Politician) ON (p.id)",
             "CREATE RANGE INDEX insider_id IF NOT EXISTS FOR (i:Insider) ON (i.id)",

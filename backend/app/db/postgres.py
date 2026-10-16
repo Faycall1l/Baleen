@@ -16,8 +16,6 @@ from sqlalchemy.engine import Engine
 from app.db.store.alerts import AlertStoreMixin
 from app.db.store.identity import (
     AliasRegistryMixin,
-    IdentityTombstoneMixin,
-    ResolutionQueueMixin,
 )
 from app.db.store.leaderboard import LeaderboardStoreMixin
 from app.db.store.reports import ReportStoreMixin
@@ -110,47 +108,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_entity_alias
     ON entity_aliases (entity_type, alias);
 CREATE INDEX IF NOT EXISTS idx_entity_canonical
     ON entity_aliases (entity_type, canonical_id);
-
--- Review queue for the 0.85-0.95 gray band: near-duplicate candidates that a
--- human should confirm or reject before they resolve into a shared canonical.
--- Nothing here mutates the graph automatically; approve() flips status and (in
--- the later identity/dedup layer) is what would drive a Neo4j merge.
-CREATE TABLE IF NOT EXISTS entity_resolution_queue (
-    id             SERIAL PRIMARY KEY,
-    entity_type    TEXT NOT NULL,
-    candidate_id   TEXT NOT NULL,               -- id that would merge into canonical
-    candidate_name TEXT NOT NULL,
-    canonical_id   TEXT NOT NULL,
-    canonical_name TEXT NOT NULL,
-    confidence     FLOAT NOT NULL,
-    reason         TEXT NOT NULL,               -- 'fuzzy_match'
-    status         TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'confirmed' | 'rejected'
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    resolved_at    TIMESTAMPTZ
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_resolution_pair
-    ON entity_resolution_queue (entity_type, candidate_id, canonical_id);
-
--- Identity remap registry (entity resolution, identity layer). When a human
--- confirms a review, the candidate id is declared an alias of the canonical
--- id. Every future event claiming the candidate id MERGEs onto the canonical
--- node instead — ids converge at the KEY level, exactly like ``entity_aliases``
--- converged the NAME level. Chains are possible (consolidation); resolvers
--- follow them to the root.
-CREATE TABLE IF NOT EXISTS entity_identities (
-    id            BIGSERIAL PRIMARY KEY,
-    entity_type   TEXT NOT NULL,
-    candidate_id  TEXT NOT NULL,
-    canonical_id  TEXT NOT NULL,
-    confidence    FLOAT NOT NULL DEFAULT 1.0,
-    source        TEXT NOT NULL,              -- 'review'
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    resolution_id INTEGER REFERENCES entity_resolution_queue (id) ON DELETE SET NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_identity_candidate
-    ON entity_identities (entity_type, candidate_id);
-CREATE INDEX IF NOT EXISTS idx_identity_canonical
-    ON entity_identities (entity_type, canonical_id);
 """
 
 
@@ -159,8 +116,6 @@ class PostgresStore(
     AlertStoreMixin,
     ReportStoreMixin,
     AliasRegistryMixin,
-    ResolutionQueueMixin,
-    IdentityTombstoneMixin,
     LeaderboardStoreMixin,
 ):
     def __init__(self, dsn: str) -> None:
@@ -192,11 +147,7 @@ class PostgresStore(
     # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
-    # entity resolution (alias registry + review queue)
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # entity resolution (identity remap registry)
+    # entity resolution (alias registry)
     # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------

@@ -258,9 +258,7 @@ instance on 7687 so plain `pytest` keeps working out of the box.
 Both Neo4j containers run with bounded CPU/memory (`NEO4J_CPUS`/`NEO4J_MEM` for
 the live graph, `NEO4J_TEST_CPUS`/`NEO4J_TEST_MEM` for the test instance) so a
 co-tenanted host can't starve them. On a dedicated box, raise the env vars. The
-app lays down a staggered set of Neo4j budgets: `NEO4J_QUERY_TIMEOUT_SECONDS`
-(cap per statement), and `NEO4J_MERGE_TIMEOUT_SECONDS` (cumulative budget for
-the single multi-statement identity-merge transaction).
+app caps each Neo4j statement with `NEO4J_QUERY_TIMEOUT_SECONDS`.
 
 ## 8. Troubleshooting
 
