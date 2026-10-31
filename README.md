@@ -15,9 +15,11 @@
 
 ![Story leads and flow tape](docs/screenshot-leads.png)
 
-<sub>Screenshots use synthetic demo data with fictional names.</sub>
+<sub>Screenshots show the local development workspace with public-record data.</sub>
 
 Baleen polls public disclosure feeds, extracts typed trade events, and writes them to a Neo4j graph where every node links back to its source filing. A React workspace on top surfaces ranked leads, KPIs and charts, and answers plain-English questions with the Cypher it ran.
+
+It is also a **media-monitoring testbed**: a traceable pipeline for noisy, multi-source public streams, where identifiers come from the record rather than from a model. See [Research context](docs/RESEARCH.md) for what it demonstrates and where it stops.
 
 ## Features
 
@@ -25,7 +27,7 @@ Baleen polls public disclosure feeds, extracts typed trade events, and writes th
 - **Insights.** Buy/sell ratio, call/put ratio, median excess return, insider clusters and off-committee trades, with charts for congress momentum, options flow, market-beating filings and activity movers.
 - **Story leads.** Ranked signals computed from the graph, with no model involved: trades in sectors a member's committees do not oversee, filings that beat the market, congress buying momentum, insider cluster buys.
 - **Signal board and flow tape.** Time-aligned event lanes with a scrubber, plus a filterable tape of options and insider prints.
-- **Ask the graph.** A natural-language question becomes Cypher, is checked against an allowlist, runs on a read-only Neo4j role, and comes back as a table with source links. With no matching data it says so.
+- **Ask the graph.** A natural-language question becomes Cypher, is checked against an allowlist, and comes back as a table with source links. It runs on a dedicated read-only Neo4j role when one is configured; validation is enforced either way. With no matching data it says so.
 - **Alerts and reports.** Three rules (oversight-sector trades, $1M+ insider buys, options volume 5x open interest), a brief per event and a daily digest.
 - **Leaderboard, path finder, detail cards.** Trades ranked by return since filing, the shortest connection between two entities, and cards for politicians, tickers and committees.
 - **Shareable views.** Layout, selection and filters live in the URL.
@@ -34,11 +36,18 @@ Baleen polls public disclosure feeds, extracts typed trade events, and writes th
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up --build -d
 docker compose exec backend python -m scripts.seed_reference
+docker compose exec backend python -m scripts.ingest_once --real   # one live pull
 ```
 
-UI at http://localhost:5173, API docs at http://localhost:8000/docs. The scheduler polls every five minutes. Free-text extraction and brief drafting need an OpenAI-compatible LLM (`LLM_BASE_URL`); structured filings skip the model, so the keyless feeds work without one.
+UI at http://localhost:5173, API docs at http://localhost:8000/docs. `--real`
+pulls the keyless feeds once and runs the whole pipeline, so the board is
+populated immediately. The scheduler then polls every five minutes.
+
+Free-text extraction and brief prose need an OpenAI-compatible LLM
+(`LLM_BASE_URL`); structured filings skip the model, so the keyless path works
+with no keys at all. See the [five-minute demo](docs/DEMO.md) for a guided tour.
 
 ## How it works
 
@@ -75,8 +84,19 @@ frontend/src/  components · hooks · tileState.ts (split-tree layout model)
 docs/          ARCHITECTURE · SCHEMA · SETUP · ALERTS
 ```
 
-[Architecture](docs/ARCHITECTURE.md) · [Graph and table schema](docs/SCHEMA.md) · [Setup and configuration](docs/SETUP.md) · [Alert rules](docs/ALERTS.md)
+[Architecture](docs/ARCHITECTURE.md) · [Graph and table schema](docs/SCHEMA.md) · [Setup and configuration](docs/SETUP.md) · [Data sources and terms](docs/SOURCES.md) · [Research context](docs/RESEARCH.md) · [Demo](docs/DEMO.md) · [Alert rules](docs/ALERTS.md)
+
+## Contributing and citation
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[code of conduct](CODE_OF_CONDUCT.md). Security reports go through
+[SECURITY.md](SECURITY.md).
+
+If you use Baleen in research or teaching, cite it via
+[CITATION.cff](CITATION.cff) (GitHub shows a *Cite this repository* button).
 
 ## Disclaimer
 
-Informational only, not financial advice. Not affiliated with X Corp. or any data provider.
+Informational only, not financial advice. Not affiliated with X Corp. or any
+data provider. Source terms and attribution are in
+[docs/SOURCES.md](docs/SOURCES.md).

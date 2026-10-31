@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use Baleen in research, teaching or a publication, please cite it as below."
+title: "Baleen: a media-monitoring workbench for public financial disclosures"
+abstract: >-
+  Baleen ingests public disclosure feeds (US House and Senate periodic
+  transaction reports, SEC EDGAR Form 4 filings and delayed CBOE option
+  chains), extracts typed events, resolves entities into a Neo4j knowledge
+  graph, and exposes the result through a grounded natural-language query
+  interface, rule-based alerts and generated reports. It is intended as a
+  reproducible engineering testbed for monitoring pipelines that must stay
+  traceable to primary sources.
+authors:
+  - family-names: Amrouche
+    given-names: Faycal
+version: 0.1.0
+date-released: "2026-10-31"
+license: MIT
+repository-code: "https://github.com/Faycall1l/Baleen"
+url: "https://github.com/Faycall1l/Baleen"
+keywords:
+  - media monitoring
+  - knowledge graph
+  - public disclosures
+  - congressional trading
+  - entity resolution
+  - text-to-cypher
+  - Neo4j
+  - FastAPI

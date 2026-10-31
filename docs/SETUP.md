@@ -7,8 +7,14 @@ How to configure, run, seed, and test Baleen.
 - Docker + Docker Compose (v2)
 - Python 3.11+ (only for running the backend/tests outside Docker)
 - Node.js 18+ (only for frontend dev outside Docker)
-- An X (Twitter) API v2 developer project — or placeholder creds, see below
-- A vLLM instance serving an open-weight model
+
+Optional:
+
+- An X (Twitter) API v2 bearer token — only for the X source. Everything else
+  is keyless.
+- An OpenAI-compatible LLM endpoint (vLLM, Groq, or any `/v1/chat/completions`
+  server) — needed for free-text extraction and brief prose, not for
+  structured filings.
 
 ## 1. Configure environment
 
@@ -24,24 +30,24 @@ Fill in real values (see [`.env.example`](../.env.example) for inline docs):
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `X_API_BEARER_TOKEN` | for live ingestion | X API v2 bearer token. Development/testing can use placeholders — the pipeline just logs fetch errors. With placeholder X creds, leave `SCHEDULER_ENABLED=false` or every failing tick burns LLM quota. |
-| `SCHEDULER_ENABLED` | no | `true` runs the ingest→process loop. Keep `false` until real X creds exist. |
-| `LLM_BASE_URL` | dev/test only | vLLM's OpenAI-compatible endpoint, e.g. `http://host.docker.internal:8001/v1`. Placeholders are fine for tests (they use a stub). |
-| `LLM_API_KEY` | dev/test only | vLLM is usually unauthenticated on localhost; any value works. |
-| `LLM_MODEL_NAME` | dev/test only | model served by vLLM. |
+| `X_API_BEARER_TOKEN` | optional | X API v2 bearer token. Placeholders are treated as "not configured": the X source is skipped and the keyless feeds keep running. |
+| `SCHEDULER_ENABLED` | no | `true` runs the ingest→process loop every five minutes over the keyless feeds (X is added only when a real token is set). |
+| `LLM_BASE_URL` | optional | OpenAI-compatible endpoint (vLLM, Groq, or any `/v1/chat/completions` server), e.g. `http://host.docker.internal:8001/v1`. Without it, structured filings still become events. |
+| `LLM_API_KEY` | optional | Most local vLLM servers are unauthenticated; any value works. |
+| `LLM_MODEL_NAME` | optional | model name served by that endpoint. |
 | `LLM_TOOL_MODE` | no | `auto` (default) \| `tools` \| `json`. See §LLM below. |
 | `GROQ_API_KEY` | no | Backup provider: used only when the primary LLM raises. Empty disables the backup. Free-tier friendly. |
 | `GROQ_MODEL_NAME` | no | Defaults to `openai/gpt-oss-20b`. Must be a model your key can access (`GET /v1/models`). |
 | `POSTGRES_*` / `DATABASE_URL` | no | defaults match `docker-compose.yml`. |
 | `NEO4J_*` | no | defaults match `docker-compose.yml`. |
 
-## 2. Pointing Baleen at the real vLLM instance
+## 2. Pointing Baleen at an LLM
 
 The LLM client is a thin wrapper in
 `backend/app/extraction/client.py`. Everything is driven by the three env vars
 above — no provider SDK is hardcoded.
 
-1. Start vLLM serving your model, e.g.:
+1. Start a server, e.g. vLLM serving your model:
    ```bash
    vllm serve <model> --port 8001
    ```
@@ -62,7 +68,7 @@ above — no provider SDK is hardcoded.
 
 `tools` and `json` force either mode. See `docs/ARCHITECTURE.md` for details.
 
-Transport failures (network blips, a vLLM restart, HTTP error statuses) are
+Transport failures (network blips, an LLM restart, HTTP error statuses) are
 retried with exponential backoff up to `LLM_MAX_RETRIES` (default 2), so a
 single hiccup never fails a whole run; `LLM_TIMEOUT_SECONDS` bounds each
 attempt.
@@ -70,7 +76,7 @@ attempt.
 ## 3. Run everything
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 This starts: Postgres (:5432), Neo4j (:7474, :7687), backend (:8000),
@@ -81,34 +87,42 @@ Open http://localhost:5173. FastAPI docs at http://localhost:8000/docs.
 ## 4. Seed reference data
 
 Politicians, committee memberships, and committee→sector oversight mappings
-live in `backend/scripts/seed_data.py` and are loaded into the graph with:
+live in `backend/app/graph/seed_data.py` and are loaded into the graph with:
 
 ```bash
 # inside the backend container
-docker-compose exec backend python -m scripts.seed_reference
+docker compose exec backend python -m scripts.seed_reference
 ```
 
 The seed is idempotent (`MERGE`) — safe to run repeatedly.
 
-## 5. Ingest a batch of tweets
+## 5. Ingest a batch of events
 
 ```bash
-docker-compose exec backend python -m scripts.ingest_once
+docker compose exec backend python -m scripts.ingest_once
 ```
 
-Polls the configured handles once (not on a timer), runs extraction, writes to
-the graph, and evaluates alerts. Useful for smoke tests and for hand-inserting
-example tweets. With no X API credentials it falls back to a bundled sample
-corpus so the full stack can be demoed end-to-end:
+Loads the bundled sample corpus once (not on a timer), runs extraction, writes
+to the graph, and evaluates alerts. The sample corpus is free text, so it needs
+a reachable LLM endpoint; without one those rows stay pending.
+
+To seed the reference graph first (needed when the graph is empty):
 
 ```bash
-docker-compose exec backend python -m scripts.ingest_once --seed-ref
+docker compose exec backend python -m scripts.ingest_once --seed-ref
+```
+
+For a populated board with **no keys and no model**, use the live public feeds
+instead — structured filings are parsed deterministically:
+
+```bash
+docker compose exec backend python -m scripts.ingest_once --real
 ```
 
 `--seed-ref` seeds the reference graph (politicians/committees/sectors) first —
 needed when the graph is empty.
 
-### Live ingestion (real X API + vLLM)
+### Live ingestion (X API + LLM)
 
 Once `X_API_BEARER_TOKEN`, `LLM_BASE_URL`, and `LLM_MODEL_NAME` are set in
 `.env`, pull a batch from the real API and run it through the stack:
@@ -225,7 +239,7 @@ pytest -q
 ```
 
 Tests that need live Postgres/Neo4j are skipped when the services are down
-(they check connectivity first). Run `docker-compose up postgres neo4j` to
+(they check connectivity first). Run `docker compose up postgres neo4j` to
 exercise the integration tests, or bring up the full stack.
 
 ### Test Neo4j isolation
@@ -248,15 +262,13 @@ app caps each Neo4j statement with `NEO4J_QUERY_TIMEOUT_SECONDS`.
 
 ## 8. Troubleshooting
 
-- **Backend can't reach Neo4j/Postgres** — ensure `docker-compose up` is running
+- **Backend can't reach Neo4j/Postgres** — ensure `docker compose up` is running
   and the `.env` hostnames match the service names (`postgres`, `neo4j`).
 - **LLM extraction returns `UnparsedEvent` for everything** — the model may not
   be responding; check backend logs, try `LLM_TOOL_MODE=json`, and confirm the
   model is actually listening on `LLM_BASE_URL`.
 - **Ports in use** — Baleen uses 5432, 7474, 7687, 7690 (test Neo4j), 8000,
-  5173. Stop other projects on these ports before
-  `docker-compose up`; 7688 is deliberately avoided because the co-located
-  gmem project binds it.
+  5173. Stop other projects on these ports before `docker compose up`.
 
 ---
 

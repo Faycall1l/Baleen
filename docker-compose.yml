@@ -22,9 +22,8 @@ services:
     restart: unless-stopped
     image: neo4j:${NEO4J_VERSION:-5}-community
     container_name: baleen-neo4j
-    # Bounded resources so a co-tenanted host (e.g. a k3d/gmem VM) cannot
-    # starve the graph of CPU/memory (see #21). Bump the *_CPUS/*_MEM env vars
-    # on a dedicated box.
+    # Bounded resources so a co-tenanted host cannot starve the graph of
+    # CPU/memory. Bump the *_CPUS/*_MEM env vars on a dedicated box.
     cpus: ${NEO4J_CPUS:-2.0}
     mem_limit: ${NEO4J_MEM:-2g}
     environment:
@@ -51,7 +50,7 @@ services:
   # graph the scheduler writes to. Not started by default — bring it up with
   # `docker compose up -d neo4j-test`; the test harness auto-promotes to it
   # (bolt://localhost:7690) when it is reachable, else falls back to 7687.
-  # (7688 is deliberately avoided: the co-located gmem project already binds it.)
+  # 7690 is used to avoid collisions with other common local stacks.
   neo4j-test:
     restart: unless-stopped
     image: neo4j:${NEO4J_VERSION:-5}-community

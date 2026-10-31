@@ -128,7 +128,7 @@ export default function FlowTape({ flow, count, error, filters, onFiltersChange,
                     key={print.event_id ?? `print-${pi}`}
                     className={`${sentimentClass(print.sentiment)}${clickable ? ' clickable' : ''}`}
                     onClick={clickable}
-                    title={ticker && onSelectTicker ? `Show ${ticker} on the canvas` : undefined}
+                    title={ticker && onSelectTicker ? `Show ${ticker} on the board` : undefined}
                   >
                     <td className="ticker">{ticker ?? '—'}</td>
                     <td>{print.side === 'call' ? 'CALL' : print.side === 'put' ? 'PUT' : '—'}</td>
