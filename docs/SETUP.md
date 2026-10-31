@@ -30,24 +30,24 @@ Fill in real values (see [`.env.example`](../.env.example) for inline docs):
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `X_API_BEARER_TOKEN` | for live ingestion | X API v2 bearer token. Development/testing can use placeholders — the pipeline just logs fetch errors. With placeholder X creds, leave `SCHEDULER_ENABLED=false` or every failing tick burns LLM quota. |
-| `SCHEDULER_ENABLED` | no | `true` runs the ingest→process loop. Keep `false` until real X creds exist. |
-| `LLM_BASE_URL` | dev/test only | vLLM's OpenAI-compatible endpoint, e.g. `http://host.docker.internal:8001/v1`. Placeholders are fine for tests (they use a stub). |
-| `LLM_API_KEY` | dev/test only | vLLM is usually unauthenticated on localhost; any value works. |
-| `LLM_MODEL_NAME` | dev/test only | model served by vLLM. |
+| `X_API_BEARER_TOKEN` | optional | X API v2 bearer token. Placeholders are treated as "not configured": the X source is skipped and the keyless feeds keep running. |
+| `SCHEDULER_ENABLED` | no | `true` runs the ingest→process loop every five minutes over the keyless feeds (X is added only when a real token is set). |
+| `LLM_BASE_URL` | optional | OpenAI-compatible endpoint (vLLM, Groq, or any `/v1/chat/completions` server), e.g. `http://host.docker.internal:8001/v1`. Without it, structured filings still become events. |
+| `LLM_API_KEY` | optional | Most local vLLM servers are unauthenticated; any value works. |
+| `LLM_MODEL_NAME` | optional | model name served by that endpoint. |
 | `LLM_TOOL_MODE` | no | `auto` (default) \| `tools` \| `json`. See §LLM below. |
 | `GROQ_API_KEY` | no | Backup provider: used only when the primary LLM raises. Empty disables the backup. Free-tier friendly. |
 | `GROQ_MODEL_NAME` | no | Defaults to `openai/gpt-oss-20b`. Must be a model your key can access (`GET /v1/models`). |
-| `POSTGRES_*` / `DATABASE_URL` | no | defaults match `docker compose.yml`. |
-| `NEO4J_*` | no | defaults match `docker compose.yml`. |
+| `POSTGRES_*` / `DATABASE_URL` | no | defaults match `docker-compose.yml`. |
+| `NEO4J_*` | no | defaults match `docker-compose.yml`. |
 
-## 2. Pointing Baleen at the real vLLM instance
+## 2. Pointing Baleen at an LLM
 
 The LLM client is a thin wrapper in
 `backend/app/extraction/client.py`. Everything is driven by the three env vars
 above — no provider SDK is hardcoded.
 
-1. Start vLLM serving your model, e.g.:
+1. Start a server, e.g. vLLM serving your model:
    ```bash
    vllm serve <model> --port 8001
    ```
@@ -68,7 +68,7 @@ above — no provider SDK is hardcoded.
 
 `tools` and `json` force either mode. See `docs/ARCHITECTURE.md` for details.
 
-Transport failures (network blips, a vLLM restart, HTTP error statuses) are
+Transport failures (network blips, an LLM restart, HTTP error statuses) are
 retried with exponential backoff up to `LLM_MAX_RETRIES` (default 2), so a
 single hiccup never fails a whole run; `LLM_TIMEOUT_SECONDS` bounds each
 attempt.
@@ -122,7 +122,7 @@ docker compose exec backend python -m scripts.ingest_once --real
 `--seed-ref` seeds the reference graph (politicians/committees/sectors) first —
 needed when the graph is empty.
 
-### Live ingestion (real X API + vLLM)
+### Live ingestion (X API + LLM)
 
 Once `X_API_BEARER_TOKEN`, `LLM_BASE_URL`, and `LLM_MODEL_NAME` are set in
 `.env`, pull a batch from the real API and run it through the stack:
