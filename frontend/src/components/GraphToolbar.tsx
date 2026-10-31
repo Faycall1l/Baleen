@@ -117,7 +117,7 @@ export default function GraphToolbar({
             </div>
           )}
         </div>
-      <button className="graph-fit-btn" onClick={onFit} title="Fit the whole graph in view">
+      <button className="graph-fit-btn" onClick={onFit} title="Fit the whole board in view">
         Fit
       </button>
       <button className="graph-fit-btn" onClick={onResetView} title="Fit, clear selection, and show all types">
@@ -131,7 +131,7 @@ export default function GraphToolbar({
       >
         {showEvents ? 'Events on' : 'Events off'}
       </button>
-      <div className="time-scrub" title="Freeze the canvas on an as-of snapshot">
+      <div className="time-scrub" title="Freeze the board on an as-of snapshot">
         <input
           type="range"
           className="time-scrub-slider"

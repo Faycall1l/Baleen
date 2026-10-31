@@ -16,7 +16,7 @@ export default function PathFromButton({ armed, onArm, onCancel }: Props) {
   }
   return (
     <div className="path-armed">
-      <span>Pick a target node — click the canvas or search.</span>
+      <span>Pick a target node — click the board or search.</span>
       <button type="button" className="node-link" onClick={onCancel}>
         Cancel
       </button>
