@@ -80,6 +80,7 @@ class LLMClient:
         backup: LLMClient | None = None,
         use_response_format: bool = True,
         cooldown_seconds: float = 60.0,
+        disable_thinking: bool = False,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -112,6 +113,10 @@ class LLMClient:
         # (and connect timeouts) on every call of a batch. Calls then go
         # straight to the backup or the caller's deterministic fallback.
         self.cooldown_seconds = cooldown_seconds
+        # Hybrid reasoning models (Nemotron, Qwen3) think by default; for
+        # extraction and short drafts that is latency and tokens for nothing.
+        # vLLM / NVIDIA NIM read this switch from chat_template_kwargs.
+        self.disable_thinking = disable_thinking
         self._down_until = 0.0
 
     def close(self) -> None:
@@ -332,6 +337,8 @@ class LLMClient:
             payload["tool_choice"] = tool_choice or "auto"
         if response_format:
             payload["response_format"] = response_format
+        if self.disable_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
         return payload
 
     def _parse(self, data: dict, *, parse_tools: bool) -> LLMResponse:
@@ -351,3 +358,37 @@ class LLMClient:
                     arguments = {}
                 tool_calls.append(ToolCall(name=name, arguments=arguments))
         return LLMResponse(content=content, tool_calls=tool_calls, raw=data)
+
+
+def build_llm(settings: Any) -> LLMClient:
+    """The configured primary client, with the Groq backup when keyed.
+
+    One construction path for the API, the scheduler and the scripts, so
+    every caller gets the same fallback and model switches.
+    """
+    backup = (
+        LLMClient(
+            base_url=settings.groq_base_url,
+            api_key=settings.groq_api_key,
+            model_name=settings.groq_model_name,
+            # Groq parses tool calls server-side, so the backup can use real
+            # tools; its hosted models flake on an explicit json_object
+            # constraint, so the strict parser guards output instead.
+            tool_mode="auto",
+            max_retries=settings.llm_max_retries,
+            timeout_seconds=settings.llm_timeout_seconds,
+            use_response_format=False,
+        )
+        if settings.groq_api_key
+        else None
+    )
+    return LLMClient(
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        model_name=settings.llm_model_name,
+        tool_mode=settings.llm_tool_mode,
+        max_retries=settings.llm_max_retries,
+        timeout_seconds=settings.llm_timeout_seconds,
+        backup=backup,
+        disable_thinking=settings.llm_disable_thinking,
+    )

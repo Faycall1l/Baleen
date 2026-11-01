@@ -32,7 +32,7 @@ from app.api.signals_routes import router as signals_router
 from app.config import Settings, get_settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.extraction.client import LLMClient
+from app.extraction.client import LLMClient, build_llm
 from app.query.agent import QueryAgent
 
 logger = logging.getLogger(__name__)
@@ -118,36 +118,7 @@ def _get_llm() -> LLMClient:
     if _llm is None:
         with _init_lock:
             if _llm is None:
-                s = _get_settings()
-                backup = (
-                    LLMClient(
-                        base_url=s.groq_base_url,
-                        api_key=s.groq_api_key,
-                        model_name=s.groq_model_name,
-                        # Native tools: Groq parses tool calls server-side,
-                        # and errors when a model emits one undeclared.
-                        # The primary stays on json mode (its endpoint has
-                        # no tool parser); the backup can use real tools.
-                        tool_mode="auto",
-                        max_retries=s.llm_max_retries,
-                        timeout_seconds=s.llm_timeout_seconds,
-                        # Groq's hosted models flake on an explicit
-                        # json_object constraint; the strict parser guards
-                        # output instead.
-                        use_response_format=False,
-                    )
-                    if s.groq_api_key
-                    else None
-                )
-                _llm = LLMClient(
-                    base_url=s.llm_base_url,
-                    api_key=s.llm_api_key,
-                    model_name=s.llm_model_name,
-                    tool_mode=s.llm_tool_mode,
-                    max_retries=s.llm_max_retries,
-                    timeout_seconds=s.llm_timeout_seconds,
-                    backup=backup,
-                )
+                _llm = build_llm(_get_settings())
     return _llm
 
 

@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     llm_tool_mode: Literal["auto", "tools", "json"] = "auto"
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_timeout_seconds: int = Field(default=90, ge=5, le=600)
+    # Send chat_template_kwargs.enable_thinking=false (vLLM, NVIDIA NIM) so
+    # hybrid reasoning models such as Nemotron answer without a thinking pass.
+    llm_disable_thinking: bool = False
     # Groq backup (OpenAI-compatible): empty key = no backup. Used only
     # when the primary LLM raises; see LLMClient backup fallback.
     groq_base_url: str = "https://api.groq.com/openai/v1"

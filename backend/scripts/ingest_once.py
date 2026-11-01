@@ -31,7 +31,7 @@ import logging
 from app.config import Settings, get_settings
 from app.db.neo4j import Neo4jStore
 from app.db.postgres import PostgresStore
-from app.extraction.client import LLMClient, LLMTransportError
+from app.extraction.client import LLMTransportError, build_llm
 from app.extraction.extractor import EventExtractor
 from app.graph.writer import GraphWriter
 from app.ingestion.pipeline import IngestionPipeline
@@ -46,14 +46,7 @@ def build_pipeline(settings: Settings) -> ProcessingPipeline:
     store = PostgresStore(settings.postgres_dsn)
     store.init_schema()
     neo4j = Neo4jStore(settings)
-    llm = LLMClient(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model_name=settings.llm_model_name,
-        tool_mode=settings.llm_tool_mode,
-        max_retries=settings.llm_max_retries,
-        timeout_seconds=settings.llm_timeout_seconds,
-    )
+    llm = build_llm(settings)
     from app.alerts.engine import AlertEngine
     from app.reports.engine import ReportEngine
 
@@ -94,14 +87,7 @@ def main() -> None:
                 "X_API_BEARER_TOKEN is not set (or is a placeholder). "
                 "Add a real token to your env (or repo-root .env) and retry."
             )
-        llm = LLMClient(
-            base_url=settings.llm_base_url,
-            api_key=settings.llm_api_key,
-            model_name=settings.llm_model_name,
-            tool_mode=settings.llm_tool_mode,
-            max_retries=settings.llm_max_retries,
-            timeout_seconds=settings.llm_timeout_seconds,
-        )
+        llm = build_llm(settings)
         if not llm.health():
             raise SystemExit(
                 f"LLM endpoint is unreachable at {settings.llm_base_url} "
