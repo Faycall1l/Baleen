@@ -102,3 +102,26 @@ def test_direction_check_rejects_wrong_pairs_and_ignores_unlabeled():
     assert any("direction" in v for v in violations)
     assert validate_cypher("MATCH (a)-[:IN_SECTOR]->(b) RETURN a") == []
     assert validate_cypher("MATCH (a:Ticker)-[:IN_SECTOR]-(s:Sector) RETURN a") == []
+
+
+def test_repair_flips_reversed_schema_edges_only():
+    from app.query.validate import repair_edge_directions
+
+    q = (
+        "MATCH (p:Politician)-[:INVOLVES_POLITICIAN]->(e:Event)<-[:INVOLVES_TICKER]-(t:Ticker)"
+        "-[:IN_SECTOR]->(s:Sector) RETURN s.name"
+    )
+    fixed, notes = repair_edge_directions(q)
+    assert fixed == (
+        "MATCH (p:Politician)<-[:INVOLVES_POLITICIAN]-(e:Event)-[:INVOLVES_TICKER]->(t:Ticker)"
+        "-[:IN_SECTOR]->(s:Sector) RETURN s.name"
+    )
+    assert len(notes) == 2
+    assert validate_cypher(fixed) == []
+    # Correct, unlabeled and undirected patterns are left alone.
+    for ok in [
+        "MATCH (e:Event)-[:INVOLVES_TICKER]->(t:Ticker) RETURN t",
+        "MATCH (a)-[:INVOLVES_TICKER]->(b) RETURN a",
+        "MATCH (t:Ticker)-[:INVOLVES_TICKER]-(e:Event) RETURN count(e)",
+    ]:
+        assert repair_edge_directions(ok) == (ok, [])

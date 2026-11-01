@@ -136,3 +136,48 @@ def _extract(pattern: re.Pattern, query: str) -> list[str]:
             if part:
                 found.append(part)
     return found
+
+
+_NODE_RE = re.compile(r"\(([^()]*)\)")
+_NODE_LABEL_RE = re.compile(r"^\s*(?:[A-Za-z_]\w*)?\s*:\s*([A-Za-z_]\w*)")
+_REL_SEGMENT_RE = re.compile(r"^(\s*)(<-|-)(\[\s*(?:[A-Za-z_]\w*)?\s*:\s*([A-Za-z_]\w*)[^\]]*\])(->|-)(\s*)$")
+
+
+def repair_edge_directions(query: str) -> tuple[str, list[str]]:
+    """Flip labeled edges written against the schema direction.
+
+    Every relationship type joins a fixed pair of labels in one direction, so
+    ``(t:Ticker)-[:INVOLVES_TICKER]->(e:Event)`` can only mean the reverse
+    edge. Smaller models make this slip and then repeat it after feedback;
+    repairing it deterministically is safer than rejecting the question.
+    Only edges whose two labels and type are known, and whose reverse is a
+    schema edge, are touched. Returns the query and a note per repair.
+    """
+    nodes = list(_NODE_RE.finditer(query))
+    pieces: list[str] = []
+    notes: list[str] = []
+    cursor = 0
+    for left, right in zip(nodes, nodes[1:], strict=False):
+        between = query[left.end() : right.start()]
+        seg = _REL_SEGMENT_RE.match(between)
+        left_label = _NODE_LABEL_RE.match(left.group(1))
+        right_label = _NODE_LABEL_RE.match(right.group(1))
+        if not (seg and left_label and right_label):
+            continue
+        lead, head, body, rel, tail, trail = seg.groups()
+        if head == "<-" and tail == "-":
+            src, dst = right_label.group(1), left_label.group(1)
+            flipped = f"{lead}-{body}->{trail}"
+        elif head == "-" and tail == "->":
+            src, dst = left_label.group(1), right_label.group(1)
+            flipped = f"{lead}<-{body}-{trail}"
+        else:
+            continue
+        if (src, rel, dst) in DIRECTED_EDGES or (dst, rel, src) not in DIRECTED_EDGES:
+            continue
+        pieces.append(query[cursor : left.end()])
+        pieces.append(flipped)
+        cursor = right.start()
+        notes.append(f"flipped ({src})-[:{rel}]->({dst})")
+    pieces.append(query[cursor:])
+    return "".join(pieces), notes

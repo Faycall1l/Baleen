@@ -32,7 +32,7 @@ from app.query.tools import (
     NO_DATA_ANSWER,
     bounded_query,
 )
-from app.query.validate import validate_cypher
+from app.query.validate import repair_edge_directions, validate_cypher
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +170,16 @@ class QueryAgent:
                 result.answer = self._failure("I couldn't produce a valid query for this question.")
                 return result
 
+            cypher, repairs = repair_edge_directions(cypher)
+            if repairs:
+                logger.info("repaired generated Cypher: %s", repairs)
             result.cypher = cypher
             violations = validate_cypher(cypher)
             if violations:
                 result.allowed = False
                 result.violations = violations
                 logger.warning("generated Cypher rejected: %s", violations)
-                messages.append(self._feedback(violations))
+                messages.append(self._feedback(violations, cypher))
                 continue
 
             try:
@@ -186,7 +189,7 @@ class QueryAgent:
             except Exception as exc:  # syntax / runtime errors from the graph
                 logger.warning("Cypher execution failed: %s", exc)
                 exec_error = str(exc)
-                messages.append(self._feedback([f"execution error: {exc}"]))
+                messages.append(self._feedback([f"execution error: {exc}"], cypher))
                 continue
 
             break
@@ -230,7 +233,8 @@ class QueryAgent:
             "names, since stored names carry first names, initials, and "
             "suffixes the question omits. When ordering by a property "
             "(e.g. `ORDER BY e.event_time DESC`), add `WHERE <prop> IS NOT "
-            "NULL`: Cypher sorts nulls first in descending order."
+            "NULL`: Cypher sorts nulls first in descending order. Alias every "
+            "non-variable expression in WITH (`WITH t.ticker AS ticker`)."
         )
 
     def _generate_cypher(self, messages: list[dict]) -> str:
@@ -241,9 +245,14 @@ class QueryAgent:
             return ""
         for call in response.tool_calls:
             # Accept an explicit generate_cypher call, or a nameless reply
-            # carrying the cypher field (some models emit bare arguments).
-            if call.name == "generate_cypher" or (not call.name and "cypher" in call.arguments):
-                return str(call.arguments.get("cypher", "")).strip()
+            # carrying the statement (some models emit bare arguments, and
+            # some name the field ``query``). Any answer the model drafts
+            # alongside is ignored: answers come only from executed rows.
+            args = call.arguments
+            if call.name == "generate_cypher" or not call.name:
+                for key in ("cypher", "query"):
+                    if isinstance(args.get(key), str) and args[key].strip():
+                        return args[key].strip()
         logger.warning("LLM returned no generate_cypher tool call")
         return ""
 
@@ -291,11 +300,14 @@ class QueryAgent:
                         sources.append(value)
         return sources
 
-    def _feedback(self, problems: list[str]) -> dict:
+    def _feedback(self, problems: list[str], cypher: str = "") -> dict:
+        # Quote the rejected query: without it the model cannot see what to
+        # fix and, sampling at temperature 0, tends to emit it verbatim again.
+        previous = f"Your previous Cypher:\n{cypher}\n\n" if cypher else ""
         return {
             "role": "user",
             "content": (
-                "Your previous Cypher was rejected. Fix it and call "
+                f"{previous}It was rejected. Fix it and call "
                 "`generate_cypher` again. Problems:\n- " + "\n- ".join(problems)
             ),
         }

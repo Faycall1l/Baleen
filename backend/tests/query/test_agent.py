@@ -336,3 +336,45 @@ def test_ask_fails_when_bounded_query_empties_degenerate_cypher():
 
     assert result.rows == []
     assert "couldn't generate a query" in result.answer
+
+
+def test_retry_feedback_quotes_the_rejected_cypher():
+    seen: list[list[dict]] = []
+    llm = SequencedStubLLM(
+        [
+            "MATCH (e:Event) RETURN foo(e) AS x",
+            "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1",
+        ]
+    )
+    inner = llm.chat_with_tools
+
+    def spy(messages, tools, tool_choice="auto"):
+        seen.append([dict(m) for m in messages])
+        return inner(messages, tools, tool_choice)
+
+    llm.chat_with_tools = spy
+    QueryAgent(llm=llm, store=ExecutionErrorStore()).ask("List tickers.")
+
+    feedback = seen[1][-1]["content"]
+    assert "MATCH (e:Event) RETURN foo(e) AS x" in feedback
+    assert "execution error" in feedback
+
+
+def test_nameless_reply_with_query_field_is_accepted_and_its_answer_ignored():
+    from app.extraction.client import LLMResponse, ToolCall
+
+    class _QueryKeyLLM:
+        def chat_with_tools(self, messages, tools, tool_choice="auto"):
+            if any("Query results" in str(m.get("content")) for m in messages):
+                return LLMResponse(tool_calls=[ToolCall("answer_question", {"answer": "NVDA it is.", "sources": []})])
+            return LLMResponse(
+                tool_calls=[
+                    ToolCall("", {"query": "MATCH (t:Ticker) RETURN t.ticker AS ticker LIMIT 1", "answer": "invented"})
+                ]
+            )
+
+    result = QueryAgent(llm=_QueryKeyLLM(), store=ExecutionErrorStore()).ask("List tickers.")
+
+    assert result.cypher.startswith("MATCH (t:Ticker)")
+    assert result.rows == [{"ticker": "NVDA"}]
+    assert "invented" not in result.answer

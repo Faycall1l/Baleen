@@ -89,6 +89,10 @@ Rules for writing Cypher:
 - Inline literal user-provided values directly in the query (quote strings).
   Do NOT use $parameters — the executor does not bind them.
 - Use the exact property names shown above.
+- What someone TRADED goes through events and tickers:
+  (p:Politician)<-[:INVOLVES_POLITICIAN]-(e:Event)-[:INVOLVES_TICKER]->(:Ticker)-[:IN_SECTOR]->(s:Sector).
+  What a committee OVERSEES is (Committee)-[:OVERSEES]->(Sector); do not use
+  it to answer what a member traded.
 """
 
 
