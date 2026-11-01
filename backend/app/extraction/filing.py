@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from app.ingestion.disclosures_parse import _normalize_name, _slug
 from app.ingestion.source import RawTweet
-from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent
+from app.models.events import CongressTradeEvent, Event, InsiderTradeEvent, OptionsFlowEvent
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,8 @@ def _text_or_none(raw: Any) -> str | None:
 def event_from_filing_row(tweet: RawTweet) -> Event | None:
     """Build a trade event straight from a structured filing row.
 
-    Handles ``congress_disclosure`` and ``insider_filing`` source kinds;
+    Handles ``congress_disclosure``, ``insider_filing`` and ``options_radar``
+    source kinds;
     anything else (or any row missing minimum facts) returns None so the
     caller falls back to LLM extraction.
     """
@@ -103,6 +104,8 @@ def event_from_filing_row(tweet: RawTweet) -> Event | None:
             return _congress_trade(tweet, meta)
         if kind == "insider_filing":
             return _insider_trade(tweet, meta)
+        if kind == "options_radar":
+            return _options_flow(tweet, meta)
         return None
     except Exception:
         logger.warning("deterministic filing build failed; falling back to LLM", exc_info=True)
@@ -154,4 +157,33 @@ def _insider_trade(tweet: RawTweet, meta: dict[str, Any]) -> InsiderTradeEvent |
         price=_positive_float(meta.get("price")),
         amount_range=_text_or_none(meta.get("amount_range_label")),
         transaction_date=_day(meta.get("transaction_date")),
+    )
+
+
+def _non_negative_int(raw: Any) -> int | None:
+    value = _positive_float(raw)
+    return int(value) if value is not None else None
+
+
+def _options_flow(tweet: RawTweet, meta: dict[str, Any]) -> OptionsFlowEvent | None:
+    """Unusual-volume contract from the CBOE sweep.
+
+    Sentiment stays ``neutral``: delayed chains show volume, not whether the
+    prints were bought or sold, so calling it bullish would be invented.
+    Premium is left empty for the same reason.
+    """
+    ticker = _ticker(meta.get("ticker"))
+    kind = meta.get("kind")
+    if not ticker or kind not in ("C", "P"):
+        return None
+    return OptionsFlowEvent(
+        tweet_id=tweet.tweet_id,
+        tweet_url=tweet.url,
+        confidence=0.95,
+        ticker=ticker,
+        contract_type="call" if kind == "C" else "put",
+        strike=_positive_float(meta.get("strike")),
+        expiration=_day(meta.get("expiry")),
+        volume=_non_negative_int(meta.get("volume")),
+        open_interest=_non_negative_int(meta.get("open_interest")),
     )

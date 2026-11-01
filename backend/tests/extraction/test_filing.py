@@ -89,3 +89,30 @@ def test_unknown_kinds_and_thin_rows_fall_back_to_none():
         )
         is None
     )
+
+
+def test_options_row_builds_without_llm():
+    event = event_from_filing_row(
+        _tweet(
+            {
+                "source_kind": "options_radar",
+                "ticker": "nvda",
+                "expiry": "2026-11-06",
+                "kind": "P",
+                "strike": 180.0,
+                "volume": 12000,
+                "open_interest": 900,
+                "ratio": 13.3,
+                "day": "2026-10-30",
+            }
+        )
+    )
+    assert event is not None
+    assert event.event_type == "options_flow"
+    assert event.ticker == "NVDA"
+    assert event.contract_type == "put"
+    assert event.expiration.isoformat() == "2026-11-06"
+    assert (event.volume, event.open_interest) == (12000, 900)
+    # Delayed chains carry no trade direction, so no sentiment is inferred.
+    assert event.sentiment == "neutral"
+    assert event_from_filing_row(_tweet({"source_kind": "options_radar", "ticker": "NVDA", "kind": "X"})) is None
