@@ -12,7 +12,7 @@ docker compose exec backend python -m scripts.ingest_once --real
 ```
 
 `--real` pulls the live keyless feeds once (House Clerk PTRs, the Senate
-mirror, SEC Form 4 filings and delayed CBOE chains), runs the full pipeline and
+mirror, SEC Form 4 filings, delayed CBOE chains and the news feeds), runs the full pipeline and
 writes the graph. No API key is needed. Open <http://localhost:5173>; the API
 docs are at <http://localhost:8000/docs>.
 
@@ -21,6 +21,8 @@ free-text paths and brief prose are enabled. Without one, structured filings
 still become events; options flow and free text stay pending.
 
 ## What to look at
+
+![Workspace overview](media/overview.gif)
 
 1. **The board.** Events sit on time-aligned lanes, one row per ticker. Use the
    zoom presets and the scrubber to move the window; the URL updates so a view
@@ -32,6 +34,9 @@ still become events; options flow and free text stay pending.
    node. The shortest connection is listed hop by hop, with the relationship on
    each edge.
 4. **Ask the graph.** Try:
+
+   ![Ask the graph](media/ask.gif)
+
    - *Which tickers did congressional traders buy most recently?*
    - *What sectors does the House Financial Services Committee oversee, and
      which of those sectors have tickers in the graph?*
@@ -45,6 +50,16 @@ still become events; options flow and free text stay pending.
 6. **Activity.** A digest of what moved in the window: biggest movers, new
    entities, and fresh events. It answers a different question from the ranked
    leads, which score relationships and oversight conflicts.
+7. **Media watch.** Headlines from the keyless RSS/Atom monitor (SEC, Federal
+   Reserve, CNBC, Politico). Articles stay visible even when no trade event is
+   extracted; cashtags and roster names become chips that open the inspector.
+
+   ![Media watch](media/media.gif)
+
+Story leads (ranked from the graph with no model involved) sit in the
+**Leads** tab:
+
+![Story leads](media/leads.gif)
 
 ## Prove it is live
 
@@ -61,6 +76,21 @@ hand instead of waiting:
 ```bash
 docker compose exec backend python -m scripts.ingest_once --real
 ```
+
+## Re-record the GIFs
+
+With the stack running and data ingested:
+
+```bash
+cd frontend
+npx playwright install chromium   # once
+node scripts/record-demo.mjs                      # all scenes
+node scripts/record-demo.mjs http://localhost:5173 ask media   # some scenes
+```
+
+Each scene is scripted in Playwright (1440×900, dark theme, first-run tour
+skipped), recorded to WebM, trimmed past page load and converted to a
+palette-optimized GIF in `docs/media/` with ffmpeg.
 
 ## What this is not
 

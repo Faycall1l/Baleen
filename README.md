@@ -11,11 +11,19 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green" /></a>
 </p>
 
-![Baleen workspace](docs/screenshot.png)
+<p align="center">
+  <img src="docs/media/overview.gif" alt="Baleen workspace: insights, signal board and an event opened in the inspector" width="100%" />
+</p>
 
-![Story leads and flow tape](docs/screenshot-leads.png)
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/media/leads.gif" alt="Ranked story leads opening ticker evidence" /><br /><sub><b>Story leads</b>: ranked from the graph, no model</sub></td>
+    <td width="33%" align="center"><img src="docs/media/ask.gif" alt="A plain-English question answered with validated Cypher" /><br /><sub><b>Ask the graph</b>: question → checked Cypher → table</sub></td>
+    <td width="33%" align="center"><img src="docs/media/media.gif" alt="Media watch headlines with entity mentions" /><br /><sub><b>Media watch</b>: monitored outlets, deterministic mentions</sub></td>
+  </tr>
+</table>
 
-<sub>Screenshots show the local development workspace with public-record data.</sub>
+<sub>Recorded from a local instance on live public-record data with <code>frontend/scripts/record-demo.mjs</code>.</sub>
 
 Baleen polls public disclosure feeds, extracts typed trade events, and writes them to a Neo4j graph where every node links back to its source filing. A React workspace on top surfaces ranked leads, KPIs and charts, and answers plain-English questions with the Cypher it ran.
 
@@ -23,10 +31,11 @@ It is also a **media-monitoring testbed**: a traceable pipeline for noisy, multi
 
 ## Features
 
-- **Live data, no API keys.** House Clerk periodic transaction reports (PDF parsing), a Senate disclosure mirror, SEC EDGAR Form 4 insider filings, and delayed CBOE option chains. The X API is an optional extra source.
+- **Live data, no API keys.** House Clerk periodic transaction reports (PDF parsing), a Senate disclosure mirror, SEC EDGAR Form 4 insider filings, delayed CBOE option chains, and four RSS/Atom news feeds (SEC, Federal Reserve, CNBC, Politico). The X API is an optional extra source.
 - **Insights.** Buy/sell ratio, call/put ratio, median excess return, insider clusters and off-committee trades, with charts for congress momentum, options flow, market-beating filings and activity movers.
 - **Story leads.** Ranked signals computed from the graph, with no model involved: trades in sectors a member's committees do not oversee, filings that beat the market, congress buying momentum, insider cluster buys.
 - **Signal board and flow tape.** Time-aligned event lanes with a scrubber, plus a filterable tape of options and insider prints.
+- **Media watch.** Monitored headlines stay visible even when no trade event is extracted, with deterministic cashtag and roster-name mentions that tap through to the inspector.
 - **Ask the graph.** A natural-language question becomes Cypher, is checked against an allowlist, and comes back as a table with source links. It runs on a dedicated read-only Neo4j role when one is configured; validation is enforced either way. With no matching data it says so.
 - **Alerts and reports.** Three rules (oversight-sector trades, $1M+ insider buys, options volume 5x open interest), a brief per event and a daily digest.
 - **Leaderboard, path finder, detail cards.** Trades ranked by return since filing, the shortest connection between two entities, and cards for politicians, tickers and committees.
