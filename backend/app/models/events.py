@@ -88,6 +88,12 @@ class CongressTradeEvent(EventBase):
     def _upper_ticker(cls, value: str) -> str:
         return value.strip().upper()
 
+    @field_validator("committee_ids", mode="before")
+    @classmethod
+    def _null_committees_to_empty(cls, value: object) -> object:
+        # Some tool-calling models send null for an unknown list.
+        return [] if value is None else value
+
     @field_validator("committee_ids")
     @classmethod
     def _upper_committee_ids(cls, value: list[str]) -> list[str]:
