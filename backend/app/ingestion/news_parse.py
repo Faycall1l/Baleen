@@ -128,3 +128,16 @@ def extract_mentions(title: str, summary: str = "") -> list[dict]:
             mentions.append({"kind": "politician", "id": person["id"], "label": name})
 
     return mentions
+
+
+def needs_extraction(record) -> bool:
+    """Whether a raw record should go through event extraction.
+
+    Non-news records always do. A news article does only when it names a
+    tracked ticker (cashtag) or roster politician: without one, no extracted
+    event could attach to the graph, so a model call would be pure cost.
+    """
+    meta = getattr(record, "raw_json", None) or {}
+    if meta.get("source_kind") != "news":
+        return True
+    return bool(extract_mentions(meta.get("title") or "", meta.get("summary") or ""))

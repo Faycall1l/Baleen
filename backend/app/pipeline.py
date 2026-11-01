@@ -2,7 +2,8 @@
 
 Drives the pipeline stages in order for every tweet with ``status='new'``:
 
-    extract (LLM, Pydantic-validated)
+    triage (news without tracked entities -> ``status='monitored'``, no LLM)
+      -> extract (structured rows directly; free text via LLM, Pydantic-validated)
       -> write graph (MERGE, traceable)
       -> evaluate alerts (MVP rule)
 
@@ -23,9 +24,14 @@ from app.extraction.filing import event_from_filing_row
 from app.graph.writer import GraphWriter
 from app.ingestion.disclosures import maybe_enrich_event
 from app.ingestion.edgar import maybe_enrich_insider
+from app.ingestion.news_parse import needs_extraction
 from app.reports.engine import ReportEngine
 
 logger = logging.getLogger(__name__)
+
+#: Consecutive LLM transport failures after which the rest of the batch's
+#: free-text records are deferred instead of each paying the retry backoff.
+LLM_BREAKER_THRESHOLD = 3
 
 
 class ProcessingPipeline:
@@ -64,19 +70,40 @@ class ProcessingPipeline:
         failures never raise.
         """
         tweets = self.store.claim_new_tweets(limit=limit)
-        summary = {"processed": 0, "unparsed": 0, "alerts": 0, "reports": 0, "failed": 0, "deterministic": 0}
+        summary = {
+            "processed": 0,
+            "unparsed": 0,
+            "alerts": 0,
+            "reports": 0,
+            "failed": 0,
+            "deterministic": 0,
+            "monitored": 0,
+        }
         done_ids: list[str] = []
+        monitored_ids: list[str] = []
         failed_ids: list[str] = []
         transport_failures = 0
+        consecutive_transport = 0
 
         for tweet in tweets:
+            # News triage: an article that names no tracked ticker or
+            # politician cannot yield a trade event about the graph, so it is
+            # kept for the media panel without a model call. This is what
+            # keeps four busy feeds from exhausting a free-tier LLM quota.
+            if not needs_extraction(tweet):
+                monitored_ids.append(tweet.tweet_id)
+                summary["monitored"] += 1
+                continue
             try:
                 # Structured filing rows skip the LLM entirely: the facts are
                 # already parsed, and a model call per tweet is what exhausts
                 # free-tier backups (Groq 429s). Falls back to extraction.
                 event = event_from_filing_row(tweet)
                 if event is None:
+                    if consecutive_transport >= LLM_BREAKER_THRESHOLD:
+                        raise LLMTransportError("circuit open: LLM unreachable earlier in this batch")
                     event = self.extractor.extract(tweet)
+                    consecutive_transport = 0
                 else:
                     summary["deterministic"] += 1
                 # Records from the filing feeds carry authoritative facts;
@@ -110,6 +137,7 @@ class ProcessingPipeline:
                 )
             except LLMTransportError:
                 transport_failures += 1
+                consecutive_transport += 1
                 failed_ids.append(tweet.tweet_id)
                 summary["failed"] += 1
                 logger.warning(
@@ -126,6 +154,8 @@ class ProcessingPipeline:
 
         if done_ids:
             self.store.mark_extracted(done_ids)
+        if monitored_ids:
+            self.store.reset_status(monitored_ids, "monitored")
         if failed_ids:
             self.store.reset_status(failed_ids, "new")
 

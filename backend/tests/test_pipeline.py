@@ -262,3 +262,33 @@ def test_report_engine_success_increments_reports(postgres_store):
     assert summary["processed"] == 1
     assert reports.calls == 1
     assert summary["reports"] == 1
+
+
+class _CountingDownExtractor:
+    def __init__(self):
+        self.calls = 0
+
+    def extract(self, tweet: RawTweet):
+        from app.extraction.client import LLMTransportError
+
+        self.calls += 1
+        raise LLMTransportError("down")
+
+
+def test_circuit_breaker_stops_calling_a_dead_llm_mid_batch(postgres_store):
+    from app.extraction.client import LLMTransportError
+    from app.pipeline import LLM_BREAKER_THRESHOLD
+
+    for i in range(LLM_BREAKER_THRESHOLD + 4):
+        postgres_store.insert_raw_tweet(_raw(f"t-{i}"))
+    extractor = _CountingDownExtractor()
+    pipeline = ProcessingPipeline(
+        extractor=extractor, writer=_FakeWriter(), alert_engine=_NoopAlertEngine(), store=postgres_store
+    )
+
+    with pytest.raises(LLMTransportError):
+        pipeline.process_new()
+
+    assert extractor.calls == LLM_BREAKER_THRESHOLD
+    # Deferred records stay pending for the next run.
+    assert len(postgres_store.get_new_tweets(limit=20)) == LLM_BREAKER_THRESHOLD + 4

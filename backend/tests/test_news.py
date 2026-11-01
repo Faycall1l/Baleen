@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.ingestion import news as news_module
 from app.ingestion.news import Feed, NewsSource
-from app.ingestion.news_parse import extract_mentions, parse_date, parse_feed
+from app.ingestion.news_parse import extract_mentions, needs_extraction, parse_date, parse_feed
 from app.ingestion.source import RawTweet
 
 RSS = b"""<?xml version="1.0"?>
@@ -178,3 +178,49 @@ def test_get_news_filters_by_outlet(postgres_store):
     rows = postgres_store.get_news(limit=10, outlet="sec")
 
     assert [r["id"] for r in rows] == ["news:sec:2"]
+
+
+def test_triage_sends_only_entity_bearing_news_to_extraction():
+    now = datetime.now(UTC)
+    assert needs_extraction(_article("n1", now, "CNBC", "Elizabeth Warren sells $NVDA", ""))
+    assert not needs_extraction(_article("n2", now, "CNBC", "How to start an art collection", ""))
+    filing = RawTweet(
+        tweet_id="ptr-1", author_handle="x", author_id="x", text="t", created_at=now, url="u", raw_json={}
+    )
+    assert needs_extraction(filing)
+
+
+class _CountingExtractor:
+    def __init__(self):
+        self.seen: list[str] = []
+
+    def extract(self, tweet):
+        from app.models.events import UnparsedEvent
+
+        self.seen.append(tweet.tweet_id)
+        return UnparsedEvent(
+            tweet_id=tweet.tweet_id, tweet_url=tweet.url, confidence=0.3, raw_text=tweet.text, reason="test"
+        )
+
+
+class _Writer:
+    def write_event(self, event) -> str:
+        return "evt"
+
+
+def test_pipeline_skips_the_model_for_news_without_tracked_entities(postgres_store):
+    from app.pipeline import ProcessingPipeline
+
+    now = datetime.now(UTC)
+    postgres_store.insert_raw_tweet(_article("news:cnbc:plain", now, "CNBC", "Markets drift", "Nothing here"))
+    postgres_store.insert_raw_tweet(_article("news:cnbc:hit", now, "CNBC", "Elizabeth Warren on $NVDA", ""))
+    extractor = _CountingExtractor()
+    pipeline = ProcessingPipeline(extractor=extractor, writer=_Writer(), alert_engine=None, store=postgres_store)
+
+    summary = pipeline.process_new()
+
+    assert extractor.seen == ["news:cnbc:hit"]
+    assert summary["monitored"] == 1
+    assert postgres_store.get_new_tweets(limit=10) == []
+    # Monitored articles stay visible in the media panel.
+    assert {a["id"] for a in postgres_store.get_news(limit=10)} == {"news:cnbc:plain", "news:cnbc:hit"}
