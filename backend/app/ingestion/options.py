@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 SOURCE_KIND = "options_radar"
 
-CHAIN_URL = "https://cdn.cboe.com/api/global/delayed_quotes/options/{ticker}.json"
+CHAIN_URL = "https://cdn-api.cboe.com/api/global/delayed_quotes/options/{ticker}.json"
 QUOTE_URL = "https://finance.yahoo.com/quote/{ticker}"
 
 #: Liquid names with active option markets (subset of the reference sectors).
@@ -212,6 +212,12 @@ class OptionsChainSource(TweetSource):
         return payload
 
     def _fetch_chain(self, ticker: str) -> dict:
-        response = httpx.get(CHAIN_URL.format(ticker=ticker), headers=_UA, timeout=self.timeout_seconds)
+        response = httpx.get(
+            CHAIN_URL.format(ticker=ticker),
+            headers=_UA,
+            timeout=self.timeout_seconds,
+            # CBOE has moved this host before (cdn -> cdn-api); follow it.
+            follow_redirects=True,
+        )
         response.raise_for_status()
         return response.json()
