@@ -18,6 +18,7 @@ from app.db.store.identity import (
     AliasRegistryMixin,
 )
 from app.db.store.leaderboard import LeaderboardStoreMixin
+from app.db.store.news import NewsStoreMixin
 from app.db.store.reports import ReportStoreMixin
 from app.db.store.tweets import TweetStoreMixin
 
@@ -45,6 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_tweets_status_created
     ON raw_tweets (status, created_at);
 CREATE INDEX IF NOT EXISTS idx_raw_tweets_status_claimed
     ON raw_tweets (status, claimed_at);
+CREATE INDEX IF NOT EXISTS idx_raw_tweets_source_kind
+    ON raw_tweets ((raw_json->>'source_kind'));
 
 CREATE TABLE IF NOT EXISTS alert_rules (
     id          SERIAL PRIMARY KEY,
@@ -117,6 +120,7 @@ class PostgresStore(
     ReportStoreMixin,
     AliasRegistryMixin,
     LeaderboardStoreMixin,
+    NewsStoreMixin,
 ):
     def __init__(self, dsn: str) -> None:
         self.engine: Engine = create_engine(dsn, pool_pre_ping=True)

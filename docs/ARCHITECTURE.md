@@ -46,7 +46,7 @@ Baleen/
 │   │   ├── config.py         # pydantic-settings, all env vars
 │   │   ├── models/           # Pydantic schemas (events)
 │   │   ├── db/               # Postgres + Neo4j clients
-│   │   ├── ingestion/        # TweetSource interface, X + disclosure + Clerk +
+│   │   ├── ingestion/        # TweetSource interface, X + disclosure + Clerk + news +
 │   │                         #   options-radar impls, MultiSource fan-out
 │   │   ├── extraction/       # LLM client wrapper + extractor
 │   │   ├── graph/            # Neo4j schema constants + MERGE writer
@@ -157,6 +157,7 @@ persists in the URL so any view is a shareable link.
 - **Insights**: KPI strip and charts (congress buy/sell, options call/put, excess return, movers).
 - **Story leads**: ranked signals (off-committee trades, market-beating filings, congress flow).
 - **Signal board**: time-aligned event lanes with a time scrubber and type filters.
+- **Media watch**: keyless RSS/Atom headlines with deterministic entity mentions.
 - **Flow tape**: filterable options and insider prints.
 - **Query bar**: natural-language questions; shows the allowlisted Cypher and the source rows.
 - **Alerts, Reports, Leaderboard, Activity**: feeds from the matching REST routes.

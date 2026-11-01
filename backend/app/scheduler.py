@@ -27,6 +27,7 @@ from app.config import Settings
 from app.ingestion.clerk import ClerkHouseSource
 from app.ingestion.disclosures import CongressDisclosureSource
 from app.ingestion.edgar import EdgarForm4Source
+from app.ingestion.news import NewsSource
 from app.ingestion.options import OptionsChainSource
 from app.ingestion.pipeline import IngestionPipeline
 from app.ingestion.source import MultiSource, TweetSource
@@ -37,13 +38,18 @@ logger = logging.getLogger(__name__)
 
 
 def build_sources(settings: Settings) -> list[TweetSource]:
-    """Live sources for this run: disclosures + options always (keyless
-    public feeds); X only when a real bearer token is configured."""
+    """Live sources for this run: disclosures, insider filings, options and
+    news always (keyless public feeds); X only when a real bearer token is
+    configured."""
     sources: list[TweetSource] = [
         CongressDisclosureSource(),
         ClerkHouseSource(),
         EdgarForm4Source(user_agent=settings.edgar_user_agent),
         OptionsChainSource(),
+        NewsSource(
+            window_seconds=settings.news_window_seconds,
+            poll_seconds=settings.news_poll_seconds,
+        ),
     ]
     if settings.x_api_configured:
         sources.append(

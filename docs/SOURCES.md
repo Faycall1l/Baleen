@@ -11,6 +11,7 @@ and expects you to respect each provider's terms when you deploy it.
 | **SEC EDGAR — Form 4** (`sec.gov`) | Insider transactions (officers, directors, 10% owners) | Keyless, requires a contact `User-Agent` | Public filings under the SEC's [fair access policy](https://www.sec.gov/os/webmaster-faq#developers). Set `EDGAR_USER_AGENT` to a real contact before sustained polling. |
 | **CBOE delayed option chains** (`cdn.cboe.com`) | Delayed option volume and open interest for a watchlist | Keyless | Delayed data, CBOE terms apply. Fine for research and local use; confirm redistribution rights before publishing derived feeds commercially. |
 | **Yahoo Finance** (`finance.yahoo.com`) | Quote page used only as a human-readable source link | Link only | Not scraped. No data is extracted from it. |
+| **News feeds (RSS/Atom)** — SEC press releases, Federal Reserve press releases, CNBC top news, Politico politics | Headlines and summaries for the media watch | Keyless | Public feeds. The monitor stores title, summary, link and publication time, links back to the article, and polls each feed at most every 15 minutes. Respect each outlet's terms and robots policy if you add or increase polling. |
 | **X / Twitter API v2** | Optional free-text flow reports from finance accounts | Paid bearer token | Subject to the X Developer Agreement. Off by default; without a token the source is inert. Tweet text is not redistributed. |
 
 ## What Baleen stores

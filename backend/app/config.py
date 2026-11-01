@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     x_max_pages: int = Field(default=3, ge=1, le=10)
     x_api_timeout_seconds: int = Field(default=30, ge=1, le=600)
     poll_interval_seconds: int = Field(default=300, ge=5)
+    # Keyless news monitor (RSS/Atom). Polls on its own clock: outlets update
+    # far slower than filings, and four feeds every five minutes is waste.
+    news_window_seconds: int = Field(default=48 * 3600, ge=3600, le=7 * 24 * 3600)
+    news_poll_seconds: int = Field(default=15 * 60, ge=60, le=3600)
 
     # --- SEC EDGAR (Form 4 insider filings, keyless) ---
     edgar_user_agent: str = "Baleen/1.0 (SEC EDGAR Form 4 research; contact: admin@example.com)"

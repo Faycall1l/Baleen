@@ -19,6 +19,27 @@ class RuleActive(BaseModel):
     active: bool
 
 
+@router.get("/news")
+def news(
+    limit: int = Query(default=30, ge=1, le=100),
+    outlet: str | None = Query(default=None),
+) -> dict:
+    """Monitored media headlines (keyless RSS/Atom), newest first.
+
+    Articles are stored independently of event extraction, so coverage stays
+    visible even when a story contains no typed trade event. Mentions are
+    deterministic: cashtags and exact roster names.
+    """
+    from app.api import routes
+
+    try:
+        articles = routes._get_store().get_news(limit=limit, outlet=outlet)
+    except Exception as exc:
+        logger.exception("news fetch failed")
+        raise HTTPException(status_code=500, detail=f"news fetch failed: {exc}") from None
+    return {"articles": articles, "count": len(articles)}
+
+
 @router.get("/alerts")
 def alerts(limit: int = Query(default=20, ge=1, le=100)) -> dict:
     from app.api import routes

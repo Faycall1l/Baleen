@@ -127,6 +127,7 @@ def main() -> None:
         from app.ingestion.clerk import ClerkHouseSource
         from app.ingestion.disclosures import CongressDisclosureSource
         from app.ingestion.edgar import EdgarForm4Source
+        from app.ingestion.news import NewsSource
         from app.ingestion.options import OptionsChainSource
         from app.ingestion.source import MultiSource
 
@@ -136,9 +137,13 @@ def main() -> None:
                 ClerkHouseSource(),
                 EdgarForm4Source(user_agent=settings.edgar_user_agent),
                 OptionsChainSource(),
+                NewsSource(
+                    window_seconds=settings.news_window_seconds,
+                    poll_seconds=settings.news_poll_seconds,
+                ),
             ]
         )
-        logger.info("live public feeds: disclosures + insider filings + options radar")
+        logger.info("live public feeds: disclosures + insider filings + options radar + news")
     else:
         source = SampleSource()
 

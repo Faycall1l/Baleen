@@ -10,7 +10,7 @@ multi-source and partly unstructured?*
 
 | Monitoring concern | How Baleen handles it |
 | --- | --- |
-| **Multi-source ingestion** | Four independent keyless feeds (House Clerk, Senate mirror, SEC EDGAR, CBOE) plus optional X. Each source fails in isolation and backs off instead of retrying hot. |
+| **Multi-source ingestion** | Eight independent keyless sources (House Clerk, Senate mirror, SEC EDGAR, CBOE, and four RSS/Atom news outlets) plus optional X. Each source fails in isolation and backs off instead of retrying hot. |
 | **Event extraction** | Structured filings are parsed deterministically — identifiers, dates and amounts come from the record, never from a model. Free text goes through schema-constrained LLM extraction; low-confidence output is quarantined as `UnparsedEvent` rather than force-fit. |
 | **Entity resolution** | Filers, tickers and committees resolve to canonical nodes through a reference roster and an alias registry. Unknown entities get stable slugs instead of guesses. |
 | **Relationship modelling** | A Neo4j graph links people, committees, sectors, tickers and events, so oversight relationships and co-occurrence are queryable rather than buried in rows. |
