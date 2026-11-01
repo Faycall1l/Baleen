@@ -228,7 +228,9 @@ class QueryAgent:
             "nothing. Match people by surname with "
             '`toLower(n.name) CONTAINS toLower("...")` — never exact `=` on '
             "names, since stored names carry first names, initials, and "
-            "suffixes the question omits."
+            "suffixes the question omits. When ordering by a property "
+            "(e.g. `ORDER BY e.event_time DESC`), add `WHERE <prop> IS NOT "
+            "NULL`: Cypher sorts nulls first in descending order."
         )
 
     def _generate_cypher(self, messages: list[dict]) -> str:
