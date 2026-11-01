@@ -133,7 +133,7 @@ def test_placeholder_token_excludes_x_but_still_ingests_and_processes():
     settings = Settings(_env_file=None)  # default token is a placeholder
     scheduler = _started_scheduler(settings, interval=60)
     assert not any(isinstance(s, XApiSource) for s in scheduler.sources)
-    assert len(scheduler.sources) == 4  # disclosures + clerk-direct + EDGAR + options radar
+    assert len(scheduler.sources) == 5  # disclosures + clerk-direct + EDGAR + options radar + news
 
     scheduler.ingestion.run_once = Mock(return_value={"inserted": 1, "duplicates_skipped": 0, "errors": []})
     scheduler.processing.process_new = Mock(return_value={"processed": 2})
@@ -186,7 +186,7 @@ def test_real_token_includes_x_source():
 
     scheduler = _started_scheduler(_live_settings(), interval=60)
     assert any(isinstance(s, XApiSource) for s in scheduler.sources)
-    assert len(scheduler.sources) == 5  # disclosures + clerk-direct + EDGAR + options radar + X
+    assert len(scheduler.sources) == 6  # disclosures + clerk-direct + EDGAR + options radar + news + X
 
 
 def test_start_warns_when_x_api_not_configured(caplog):
