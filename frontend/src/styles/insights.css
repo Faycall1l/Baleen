@@ -19,3 +19,4 @@
 .bar-svg .neg { fill: #eb6f6f; }
 .bar-svg .dim { fill: var(--text-dim); }
 .bar-svg .axis { stroke: var(--border); stroke-width: 0.4; vector-effect: non-scaling-stroke; }
+.chart-card-empty { order: 1; }

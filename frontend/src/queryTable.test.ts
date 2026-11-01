@@ -14,6 +14,10 @@ describe('answer table helpers', () => {
   it('formats cells without shifting meaning', () => {
     expect(formatCell(null)).toBe('—');
     expect(formatCell(undefined)).toBe('—');
+    expect(formatCell('2026-10-29T00:00:00.000000000+00:00')).toBe('2026-10-29');
+    expect(formatCell('2026-10-29T14:30:05Z')).toBe('2026-10-29 14:30 UTC');
+    expect(formatCell('2026-10-29T14:30:05-04:00')).toBe('2026-10-29 14:30 -04:00');
+    expect(formatCell('not a date')).toBe('not a date');
     expect(formatCell(true)).toBe('TRUE');
     expect(formatCell(false)).toBe('FALSE');
     expect(formatCell(5000)).toBe('5,000');

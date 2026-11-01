@@ -30,9 +30,11 @@ function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?
   );
 }
 
-function Card({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+// Empty cards sink below populated ones (CSS order on the grid), so the
+// first screen shows data rather than a stack of placeholders.
+function Card({ title, sub, empty, children }: { title: string; sub?: string; empty?: boolean; children: React.ReactNode }) {
   return (
-    <section className="chart-card">
+    <section className={`chart-card${empty ? ' chart-card-empty' : ''}`}>
       <header>
         <h3>{title}</h3>
         {sub && <span>{sub}</span>}
@@ -108,7 +110,7 @@ export default function InsightsPanel({ signals, leaders, activity, unreadAlerts
         <Kpi label="Unread alerts" value={String(unreadAlerts)} tone={unreadAlerts ? 'down' : undefined} />
       </div>
 
-      <Card title="Congress momentum" sub="buys vs sells per ticker">
+      <Card empty={momentum.length === 0} title="Congress momentum" sub="buys vs sells per ticker">
         {momentum.length === 0 ? (
           <div className="empty-hint">No congressional trades in window.</div>
         ) : (
@@ -126,9 +128,9 @@ export default function InsightsPanel({ signals, leaders, activity, unreadAlerts
         )}
       </Card>
 
-      <Card title="Options flow" sub="call vs put volume">
+      <Card empty={options.length === 0} title="Options flow" sub="call vs put volume">
         {options.length === 0 ? (
-          <div className="empty-hint">No options prints yet.</div>
+          <div className="empty-hint">No options prints yet. Delayed CBOE chains fill in during US market hours.</div>
         ) : (
           options.map((o) => (
             <button key={o.ticker} className="bar-row" onClick={() => onTickerClick(o.ticker as string)}>
@@ -143,9 +145,9 @@ export default function InsightsPanel({ signals, leaders, activity, unreadAlerts
         )}
       </Card>
 
-      <Card title="Beating the market" sub="excess return since filing">
+      <Card empty={lead.length === 0} title="Beating the market" sub="excess return since filing">
         {lead.length === 0 ? (
-          <div className="empty-hint">No scored trades yet.</div>
+          <div className="empty-hint">No scored trades yet. Returns since filing come from the Senate disclosure mirror.</div>
         ) : (
           lead.map((l, i) => {
             const v = l.excess_pct as number;
@@ -164,7 +166,7 @@ export default function InsightsPanel({ signals, leaders, activity, unreadAlerts
         )}
       </Card>
 
-      <Card title="Activity movers" sub="recent vs prior window">
+      <Card empty={movers.length === 0} title="Activity movers" sub="recent vs prior window">
         {movers.length === 0 ? (
           <div className="empty-hint">No movers.</div>
         ) : (

@@ -17,8 +17,8 @@ export interface OnboardingStep {
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'leads',
-    title: '1 · Start with story leads',
-    body: 'The first tile ranks today’s congressional-trading leads: unsupervised sector trades, market-beating filings, congress flow. Click any ticker to open its evidence.',
+    title: '1 · Start with the overview',
+    body: 'Insights summarizes the window: buy/sell balance, options flow, off-committee trades. Open Leads in the left rail for ranked story leads; click any ticker to open its evidence.',
   },
   {
     id: 'ask',

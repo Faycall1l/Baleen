@@ -38,7 +38,7 @@ export default function AnswerPanel({ result, error, history, onClose, onExample
             </div>
           )}
           <div className="query-examples">
-            {EXAMPLES.map((ex) => (
+            {EXAMPLES.filter((ex) => !history.slice(0, 5).includes(ex)).map((ex) => (
               <button key={ex} className="query-example" onClick={() => onExample(ex)}>
                 {ex}
               </button>

@@ -362,7 +362,13 @@ export default function TimelineBoard({
                     y2={rows.length * ROW_H + 22}
                     className="tl-grid"
                   />
-                  <text x={x(t)} y={12} textAnchor="middle" className="tl-tick">
+                  <text
+                    x={x(t)}
+                    y={12}
+                    // Edge ticks anchor inward so their labels are not clipped.
+                    textAnchor={x(t) < 24 ? 'start' : x(t) > plotW + PLOT_PAD * 2 - 24 ? 'end' : 'middle'}
+                    className="tl-tick"
+                  >
                     {fmtDay(t)}
                   </text>
                 </g>
