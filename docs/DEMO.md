@@ -18,7 +18,7 @@ docs are at <http://localhost:8000/docs>.
 
 If you also have an OpenAI-compatible LLM configured (`LLM_BASE_URL`), the
 free-text paths and brief prose are enabled. Without one, structured filings
-still become events; options flow and free text stay pending.
+still become events, options flow included; only free text stays pending.
 
 ## What to look at
 
