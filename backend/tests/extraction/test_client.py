@@ -501,3 +501,26 @@ def test_healthy_false_without_backup(monkeypatch):
     client = LLMClient("http://x", "k", "m")
     monkeypatch.setattr(client, "health", lambda: False)
     assert client.healthy() is False
+
+
+def test_dead_endpoint_fails_fast_during_cooldown(monkeypatch):
+    calls = {"n": 0}
+
+    def refused(*_args, **_kwargs):
+        calls["n"] += 1
+        raise LLMTransportError("connection refused")
+
+    monkeypatch.setattr("app.extraction.client.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.extraction.client.LLMClient._post_once", refused)
+    client = LLMClient("http://x", "k", "m", max_retries=2, cooldown_seconds=60)
+
+    for _ in range(3):
+        with pytest.raises(LLMTransportError):
+            client._post({})
+
+    assert calls["n"] == 3  # one retry budget, then fail fast
+
+    client._down_until = 0.0  # cooldown elapsed
+    with pytest.raises(LLMTransportError):
+        client._post({})
+    assert calls["n"] == 6

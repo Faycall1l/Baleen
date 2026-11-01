@@ -79,6 +79,7 @@ class LLMClient:
         max_tokens: int | None = 1024,
         backup: LLMClient | None = None,
         use_response_format: bool = True,
+        cooldown_seconds: float = 60.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -106,6 +107,12 @@ class LLMClient:
         # hundreds of sequential calls a processing batch makes. Module-level
         # httpx one-shots would pay a fresh TCP+TLS handshake per call.
         self._http = httpx.Client(timeout=self.timeout)
+        # Circuit breaker: once an endpoint has exhausted its retries, fail
+        # fast for ``cooldown_seconds`` instead of paying the full backoff
+        # (and connect timeouts) on every call of a batch. Calls then go
+        # straight to the backup or the caller's deterministic fallback.
+        self.cooldown_seconds = cooldown_seconds
+        self._down_until = 0.0
 
     def close(self) -> None:
         """Release the pooled connections (app shutdown)."""
@@ -218,13 +225,18 @@ class LLMClient:
         network blip does not fail an otherwise-good run. Content errors (bad
         model output) are the caller's concern and are never retried here.
         """
+        if time.monotonic() < self._down_until:
+            raise LLMTransportError(f"{self.base_url} cooling down after repeated transport failures")
         attempt = 0
         while True:
             try:
-                return self._post_once(payload)
+                result = self._post_once(payload)
+                self._down_until = 0.0
+                return result
             except LLMTransportError as exc:
                 attempt += 1
                 if attempt > self.max_retries:
+                    self._down_until = time.monotonic() + self.cooldown_seconds
                     raise
                 delay = min(2.0 ** (attempt - 1), 8.0)
                 logger.warning(
