@@ -283,3 +283,24 @@ export interface Health {
   app: string;
   checks: Record<string, HealthCheck>;
 }
+
+export interface NewsMention {
+  kind: 'ticker' | 'politician' | string;
+  id: string;
+  label: string;
+}
+
+export interface NewsArticle {
+  id: string;
+  outlet: string;
+  title: string;
+  summary: string;
+  url: string;
+  published_at: string;
+  mentions: NewsMention[];
+}
+
+export interface NewsResponse {
+  articles: NewsArticle[];
+  count: number;
+}

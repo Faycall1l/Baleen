@@ -6,10 +6,11 @@ import {
   fetchDigest,
   fetchHealth,
   fetchLeaderboard,
+  fetchNews,
   fetchReports,
   fetchSignals,
 } from '../api';
-import type { ActivityBundle, Alert, Health, LeaderboardEntry, Report, SignalsBundle } from '../types';
+import type { ActivityBundle, Alert, Health, LeaderboardEntry, NewsArticle, Report, SignalsBundle } from '../types';
 
 // Side-panel feeds: alerts, reports + digest, leaderboard, signals, plus the
 // health dot (extracted from App, H10). The graph is polled separately by
@@ -26,6 +27,8 @@ export function useFeeds() {
   const [signalsError, setSignalsError] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityBundle | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [news, setNews] = useState<NewsArticle[]>([]);
+  const [newsError, setNewsError] = useState<string | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   // First check completed (success or failure): before this the pill must
   // not claim OFFLINE — nothing has been measured yet.
@@ -54,6 +57,13 @@ export function useFeeds() {
     fetchLeaderboard()
       .then((res) => setLeaders(res.leaders))
       .catch((err) => setLeadersError(err.message));
+  }, []);
+
+  const loadNews = useCallback(() => {
+    setNewsError(null);
+    fetchNews()
+      .then((res) => setNews(res.articles))
+      .catch((err) => setNewsError(err.message));
   }, []);
 
   const loadSignals = useCallback(() => {
@@ -145,7 +155,8 @@ export function useFeeds() {
     loadReports();
     loadLeaders();
     loadSignals();
-  }, [loadAlerts, loadReports, loadLeaders, loadSignals]);
+    loadNews();
+  }, [loadAlerts, loadReports, loadLeaders, loadSignals, loadNews]);
 
   const briefs = reports.filter((r) => r.kind === 'brief');
   const reportCount = briefs.length + (digest ? 1 : 0);
@@ -172,12 +183,15 @@ export function useFeeds() {
     signalsError,
     activity,
     activityError,
+    news,
+    newsError,
     health,
     healthChecked,
     briefs,
     reportCount,
     signalsCount,
     activityCount,
+    newsCount: news.length,
     loadAll,
   };
 }

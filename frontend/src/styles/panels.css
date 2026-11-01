@@ -111,3 +111,45 @@
   line-height: 1.2;
 }
 
+
+/* Media watch: monitored headlines. Reuses the alert row shape so the feed
+   reads like every other list; the title is an outbound link and mention
+   chips tap through to the inspector. */
+.media-item .media-meta {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.media-outlet {
+  color: var(--link);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.media-item .media-title {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.media-item .media-title:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.media-item .media-mentions {
+  gap: 6px;
+}
+
+.media-chip {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.media-chip:hover {
+  background: rgba(122, 184, 232, 0.22);
+}

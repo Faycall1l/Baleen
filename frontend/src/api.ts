@@ -1,7 +1,7 @@
 // Thin client for the Baleen API surfaces.
 
 import { buildFlowQuery } from './flow';
-import type { ActivityBundle, Alert, CommitteeCard, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, PersonCard, QueryResponse, Report, SignalsBundle, SimilarTrader, TickerCard } from './types';
+import type { ActivityBundle, Alert, CommitteeCard, FlowFilters, FlowResponse, GraphData, Health, LeaderboardEntry, NewsResponse, PersonCard, QueryResponse, Report, SignalsBundle, SimilarTrader, TickerCard } from './types';
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -209,5 +209,12 @@ export function fetchPath(fromId: string, toId: string): Promise<PathResponse> {
     ...res,
     nodes: asArray(res.nodes),
     rels: asArray(res.rels),
+  }));
+}
+
+export function fetchNews(limit = 30): Promise<NewsResponse> {
+  return json<NewsResponse>(`/api/news?limit=${limit}`).then((res) => ({
+    ...res,
+    articles: asArray(res.articles).map((a) => ({ ...a, mentions: asArray(a.mentions) })),
   }));
 }

@@ -7,6 +7,7 @@ import LeadsPanel from './components/LeadsPanel';
 import ReportsPanel from './components/ReportsPanel';
 import InsightsPanel from './components/InsightsPanel';
 import ActivityPanel from './components/ActivityPanel';
+import MediaPanel from './components/MediaPanel';
 import CommandBar from './components/CommandBar';
 import FlowTape from './components/FlowTape';
 import GraphErrorBoundary from './components/GraphErrorBoundary';
@@ -103,11 +104,14 @@ export default function App() {
     signalsError,
     activity,
     activityError,
+    news,
+    newsError,
     health,
     healthChecked,
     briefs,
     reportCount,
     activityCount,
+    newsCount,
     loadAll,
   } = useFeeds();
 
@@ -365,6 +369,18 @@ export default function App() {
         </div>
       );
     }
+    if (id === 'media') {
+      return (
+        <div className="flow-tile-scroll">
+          <MediaPanel
+            articles={news}
+            error={newsError}
+            onTickerClick={openSignalTicker}
+            onMemberClick={openMemberAnywhere}
+          />
+        </div>
+      );
+    }
     if (id === 'path') {
       return (
         <div className="flow-tile-scroll">
@@ -399,7 +415,7 @@ export default function App() {
         <PanelRail
           open={railOpen}
           onToggle={handleRailToggle}
-          counts={{ insights: 0, board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: activityCount, path: pathResult ? pathResult.nodes.length : 0 }}
+          counts={{ insights: 0, board: 0, leads: (signals?.uncovered.length ?? 0) + (signals?.suspicious.length ?? 0) + (signals?.momentum.length ?? 0), flow: flowCount, alerts: inbox.unread, reports: reportCount, leaders: leaders.length, signals: activityCount, media: newsCount, path: pathResult ? pathResult.nodes.length : 0 }}
         />
         <main className="graph-area">
           <TileDock

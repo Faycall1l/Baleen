@@ -20,6 +20,7 @@ describe('sanitizeTiles', () => {
   it('keeps valid tiles, drops garbage, and dedupes', () => {
     expect(sanitizeTiles(['board', 'flow', 'nope', 42, 'flow'])).toEqual(['board', 'flow']);
     expect(sanitizeTiles(['alerts'])).toEqual(['alerts']);
+    expect(sanitizeTiles(['media', 'media'])).toEqual(['media']);
     expect(sanitizeTiles([])).toEqual([]);
     expect(sanitizeTiles(null)).toEqual([...DEFAULT_TILES]);
     expect(sanitizeTiles('board')).toEqual([...DEFAULT_TILES]);

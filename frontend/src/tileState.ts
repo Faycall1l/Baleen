@@ -42,7 +42,8 @@ export type TileId =
   | 'leaders'
   | 'signals'
   | 'insights'
-  | 'path';
+  | 'path'
+  | 'media';
 
 const ALL_TILES: ReadonlySet<string> = new Set([
   'board',
@@ -54,6 +55,7 @@ const ALL_TILES: ReadonlySet<string> = new Set([
   'signals',
   'insights',
   'path',
+  'media',
 ]);
 
 export const ALL_TILE_IDS: TileId[] = [
@@ -66,6 +68,7 @@ export const ALL_TILE_IDS: TileId[] = [
   'signals',
   'insights',
   'path',
+  'media',
 ];
 
 export const DEFAULT_TILES: TileId[] = ['insights', 'board'];
@@ -80,6 +83,7 @@ export const TILE_TITLES: Record<TileId, string> = {
   signals: 'Activity',
   insights: 'Insights',
   path: 'Path',
+  media: 'Media watch',
 };
 
 function isTileId(v: unknown): v is TileId {

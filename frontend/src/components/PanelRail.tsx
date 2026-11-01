@@ -11,6 +11,7 @@ const ITEMS: { key: RailKey; label: string }[] = [
   { key: 'reports', label: 'Reports' },
   { key: 'leaders', label: 'Leaders' },
   { key: 'signals', label: 'Activity' },
+  { key: 'media', label: 'Media' },
 ];
 
 // Left rail of panel toggles (extracted from App, H12). Counts come from the
